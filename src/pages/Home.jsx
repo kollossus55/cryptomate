@@ -1,9 +1,8 @@
-
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, Shield, Sparkles, ArrowRight, CheckCircle, Zap, AlertCircle } from "lucide-react";
-import { createPageUrl } from "./utils";
+import { TrendingUp, Shield, Sparkles, BarChart3, ArrowRight, CheckCircle, Zap, AlertCircle } from "lucide-react";
+import { createPageUrl } from "../components/utils";
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
