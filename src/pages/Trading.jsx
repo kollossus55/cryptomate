@@ -1066,27 +1066,30 @@ export default function Trading() {
             <p className="text-slate-400">Trade top 20 cryptocurrencies with AI-powered insights • Filter by AI Signal</p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-3">
             <Button
               onClick={() => setShowNewsWidget(!showNewsWidget)}
               variant="outline"
+              size="lg"
               className={`border-slate-700 ${showNewsWidget ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
             >
-              <Newspaper className="w-4 h-4 mr-2" />
+              <Newspaper className="w-5 h-5 mr-2" />
               News Feed
             </Button>
             <Button
               onClick={() => setShowRecommendations(true)}
-              className="bg-gradient-to-br from-indigo-900 to-purple-900 hover:from-indigo-800 hover:to-purple-800 text-white font-bold shadow-xl shadow-indigo-500/50 border-2 border-indigo-400/80"
+              size="lg"
+              className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold"
             >
-              <Sparkles className="w-4 h-4 mr-2 animate-pulse" />
+              <Sparkles className="w-5 h-5 mr-2" />
               AI Signals
             </Button>
             <Button
               onClick={() => setShowAltcoinScanner(true)}
-              className="bg-gradient-to-br from-cyan-900 to-blue-900 hover:from-cyan-800 hover:to-blue-800 text-white font-bold shadow-xl shadow-cyan-500/50 border-2 border-cyan-400/80"
+              size="lg"
+              className="bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold"
             >
-              <Scan className="w-4 h-4 mr-2" />
+              <Scan className="w-5 h-5 mr-2" />
               Altcoin Scanner
             </Button>
           </div>
