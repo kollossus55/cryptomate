@@ -65,8 +65,55 @@ export const analyzeOnChainData = async (asset) => {
   return result;
 };
 
+// Predictive price movement analysis using machine learning-like patterns
+const predictPriceMovement = (asset) => {
+  // Analyze recent momentum and patterns
+  const momentum = asset.change24h;
+  const volumeTrend = asset.volume24h / 1500000000; // Normalized volume
+  
+  // Calculate momentum indicators
+  const shortTermMomentum = momentum;
+  const volumeStrength = Math.min(volumeTrend * 100, 100);
+  
+  // Pattern recognition - detect bullish/bearish patterns
+  const isBullishPattern = momentum > 0 && volumeTrend > 1.2;
+  const isBearishPattern = momentum < 0 && volumeTrend > 1.2;
+  
+  // Predict next 24h movement
+  let predictedChange = momentum * 0.6; // Momentum continuation factor
+  
+  // Add pattern influence
+  if (isBullishPattern) predictedChange += 2;
+  if (isBearishPattern) predictedChange -= 2;
+  
+  // Add volume influence
+  if (volumeTrend > 2) predictedChange *= 1.2;
+  
+  // Calculate target price
+  const currentPrice = asset.price;
+  const predictedPrice = currentPrice * (1 + predictedChange / 100);
+  
+  // Confidence in prediction (0-100)
+  const predictionConfidence = Math.min(95, Math.max(30, 
+    50 + (volumeStrength * 0.3) + (Math.abs(momentum) * 2)
+  ));
+  
+  return {
+    predicted_change: predictedChange,
+    predicted_price: predictedPrice,
+    prediction_confidence: Math.round(predictionConfidence),
+    timeframe: '24h',
+    pattern_detected: isBullishPattern ? 'bullish' : isBearishPattern ? 'bearish' : 'neutral',
+    key_factors: [
+      `Momentum: ${momentum > 0 ? '+' : ''}${momentum.toFixed(2)}%`,
+      `Volume trend: ${volumeTrend.toFixed(2)}x average`,
+      `Pattern: ${isBullishPattern ? 'Bullish breakout' : isBearishPattern ? 'Bearish breakdown' : 'Consolidation'}`
+    ]
+  };
+};
+
 // Generate comprehensive AI signal combining all data sources
-export const generateAdvancedSignal = async (asset) => {
+export const generateAdvancedSignal = async (asset, userPreferences = null) => {
   try {
     // Fetch all data sources in parallel (now using cached/simulated data)
     const [newsData, socialData, onChainData] = await Promise.all([
@@ -75,43 +122,59 @@ export const generateAdvancedSignal = async (asset) => {
       analyzeOnChainData(asset)
     ]);
 
+    // Generate predictive analysis
+    const prediction = predictPriceMovement(asset);
+
     // Technical indicators (from asset data)
     const technicalScore = calculateTechnicalScore(asset);
 
-    // Weighted composite score
+    // Dynamic weights based on user preferences or defaults
+    const newsWeight = userPreferences?.signal_alert_thresholds?.news_sentiment_weight ?? 0.25;
     const weights = {
       technical: 0.30,
-      news: 0.25,
+      news: newsWeight,
       social: 0.20,
-      onchain: 0.25
+      onchain: 0.25 - (newsWeight - 0.25), // Adjust onchain to compensate
+      predictive: 0.25
     };
 
+    // Composite score with predictive analysis
     const compositeScore = 
       (technicalScore * weights.technical) +
       ((newsData.sentiment_score + 1) * 50 * weights.news) +  // Convert -1 to 1 scale to 0-100
       (socialData.social_score * weights.social) +
-      (onChainData.onchain_score * weights.onchain);
+      (onChainData.onchain_score * weights.onchain) +
+      (prediction.prediction_confidence * weights.predictive);
 
-    // Determine confidence level (30-95 range)
-    const confidence = Math.max(30, Math.min(95, Math.round(compositeScore)));
+    // Determine confidence level with news sentiment boost
+    let confidence = Math.max(30, Math.min(95, Math.round(compositeScore)));
+    
+    // Boost confidence if news sentiment is strong
+    if (Math.abs(newsData.sentiment_score) > 0.6) {
+      confidence = Math.min(95, confidence + 5);
+    }
 
     // Determine risk level
     let riskLevel = 'medium';
     const volatility = Math.abs(asset.change24h || 0);
-    if (confidence >= 80 && volatility < 5) riskLevel = 'low';
-    else if (confidence < 60 || volatility > 10) riskLevel = 'high';
+    if (confidence >= 80 && volatility < 5 && prediction.prediction_confidence > 70) riskLevel = 'low';
+    else if (confidence < 60 || volatility > 10 || prediction.prediction_confidence < 50) riskLevel = 'high';
 
-    // Generate trading recommendation (influenced by news sentiment)
+    // Generate trading recommendation with predictive influence
     let recommendation = 'hold';
     const newsInfluence = newsData.sentiment_score * (newsData.impact_level === 'high' ? 1.5 : 1.0);
     
-    if (confidence >= 75 && asset.change24h > 1 && newsInfluence > 0.2) recommendation = 'buy';
-    else if (confidence < 50 || asset.change24h < -3 || newsInfluence < -0.3) recommendation = 'sell';
+    if (confidence >= 75 && asset.change24h > 1 && newsInfluence > 0.2 && prediction.predicted_change > 0) {
+      recommendation = 'buy';
+    } else if (confidence < 50 || asset.change24h < -3 || newsInfluence < -0.3 || prediction.predicted_change < -3) {
+      recommendation = 'sell';
+    }
 
     return {
       confidence,
       recommendation,
       riskLevel,
+      prediction,
       breakdown: {
         technical: technicalScore,
         news: newsData,
