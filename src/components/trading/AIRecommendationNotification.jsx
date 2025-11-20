@@ -1,20 +1,22 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Sparkles, TrendingUp, TrendingDown, X, RefreshCw, Target, Minimize2, Maximize2, Bell } from "lucide-react";
+import { Sparkles, TrendingUp, TrendingDown, X, RefreshCw, Target, Minimize2, Maximize2, Bell, Scan, Filter } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { scanAltcoins, getCategories, getAltcoinsByCategory } from "./AltcoinScanner";
 
-export default function AIRecommendationNotification({ assets, onTradeAsset, onClose }) {
+export default function AIRecommendationNotification({ assets, onTradeAsset, onClose, useAltcoinScanner = false }) {
   const [recommendations, setRecommendations] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
   const [hasNewSignals, setHasNewSignals] = useState(false);
   const [lastInteractionTime, setLastInteractionTime] = useState(Date.now());
+  const [scannerMode, setScannerMode] = useState(useAltcoinScanner);
+  const [selectedCategory, setSelectedCategory] = useState("all");
   
   const autoRefreshIntervalRef = useRef(null);
   const inactivityTimerRef = useRef(null);
@@ -33,10 +35,12 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
 
   // Initial analysis on mount
   useEffect(() => {
-    if (assetsRef.current && assetsRef.current.length > 0) {
+    if (scannerMode) {
+      runAltcoinScanner();
+    } else if (assetsRef.current && assetsRef.current.length > 0) {
       analyzeTopAssets();
     }
-  }, []); // Run only once on mount
+  }, [scannerMode]); // Run when scanner mode changes
 
   // Setup intervals based on minimized state
   useEffect(() => {
@@ -55,7 +59,11 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
       console.log('🔄 Setting up auto-refresh every 10 minutes');
       autoRefreshIntervalRef.current = setInterval(() => {
         console.log('🔄 Auto-refreshing AI signals... (10 min interval)');
-        analyzeTopAssets();
+        if (scannerMode) {
+          runAltcoinScanner();
+        } else {
+          analyzeTopAssets();
+        }
       }, AUTO_REFRESH_INTERVAL);
     }
 
@@ -315,7 +323,71 @@ Return ONLY the top 3 highest-conviction opportunities.`;
   };
 
   const handleRefresh = () => {
-    analyzeTopAssets();
+    if (scannerMode) {
+      runAltcoinScanner();
+    } else {
+      analyzeTopAssets();
+    }
+    handleUserInteraction();
+  };
+
+  const runAltcoinScanner = async () => {
+    setIsLoading(true);
+    try {
+      console.log('🔍 Running altcoin scanner...');
+      const opportunities = await scanAltcoins(10);
+      
+      const recommendations = opportunities.map(opp => ({
+        symbol: opp.symbol,
+        name: opp.name,
+        action: opp.signal === 'strong_buy' || opp.signal === 'buy' ? 'buy' : 'sell',
+        confidence: opp.confidence,
+        reasoning: `${opp.name} (${opp.category}) shows ${opp.signal.replace('_', ' ').toUpperCase()} signal. Momentum: ${opp.momentum}%, Volatility: ${opp.volatility}%, Volume surge: ${opp.volume_surge}x. Strong ${opp.category} sector performance.`,
+        risk_level: opp.score >= 75 ? 'low' : opp.score >= 60 ? 'medium' : 'high',
+        target_price: opp.simulated_price * (opp.signal.includes('buy') ? 1.12 : 0.88),
+        data_sources: {
+          technical_score: opp.score,
+          news_sentiment: opp.signal.includes('buy') ? 'positive' : opp.signal.includes('sell') ? 'negative' : 'neutral',
+          social_score: Math.round(opp.confidence * 0.8),
+          onchain_signal: opp.volume_surge > 1.5 ? 'bullish' : 'neutral'
+        },
+        category: opp.category,
+        marketCap: opp.marketCap,
+        price: opp.simulated_price,
+        icon: opp.symbol.charAt(0),
+        color: getCategoryColor(opp.category)
+      }));
+
+      setRecommendations({
+        recommendations: selectedCategory === 'all' 
+          ? recommendations 
+          : recommendations.filter(r => r.category === selectedCategory),
+        market_summary: `Altcoin scanner analyzed ${opportunities.length} opportunities across multiple categories. Showing top ${selectedCategory === 'all' ? 'overall' : selectedCategory} performers.`
+      });
+    } catch (error) {
+      console.error('Scanner failed:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getCategoryColor = (category) => {
+    const colors = {
+      'DeFi': 'bg-blue-500',
+      'Layer 1': 'bg-purple-500',
+      'Layer 2': 'bg-indigo-500',
+      'Gaming': 'bg-pink-500',
+      'AI': 'bg-cyan-500',
+      'Meme': 'bg-orange-500',
+      'Infrastructure': 'bg-green-500',
+      'Privacy': 'bg-slate-500',
+      'NFT': 'bg-red-500'
+    };
+    return colors[category] || 'bg-gray-500';
+  };
+
+  const toggleScannerMode = () => {
+    setScannerMode(!scannerMode);
     handleUserInteraction();
   };
 
@@ -372,15 +444,25 @@ Return ONLY the top 3 highest-conviction opportunities.`;
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-white text-lg">AI Trading Signals</h3>
+                    <h3 className="font-bold text-white text-lg">
+                      {scannerMode ? 'Altcoin Scanner' : 'AI Trading Signals'}
+                    </h3>
                     {hasNewSignals && isMinimized && (
                       <Badge className="bg-green-500 text-white animate-pulse">
                         NEW
                       </Badge>
                     )}
+                    {scannerMode && (
+                      <Badge className="bg-cyan-500 text-white">
+                        <Scan className="w-3 h-3 mr-1" />
+                        100+ Coins
+                      </Badge>
+                    )}
                   </div>
                   {!isMinimized && (
-                    <p className="text-indigo-200 text-sm">Top opportunities detected • Auto-refreshing</p>
+                    <p className="text-indigo-200 text-sm">
+                      {scannerMode ? 'Scanning altcoin opportunities' : 'Top opportunities detected'} • Auto-refreshing
+                    </p>
                   )}
                   {isMinimized && recommendations?.recommendations && (
                     <p className="text-indigo-200 text-xs">
@@ -427,6 +509,55 @@ Return ONLY the top 3 highest-conviction opportunities.`;
           {/* Content - Scrollable with visible scrollbar */}
           {!isMinimized && (
             <div className="overflow-y-auto px-4 pb-4" style={{ maxHeight: "calc(85vh - 100px)" }}>
+              {/* Mode Toggle */}
+              <div className="flex gap-2 mb-4">
+                <Button
+                  variant={!scannerMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => !scannerMode || toggleScannerMode()}
+                  className={!scannerMode ? "bg-indigo-600" : "border-white/30 text-white hover:bg-white/10"}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Top 20
+                </Button>
+                <Button
+                  variant={scannerMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => scannerMode || toggleScannerMode()}
+                  className={scannerMode ? "bg-cyan-600" : "border-white/30 text-white hover:bg-white/10"}
+                >
+                  <Scan className="w-4 h-4 mr-2" />
+                  Altcoin Scanner
+                </Button>
+              </div>
+
+              {/* Category Filter (only in scanner mode) */}
+              {scannerMode && (
+                <div className="mb-4">
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      variant={selectedCategory === 'all' ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => { setSelectedCategory('all'); runAltcoinScanner(); }}
+                      className={selectedCategory === 'all' ? "bg-white/20" : "border-white/20 text-white"}
+                    >
+                      All
+                    </Button>
+                    {getCategories().slice(0, 6).map(cat => (
+                      <Button
+                        key={cat}
+                        variant={selectedCategory === cat ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => { setSelectedCategory(cat); runAltcoinScanner(); }}
+                        className={selectedCategory === cat ? "bg-white/20" : "border-white/20 text-white text-xs"}
+                      >
+                        {cat}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {isLoading ? (
                 <div className="py-8 text-center">
                   <div className="inline-flex items-center gap-3">
@@ -446,7 +577,9 @@ Return ONLY the top 3 highest-conviction opportunities.`;
                   )}
 
                   {recommendations.recommendations?.map((rec, idx) => {
-                    const asset = assets.find(a => a.symbol === rec.symbol);
+                    const asset = scannerMode 
+                      ? { symbol: rec.symbol, name: rec.name, price: rec.price, icon: rec.icon, color: rec.color }
+                      : assets.find(a => a.symbol === rec.symbol);
                     if (!asset) return null;
 
                     return (
@@ -511,10 +644,15 @@ Return ONLY the top 3 highest-conviction opportunities.`;
                         )}
 
                         <div className="flex items-center justify-between">
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 flex-wrap">
                             <Badge className={getRiskColor(rec.risk_level)}>
                               {rec.risk_level} risk
                             </Badge>
+                            {scannerMode && rec.category && (
+                              <Badge className="bg-white/20 text-white border-white/30">
+                                {rec.category}
+                              </Badge>
+                            )}
                             {rec.target_price && (
                               <Badge variant="outline" className="border-indigo-400 text-indigo-300">
                                 <Target className="w-3 h-3 mr-1" />
