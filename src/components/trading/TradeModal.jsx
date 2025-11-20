@@ -294,33 +294,29 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
           {tradeType === 'buy' && (
             <div className="grid grid-cols-4 gap-2">
               <Button
-                variant="outline"
                 onClick={() => assetPrice > 0 && handleQuickAmount((100 / assetPrice).toFixed(6))}
-                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                className="bg-slate-800 border border-slate-600 text-white hover:bg-slate-700"
                 disabled={!assetPrice || assetPrice === 0}
               >
                 $100
               </Button>
               <Button
-                variant="outline"
                 onClick={() => assetPrice > 0 && handleQuickAmount((500 / assetPrice).toFixed(6))}
-                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                className="bg-slate-800 border border-slate-600 text-white hover:bg-slate-700"
                 disabled={!assetPrice || assetPrice === 0}
               >
                 $500
               </Button>
               <Button
-                variant="outline"
                 onClick={() => assetPrice > 0 && handleQuickAmount((1000 / assetPrice).toFixed(6))}
-                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                className="bg-slate-800 border border-slate-600 text-white hover:bg-slate-700"
                 disabled={!assetPrice || assetPrice === 0}
               >
                 $1000
               </Button>
               <Button
-                variant="outline"
                 onClick={() => assetPrice > 0 && handleQuickAmount((availableBalance / assetPrice).toFixed(6))}
-                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                className="bg-slate-800 border border-slate-600 text-white hover:bg-slate-700"
                 disabled={!assetPrice || assetPrice === 0}
               >
                 Max
@@ -331,30 +327,26 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
           {tradeType === 'sell' && position && (
             <div className="grid grid-cols-4 gap-2">
               <Button
-                variant="outline"
                 onClick={() => handleQuickAmount((position.quantity * 0.25).toFixed(6))}
-                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                className="bg-slate-800 border border-slate-600 text-white hover:bg-slate-700"
               >
                 25%
               </Button>
               <Button
-                variant="outline"
                 onClick={() => handleQuickAmount((position.quantity * 0.5).toFixed(6))}
-                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                className="bg-slate-800 border border-slate-600 text-white hover:bg-slate-700"
               >
                 50%
               </Button>
               <Button
-                variant="outline"
                 onClick={() => handleQuickAmount((position.quantity * 0.75).toFixed(6))}
-                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                className="bg-slate-800 border border-slate-600 text-white hover:bg-slate-700"
               >
                 75%
               </Button>
               <Button
-                variant="outline"
                 onClick={() => handleQuickAmount(position.quantity.toFixed(6))}
-                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                className="bg-slate-800 border border-slate-600 text-white hover:bg-slate-700"
               >
                 Max
               </Button>
