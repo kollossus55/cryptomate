@@ -578,9 +578,9 @@ Return ONLY the top 3 highest-conviction opportunities.`;
 
                   {recommendations.recommendations?.map((rec, idx) => {
                     const asset = scannerMode 
-                      ? { symbol: rec.symbol, name: rec.name, price: rec.price, icon: rec.icon, color: rec.color }
+                      ? { symbol: rec.symbol, name: rec.name, price: rec.price || 0, icon: rec.icon, color: rec.color }
                       : assets.find(a => a.symbol === rec.symbol);
-                    if (!asset) return null;
+                    if (!asset || !asset.price) return null;
 
                     return (
                       <motion.div
@@ -653,7 +653,7 @@ Return ONLY the top 3 highest-conviction opportunities.`;
                                 {rec.category}
                               </Badge>
                             )}
-                            {rec.target_price && (
+                            {rec.target_price && typeof rec.target_price === 'number' && (
                               <Badge variant="outline" className="border-indigo-400 text-indigo-300">
                                 <Target className="w-3 h-3 mr-1" />
                                 ${rec.target_price.toLocaleString()}
