@@ -1066,7 +1066,7 @@ export default function Trading() {
             <p className="text-slate-400">Trade top 20 cryptocurrencies with AI-powered insights • Filter by AI Signal</p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => setShowNewsWidget(!showNewsWidget)}
               variant="outline"
@@ -1075,20 +1075,20 @@ export default function Trading() {
               <Newspaper className="w-4 h-4 mr-2" />
               News Feed
             </Button>
-            <div
+            <Button
               onClick={() => setShowRecommendations(true)}
-              className="cursor-pointer px-4 py-2 rounded-lg bg-gradient-to-br from-indigo-900 to-purple-900 hover:from-indigo-800 hover:to-purple-800 text-white font-bold shadow-xl shadow-indigo-500/50 border-2 border-indigo-400/80 flex items-center gap-2 transition-all"
+              className="bg-gradient-to-br from-indigo-900 to-purple-900 hover:from-indigo-800 hover:to-purple-800 text-white font-bold shadow-xl shadow-indigo-500/50 border-2 border-indigo-400/80"
             >
-              <Sparkles className="w-4 h-4 animate-pulse" />
+              <Sparkles className="w-4 h-4 mr-2 animate-pulse" />
               AI Signals
-            </div>
-            <div
+            </Button>
+            <Button
               onClick={() => setShowAltcoinScanner(true)}
-              className="cursor-pointer px-4 py-2 rounded-lg bg-gradient-to-br from-cyan-900 to-blue-900 hover:from-cyan-800 hover:to-blue-800 text-white font-bold shadow-xl shadow-cyan-500/50 border-2 border-cyan-400/80 flex items-center gap-2 transition-all"
+              className="bg-gradient-to-br from-cyan-900 to-blue-900 hover:from-cyan-800 hover:to-blue-800 text-white font-bold shadow-xl shadow-cyan-500/50 border-2 border-cyan-400/80"
             >
-              <Scan className="w-4 h-4" />
+              <Scan className="w-4 h-4 mr-2" />
               Altcoin Scanner
-            </div>
+            </Button>
           </div>
         </div>
 
