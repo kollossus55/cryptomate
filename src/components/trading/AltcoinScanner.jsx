@@ -144,9 +144,9 @@ export const scanAltcoins = async (count = 10) => {
     opportunities.push({
       ...altcoin,
       score,
-      momentum: momentum.toFixed(2),
-      volatility: volatility.toFixed(1),
-      volume_surge: volume_surge.toFixed(2),
+      momentum: parseFloat(momentum.toFixed(2)),
+      volatility: parseFloat(volatility.toFixed(1)),
+      volume_surge: parseFloat(volume_surge.toFixed(2)),
       signal: score >= 75 ? 'strong_buy' : score >= 65 ? 'buy' : score >= 55 ? 'hold' : score >= 45 ? 'sell' : 'strong_sell',
       simulated_price: generatePrice(altcoin),
       confidence: Math.round(score * 0.9), // Confidence slightly lower than score
