@@ -234,33 +234,39 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
                 <h3 className="font-semibold text-white">AI Position Sizing</h3>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <button
+                <Button
                   onClick={() => handleQuickAmount(recommendations.conservative)}
-                  className="bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg p-3 transition-all"
+                  className="bg-slate-800 hover:bg-slate-700 border border-green-500/50 text-white h-auto p-3"
                   disabled={recommendations.conservative === "0"}
                 >
-                  <div className="text-green-400 text-sm mb-1">Conservative</div>
-                  <div className="text-white font-bold">{recommendations.conservative}</div>
-                  <div className="text-slate-400 text-xs">5% Portfolio</div>
-                </button>
-                <button
+                  <div className="flex flex-col items-center">
+                    <div className="text-green-400 text-sm mb-1">Conservative</div>
+                    <div className="text-white font-bold">{recommendations.conservative}</div>
+                    <div className="text-slate-400 text-xs">5% Portfolio</div>
+                  </div>
+                </Button>
+                <Button
                   onClick={() => handleQuickAmount(recommendations.moderate)}
-                  className="bg-slate-800 hover:bg-slate-700 border border-indigo-500 rounded-lg p-3 transition-all"
+                  className="bg-slate-800 hover:bg-slate-700 border border-indigo-500 text-white h-auto p-3"
                   disabled={recommendations.moderate === "0"}
                 >
-                  <div className="text-yellow-400 text-sm mb-1">Moderate</div>
-                  <div className="text-white font-bold">{recommendations.moderate}</div>
-                  <div className="text-slate-400 text-xs">10% Portfolio</div>
-                </button>
-                <button
+                  <div className="flex flex-col items-center">
+                    <div className="text-yellow-400 text-sm mb-1">Moderate</div>
+                    <div className="text-white font-bold">{recommendations.moderate}</div>
+                    <div className="text-slate-400 text-xs">10% Portfolio</div>
+                  </div>
+                </Button>
+                <Button
                   onClick={() => handleQuickAmount(recommendations.aggressive)}
-                  className="bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg p-3 transition-all"
+                  className="bg-slate-800 hover:bg-slate-700 border border-red-500/50 text-white h-auto p-3"
                   disabled={recommendations.aggressive === "0"}
                 >
-                  <div className="text-red-400 text-sm mb-1">Aggressive</div>
-                  <div className="text-white font-bold">{recommendations.aggressive}</div>
-                  <div className="text-slate-400 text-xs">20% Portfolio</div>
-                </button>
+                  <div className="flex flex-col items-center">
+                    <div className="text-red-400 text-sm mb-1">Aggressive</div>
+                    <div className="text-white font-bold">{recommendations.aggressive}</div>
+                    <div className="text-slate-400 text-xs">20% Portfolio</div>
+                  </div>
+                </Button>
               </div>
             </div>
           )}
