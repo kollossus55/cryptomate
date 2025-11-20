@@ -3,13 +3,14 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, TrendingUp, Sparkles, RefreshCw, AlertCircle, Settings, Eye, EyeOff, Newspaper } from "lucide-react";
+import { Search, TrendingUp, Sparkles, RefreshCw, AlertCircle, Settings, Eye, EyeOff, Newspaper, Scan } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 import AssetCard from "../components/trading/AssetCard";
 import TradeModal from "../components/trading/TradeModal";
 import AIAnalysisModal from "../components/trading/AIAnalysisModal";
 import AIRecommendationNotification from "../components/trading/AIRecommendationNotification";
+import AltcoinScannerModal from "../components/trading/AltcoinScannerModal";
 import PortfolioCard from "../components/trading/PortfolioCard";
 import NotificationToast from "../components/notifications/NotificationToast";
 import { useNotificationMonitor } from "../components/notifications/useNotificationMonitor";
@@ -35,6 +36,7 @@ export default function Trading() {
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [analysisAsset, setAnalysisAsset] = useState(null);
   const [showRecommendations, setShowRecommendations] = useState(false);
+  const [showAltcoinScanner, setShowAltcoinScanner] = useState(false);
   const [isPriceLoading, setIsPriceLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [assetConfidence, setAssetConfidence] = useState({});
@@ -1080,6 +1082,13 @@ export default function Trading() {
               <Sparkles className="w-4 h-4 animate-pulse" />
               AI Signals
             </div>
+            <div
+              onClick={() => setShowAltcoinScanner(true)}
+              className="cursor-pointer px-4 py-2 rounded-lg bg-gradient-to-br from-cyan-900 to-blue-900 hover:from-cyan-800 hover:to-blue-800 text-white font-bold shadow-xl shadow-cyan-500/50 border-2 border-cyan-400/80 flex items-center gap-2 transition-all"
+            >
+              <Scan className="w-4 h-4" />
+              Altcoin Scanner
+            </div>
           </div>
         </div>
 
@@ -1236,6 +1245,13 @@ export default function Trading() {
           assets={assets}
           onTradeAsset={handleTrade}
           onClose={() => setShowRecommendations(false)}
+        />
+      )}
+
+      {showAltcoinScanner && (
+        <AltcoinScannerModal
+          onTradeAsset={handleTrade}
+          onClose={() => setShowAltcoinScanner(false)}
         />
       )}
 
