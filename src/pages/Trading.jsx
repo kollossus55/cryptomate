@@ -887,9 +887,8 @@ export default function Trading() {
           <div className="flex flex-wrap gap-3">
             <Button
               onClick={() => setShowNewsWidget(!showNewsWidget)}
-              variant="outline"
               size="lg"
-              className={`border-slate-700 ${showNewsWidget ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
+              className={`${showNewsWidget ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-700 hover:bg-slate-600'} text-white font-bold`}
             >
               <Newspaper className="w-5 h-5 mr-2" />
               News Feed
