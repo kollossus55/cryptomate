@@ -1,10 +1,17 @@
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Wallet, PieChart, Target, Award, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-export default function PortfolioCard({ portfolio, onClosePosition }) {
+export default function PortfolioCard({ portfolio, onClosePosition, assets = [] }) {
   if (!portfolio) return null;
+  
+  // Create a map of current prices for quick lookup
+  const currentPrices = {};
+  assets.forEach(asset => {
+    currentPrices[`${asset.symbol}/USDT`] = asset.price;
+  });
 
   const totalBalance = portfolio.total_balance || 0;
   const availableBalance = portfolio.available_balance || 0;
@@ -108,8 +115,11 @@ export default function PortfolioCard({ portfolio, onClosePosition }) {
               {portfolio.positions.map((position, idx) => {
                 const quantity = position.quantity || 0;
                 const avgEntryPrice = position.avg_entry_price || 0;
-                const currentValue = position.current_value || 0;
-                const profitLoss = position.profit_loss || 0;
+                
+                // Calculate real-time P&L using current market prices
+                const currentPrice = currentPrices[position.asset_symbol] || avgEntryPrice;
+                const currentValue = quantity * currentPrice;
+                const profitLoss = (currentPrice - avgEntryPrice) * quantity;
                 const profitLossPercent = avgEntryPrice > 0 ? ((profitLoss / (quantity * avgEntryPrice)) * 100).toFixed(2) : 0;
                 
                 return (
