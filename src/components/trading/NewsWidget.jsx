@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Newspaper, TrendingUp, TrendingDown, Clock, ExternalLink, Bell, Filter } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
@@ -51,6 +51,22 @@ export default function NewsWidget({ assets, onNewsAlert, isCompact = false }) {
               source: "AI Analysis",
               summary: idx === 0 ? newsData.summary : null
             });
+          });
+        } else {
+          // Generate simulated news if signal data not available
+          const sentiment = asset.change24h > 3 ? 'bullish' : asset.change24h < -3 ? 'bearish' : 'neutral';
+          const sentimentScore = asset.change24h > 0 ? Math.min(asset.change24h / 10, 0.8) : Math.max(asset.change24h / 10, -0.8);
+          
+          newsItems.push({
+            id: `${asset.symbol}-simulated-${Date.now()}`,
+            asset: asset.symbol,
+            headline: `${asset.name} ${asset.change24h > 0 ? 'gains' : 'drops'} ${Math.abs(asset.change24h).toFixed(2)}% in 24h trading`,
+            sentiment: sentiment,
+            sentiment_score: sentimentScore,
+            impact: Math.abs(asset.change24h) > 5 ? 'high' : 'medium',
+            timestamp: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+            source: "Market Data",
+            summary: `${asset.name} is showing ${sentiment} momentum with ${Math.abs(asset.change24h).toFixed(2)}% price movement.`
           });
         }
       }
