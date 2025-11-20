@@ -1,11 +1,10 @@
-
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { AlertCircle, Sparkles, Target } from "lucide-react";
+import { AlertCircle, TrendingUp, Sparkles, Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecuteTrade, portfolio }) {
@@ -399,7 +398,7 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
             <Button
               variant="outline"
               onClick={onClose}
-              className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800"
+              className="flex-1 border-slate-600 bg-slate-800 text-white hover:bg-slate-700 hover:border-slate-500"
             >
               Cancel
             </Button>
@@ -416,8 +415,8 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
               }
               className={`flex-1 ${
                 tradeType === 'buy' 
-                  ? 'bg-green-600 hover:bg-green-700' 
-                  : 'bg-red-600 hover:bg-red-700'
+                  ? 'bg-green-600 hover:bg-green-700 text-white' 
+                  : 'bg-red-600 hover:bg-red-700 text-white'
               }`}
             >
               {isExecuting ? 'Executing Trade...' : `${tradeType === 'buy' ? 'Buy' : 'Sell'} ${asset.symbol}`}
