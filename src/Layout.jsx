@@ -1,7 +1,6 @@
-
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { createPageUrl } from "./utils";
+import { createPageUrl } from "./components/utils";
 import { base44 } from "@/api/base44Client";
 import { TrendingUp, History, Settings, LogOut, User, Sparkles, Bell, Shield, Activity, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
