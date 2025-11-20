@@ -868,6 +868,51 @@ export default function Trading() {
   return (
     <div className="min-h-screen">
       <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+          <div>
+            <div className="flex items-center gap-4 mb-2">
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                AI Trading Platform
+              </h1>
+              <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 rounded-xl border border-slate-700">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-slate-300 text-sm font-mono">
+                  {currentTime.toLocaleTimeString()}
+                </span>
+              </div>
+            </div>
+            <p className="text-slate-400">Trade top 20 cryptocurrencies with AI-powered insights • Filter by AI Signal</p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={() => setShowNewsWidget(!showNewsWidget)}
+              variant="outline"
+              size="lg"
+              className={`border-slate-700 ${showNewsWidget ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
+            >
+              <Newspaper className="w-5 h-5 mr-2" />
+              News Feed
+            </Button>
+            <Button
+              onClick={() => setShowRecommendations(true)}
+              size="lg"
+              className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold"
+            >
+              <Sparkles className="w-5 h-5 mr-2" />
+              AI Signals
+            </Button>
+            <Button
+              onClick={() => setShowAltcoinScanner(true)}
+              size="lg"
+              className="bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold"
+            >
+              <Scan className="w-5 h-5 mr-2" />
+              Altcoin Scanner
+            </Button>
+          </div>
+        </div>
+
         {autoTradingSettings?.is_enabled && (
           <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 border-2 border-green-500/40 rounded-2xl p-4 mb-6">
             <div className="flex items-center justify-between flex-wrap gap-4">
@@ -1047,51 +1092,6 @@ export default function Trading() {
                 Reset Portfolio
               </Button>
             </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
-          <div>
-            <div className="flex items-center gap-4 mb-2">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                AI Trading Platform
-              </h1>
-              <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 rounded-xl border border-slate-700">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-slate-300 text-sm font-mono">
-                  {currentTime.toLocaleTimeString()}
-                </span>
-              </div>
-            </div>
-            <p className="text-slate-400">Trade top 20 cryptocurrencies with AI-powered insights • Filter by AI Signal</p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Button
-              onClick={() => setShowNewsWidget(!showNewsWidget)}
-              variant="outline"
-              size="lg"
-              className={`border-slate-700 ${showNewsWidget ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
-            >
-              <Newspaper className="w-5 h-5 mr-2" />
-              News Feed
-            </Button>
-            <Button
-              onClick={() => setShowRecommendations(true)}
-              size="lg"
-              className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold"
-            >
-              <Sparkles className="w-5 h-5 mr-2" />
-              AI Signals
-            </Button>
-            <Button
-              onClick={() => setShowAltcoinScanner(true)}
-              size="lg"
-              className="bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold"
-            >
-              <Scan className="w-5 h-5 mr-2" />
-              Altcoin Scanner
-            </Button>
           </div>
         </div>
 
