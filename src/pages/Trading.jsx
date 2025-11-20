@@ -1073,13 +1073,13 @@ export default function Trading() {
               <Newspaper className="w-4 h-4 mr-2" />
               News Feed
             </Button>
-            <Button
+            <div
               onClick={() => setShowRecommendations(true)}
-              className="bg-gradient-to-br from-indigo-900 to-purple-900 hover:from-indigo-800 hover:to-purple-800 text-white border-2 border-indigo-400/80 shadow-xl shadow-indigo-500/50 font-bold"
+              className="cursor-pointer px-4 py-2 rounded-lg bg-gradient-to-br from-indigo-900 to-purple-900 hover:from-indigo-800 hover:to-purple-800 text-white font-bold shadow-xl shadow-indigo-500/50 border-2 border-indigo-400/80 flex items-center gap-2 transition-all"
             >
-              <Sparkles className="w-4 h-4 mr-2 animate-pulse" />
+              <Sparkles className="w-4 h-4 animate-pulse" />
               AI Signals
-            </Button>
+            </div>
           </div>
         </div>
 
