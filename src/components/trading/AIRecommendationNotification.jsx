@@ -135,31 +135,63 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
         return;
       }
 
-      const topAssets = currentAssets.slice(0, 10);
+      // Apply user preference filters
+      let topAssets = currentAssets.slice(0, 10);
+
+      // Filter by user preferences if available
+      if (userPreferences) {
+        const prefs = userPreferences;
+
+        // Exclude assets the user doesn't want
+        if (prefs.excluded_assets && prefs.excluded_assets.length > 0) {
+          topAssets = topAssets.filter(a => !prefs.excluded_assets.includes(a.symbol));
+        }
+
+        // Prioritize preferred assets
+        if (prefs.preferred_assets && prefs.preferred_assets.length > 0) {
+          const preferred = topAssets.filter(a => prefs.preferred_assets.includes(a.symbol));
+          const others = topAssets.filter(a => !prefs.preferred_assets.includes(a.symbol));
+          topAssets = [...preferred, ...others].slice(0, 10);
+        }
+      }
       
-      const assetsData = topAssets.map(asset => 
-        `${asset.name} (${asset.symbol}): Price $${asset.price}, 24h Change ${asset.change24h}%, Volume $${(asset.volume24h / 1e9).toFixed(2)}B`
-      ).join('\n');
+      const assetsData = topAssets.map(asset => {
+        const signalData = window.assetSignalData?.[asset.symbol];
+        const prediction = signalData?.prediction;
+        return `${asset.name} (${asset.symbol}): Price $${asset.price}, 24h Change ${asset.change24h}%, Volume $${(asset.volume24h / 1e9).toFixed(2)}B${prediction ? `, Predicted 24h: ${prediction.predicted_change > 0 ? '+' : ''}${prediction.predicted_change.toFixed(2)}%` : ''}`;
+      }).join('\n');
+
+      // Get user thresholds
+      const minConfidenceBuy = userPreferences?.signal_alert_thresholds?.min_confidence_buy ?? 70;
+      const minConfidenceSell = userPreferences?.signal_alert_thresholds?.min_confidence_sell ?? 65;
+      const minPredictedGain = userPreferences?.signal_alert_thresholds?.min_predicted_gain ?? 5;
 
       const prompt = `As an advanced AI trading system, analyze these top cryptocurrencies using multi-factor analysis:
 
-${assetsData}
+      ${assetsData}
 
-Use comprehensive data sources:
-1. **Technical Analysis**: Price momentum, volume, volatility patterns
-2. **News Sentiment**: Recent headlines, regulatory news, partnerships
-3. **Social Media Trends**: Twitter/Reddit sentiment, influencer opinions, trending topics
-4. **On-Chain Metrics**: Whale movements, exchange flows, network activity
+      User Risk Tolerance: ${userPreferences?.risk_tolerance || 'moderate'}
+      User Trading Style: ${userPreferences?.trading_style || 'balanced'}
+      Alert Thresholds: Buy signals minimum ${minConfidenceBuy}% confidence, Sell signals minimum ${minConfidenceSell}% confidence
 
-Recommend the BEST 3 trading opportunities with:
-- High conviction trades based on multiple confirming signals
-- Detailed reasoning incorporating all data sources
-- Risk assessment considering volatility and market conditions
-- Realistic target prices based on support/resistance levels
+      Use comprehensive data sources:
+      1. **Technical Analysis**: Price momentum, volume, volatility patterns
+      2. **Predictive Analysis**: 24-hour price movement forecasts (minimum ${minPredictedGain}% gain for buy signals)
+      3. **News Sentiment**: Recent headlines, regulatory news, partnerships
+      4. **Social Media Trends**: Twitter/Reddit sentiment, influencer opinions, trending topics
+      5. **On-Chain Metrics**: Whale movements, exchange flows, network activity
 
-IMPORTANT: Return confidence as a percentage from 0-100 (e.g., 85 not 0.85).
+      Recommend the BEST 3 trading opportunities with:
+      - High conviction trades based on multiple confirming signals
+      - Detailed reasoning incorporating all data sources including predictive analysis
+      - Risk assessment considering volatility and market conditions
+      - Realistic target prices based on support/resistance levels and predictions
+      - Only recommend buy signals with predicted gains above ${minPredictedGain}%
+      - Ensure confidence levels meet user thresholds (${minConfidenceBuy}% for buys, ${minConfidenceSell}% for sells)
 
-Return ONLY the top 3 highest-conviction opportunities.`;
+      IMPORTANT: Return confidence as a percentage from 0-100 (e.g., 85 not 0.85).
+
+      Return ONLY the top 3 highest-conviction opportunities that meet the user's criteria.`;
 
       const result = await base44.integrations.Core.InvokeLLM({
         prompt,
@@ -178,13 +210,16 @@ Return ONLY the top 3 highest-conviction opportunities.`;
                   reasoning: { type: "string" },
                   risk_level: { type: "string", enum: ["low", "medium", "high"] },
                   target_price: { type: "number" },
+                  predicted_change_24h: { type: "number" },
+                  prediction_confidence: { type: "number" },
                   data_sources: {
                     type: "object",
                     properties: {
                       technical_score: { type: "number" },
                       news_sentiment: { type: "string" },
                       social_score: { type: "number" },
-                      onchain_signal: { type: "string" }
+                      onchain_signal: { type: "string" },
+                      predictive_score: { type: "number" }
                     }
                   }
                 }
@@ -211,7 +246,14 @@ Return ONLY the top 3 highest-conviction opportunities.`;
       
       // Check if there are new high-confidence signals when minimized
       if (isMinimized && result?.recommendations) {
-        const highConfidenceSignals = result.recommendations.filter(r => r.confidence >= 80);
+        const minConfidenceBuy = userPreferences?.signal_alert_thresholds?.min_confidence_buy ?? 70;
+        const minConfidenceSell = userPreferences?.signal_alert_thresholds?.min_confidence_sell ?? 65;
+
+        const highConfidenceSignals = result.recommendations.filter(r => 
+          (r.action === 'buy' && r.confidence >= minConfidenceBuy) ||
+          (r.action === 'sell' && r.confidence >= minConfidenceSell)
+        );
+
         if (highConfidenceSignals.length > 0) {
           setHasNewSignals(true);
         }
@@ -495,6 +537,28 @@ Return ONLY the top 3 highest-conviction opportunities.`;
 
                         <p className="text-indigo-200 text-sm mb-3">{rec.reasoning}</p>
 
+                        {/* Prediction Display */}
+                        {rec.predicted_change_24h != null && (
+                          <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 rounded-lg p-3 mb-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="text-xs text-purple-300">24h Prediction</span>
+                                <div className={`text-lg font-bold ${rec.predicted_change_24h > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {rec.predicted_change_24h > 0 ? '+' : ''}{rec.predicted_change_24h.toFixed(2)}%
+                                </div>
+                              </div>
+                              {rec.prediction_confidence && (
+                                <div className="text-right">
+                                  <span className="text-xs text-purple-300">Confidence</span>
+                                  <div className="text-lg font-bold text-purple-400">
+                                    {rec.prediction_confidence}%
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Data Sources Breakdown */}
                         {rec.data_sources && (
                           <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
@@ -514,6 +578,12 @@ Return ONLY the top 3 highest-conviction opportunities.`;
                               <span className="text-slate-400">On-Chain: </span>
                               <span className="text-white font-bold capitalize">{rec.data_sources.onchain_signal}</span>
                             </div>
+                            {rec.data_sources.predictive_score != null && (
+                              <div className="bg-purple-500/20 rounded p-2 col-span-2">
+                                <span className="text-purple-300">Predictive: </span>
+                                <span className="text-white font-bold">{rec.data_sources.predictive_score}/100</span>
+                              </div>
+                            )}
                           </div>
                         )}
 

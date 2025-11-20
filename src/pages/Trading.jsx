@@ -19,6 +19,7 @@ import AutoTradingDebugPanel from "../components/trading/AutoTradingDebugPanel";
 import BackendMigrationGuide from "../components/trading/BackendMigrationGuide";
 import NewsWidget from "../components/trading/NewsWidget";
 import AITradingAdvisor from "../components/trading/AITradingAdvisor";
+import SignalAlertSettings from "../components/trading/SignalAlertSettings";
 
 import {
   executeAutoTradingCheckAdvanced,
@@ -1101,16 +1102,17 @@ export default function Trading() {
           />
         </div>
 
-        {trades && trades.length >= 5 && (
-          <div className="mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {trades && trades.length >= 5 && (
             <AITradingAdvisor
               trades={trades}
               portfolio={portfolio}
               autoTradingSettings={autoTradingSettings}
               onApplyRecommendation={handleApplyAdvisorRecommendation}
             />
-          </div>
-        )}
+          )}
+          <SignalAlertSettings />
+        </div>
 
         {showNewsWidget && (
           <div className="mb-8">

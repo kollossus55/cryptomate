@@ -1,9 +1,9 @@
-
 /**
  * Advanced AI Signal Generator
  * Incorporates multiple data sources for sophisticated trading signals
  */
 
+import { base44 } from "@/api/base44Client";
 
 // Cache for API results to prevent rate limiting
 const cache = {
