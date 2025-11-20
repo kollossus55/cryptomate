@@ -1075,7 +1075,7 @@ export default function Trading() {
             </Button>
             <Button
               onClick={() => setShowRecommendations(true)}
-              className="bg-gradient-to-br from-indigo-900 to-purple-900 hover:from-indigo-800 hover:to-purple-800 text-white font-bold shadow-xl shadow-indigo-500/50 border-2 border-indigo-400/80"
+              className="!bg-gradient-to-br !from-indigo-900 !to-purple-900 hover:!from-indigo-800 hover:!to-purple-800 !text-white font-bold shadow-xl shadow-indigo-500/50 border-2 !border-indigo-400/80"
             >
               <Sparkles className="w-4 h-4 mr-2 animate-pulse" />
               AI Signals
