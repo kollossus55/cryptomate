@@ -109,7 +109,7 @@ export default function AltcoinScannerModal({ onClose, onTradeAsset }) {
                 variant={selectedCategory === 'all' ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSelectedCategory('all')}
-                className={selectedCategory === 'all' ? "bg-cyan-600" : "border-cyan-400/30 text-cyan-300 hover:bg-cyan-500/10"}
+                className={selectedCategory === 'all' ? "bg-cyan-600 text-white" : "border-cyan-400 bg-slate-800 text-cyan-300 hover:bg-cyan-600 hover:text-white"}
               >
                 All ({opportunities.length})
               </Button>
@@ -121,7 +121,7 @@ export default function AltcoinScannerModal({ onClose, onTradeAsset }) {
                     variant={selectedCategory === cat ? "default" : "outline"}
                     size="sm"
                     onClick={() => setSelectedCategory(cat)}
-                    className={selectedCategory === cat ? "bg-cyan-600" : "border-cyan-400/30 text-cyan-300 hover:bg-cyan-500/10 text-xs"}
+                    className={selectedCategory === cat ? "bg-cyan-600 text-white" : "border-cyan-400 bg-slate-800 text-cyan-300 hover:bg-cyan-600 hover:text-white text-xs"}
                   >
                     {cat} ({count})
                   </Button>
@@ -248,7 +248,7 @@ export default function AltcoinScannerModal({ onClose, onTradeAsset }) {
               variant="outline"
               onClick={runScan}
               disabled={isLoading}
-              className="w-full border-cyan-400/50 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20"
+              className="w-full border-cyan-400 bg-cyan-600 text-white hover:bg-cyan-700"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               {isLoading ? 'Scanning...' : 'Refresh Scan'}
