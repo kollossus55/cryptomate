@@ -439,6 +439,32 @@ export default function Trading() {
     }
   };
 
+  // Check if backend functions are available
+  const [hasBackendFunctions, setHasBackendFunctions] = useState(false);
+  
+  useEffect(() => {
+    // Check if backend functions are available (server-side trading)
+    const checkBackend = async () => {
+      try {
+        // Try to detect if backend functions exist
+        // In production, this would be an API call to check function availability
+        const backendAvailable = false; // Set to true when backend functions are deployed
+        setHasBackendFunctions(backendAvailable);
+        
+        if (backendAvailable) {
+          console.log('✅ Backend functions detected - 24/7 trading enabled');
+        } else {
+          console.log('ℹ️ Using browser-based trading (requires tab open)');
+        }
+      } catch (error) {
+        console.log('ℹ️ Backend functions not available, using browser-based trading');
+        setHasBackendFunctions(false);
+      }
+    };
+    
+    checkBackend();
+  }, []);
+
   useEffect(() => {
     if (!autoTradingSettings?.is_enabled || !portfolio || !assets || assets.length === 0) {
       if (autoTradingSettings?.is_enabled) {
@@ -455,8 +481,14 @@ export default function Trading() {
       console.log('⏳ Waiting for AI confidence data...');
       return;
     }
+    
+    // If backend functions are available, browser-based trading is just for monitoring
+    if (hasBackendFunctions) {
+      console.log('✅ Server-side auto-trading active - browser provides monitoring only');
+      return;
+    }
 
-    console.log('✅ Auto-trading monitor initialized with smart order execution');
+    console.log('✅ Auto-trading monitor initialized with smart order execution (browser-based)');
 
     const checkAutoTrading = async () => {
       BrowserState.save({
@@ -588,7 +620,7 @@ export default function Trading() {
       clearInterval(interval);
       clearTimeout(initialCheck);
     };
-  }, [autoTradingSettings, portfolio, assets, assetConfidence]);
+    }, [autoTradingSettings, portfolio, assets, assetConfidence, hasBackendFunctions]);
 
   const calculateAIConfidence = async () => {
     const confidence = {};
@@ -926,18 +958,30 @@ export default function Trading() {
                     <Badge className="bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold shadow-md">
                       AUTO-TRADING ACTIVE
                     </Badge>
-                    <Badge className="bg-slate-700 border-green-500/50 text-green-400 font-semibold">
-                      Browser-Assisted Mode
-                    </Badge>
-                    {!isPageVisible && (
-                      <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 animate-pulse">
-                        <EyeOff className="w-3 h-3 mr-1" />
-                        Tab Hidden
+                    {hasBackendFunctions ? (
+                      <Badge className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold shadow-md">
+                        ⚡ 24/7 Server-Side Mode
                       </Badge>
+                    ) : (
+                      <>
+                        <Badge className="bg-slate-700 border-green-500/50 text-green-400 font-semibold">
+                          Browser-Assisted Mode
+                        </Badge>
+                        {!isPageVisible && (
+                          <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 animate-pulse">
+                            <EyeOff className="w-3 h-3 mr-1" />
+                            Tab Hidden
+                          </Badge>
+                        )}
+                      </>
                     )}
                   </div>
                   <p className="text-slate-300 text-sm">
-                    AI is monitoring markets and executing trades automatically • {autoTradingSettings.trades_today || 0}/{autoTradingSettings.max_trades_per_day || 10} trades today
+                    {hasBackendFunctions 
+                      ? '🚀 Trading 24/7 on server - no browser required • '
+                      : 'AI is monitoring markets and executing trades automatically • '
+                    }
+                    {autoTradingSettings.trades_today || 0}/{autoTradingSettings.max_trades_per_day || 10} trades today
                     {((autoTradingSettings.daily_loss || 0) >= (autoTradingSettings.max_daily_loss_percent || 0)) && (
                       <span className="ml-2 text-red-400 font-bold">⚠️ CIRCUIT BREAKER TRIGGERED</span>
                     )}
