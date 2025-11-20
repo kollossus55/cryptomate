@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, TrendingUp, Sparkles, RefreshCw, AlertCircle, Settings, EyeOff, Newspaper } from "lucide-react";
+import { Search, TrendingUp, Sparkles, RefreshCw, AlertCircle, Settings, Eye, EyeOff, Newspaper } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 import AssetCard from "../components/trading/AssetCard";
@@ -1075,9 +1075,9 @@ export default function Trading() {
             </Button>
             <Button
               onClick={() => setShowRecommendations(true)}
-              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold shadow-lg shadow-indigo-500/50 border-2 border-indigo-400"
             >
-              <Sparkles className="w-4 h-4 mr-2" />
+              <Sparkles className="w-4 h-4 mr-2 animate-pulse" />
               AI Signals
             </Button>
           </div>
