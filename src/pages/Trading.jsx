@@ -1073,19 +1073,13 @@ export default function Trading() {
               <Newspaper className="w-4 h-4 mr-2" />
               News Feed
             </Button>
-            <button
+            <Button
               onClick={() => setShowRecommendations(true)}
-              style={{
-                background: 'linear-gradient(to bottom right, rgb(49, 46, 129), rgb(88, 28, 135)) !important',
-                color: 'white !important',
-                border: '2px solid rgba(129, 140, 248, 0.8) !important',
-                boxShadow: '0 20px 25px -5px rgba(99, 102, 241, 0.5), 0 8px 10px -6px rgba(99, 102, 241, 0.5)'
-              }}
-              className="px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-all hover:brightness-110"
+              className="bg-gradient-to-br from-indigo-900 to-purple-900 hover:from-indigo-800 hover:to-purple-800 text-white border-2 border-indigo-400/80 shadow-xl shadow-indigo-500/50 font-bold"
             >
-              <Sparkles className="w-4 h-4 animate-pulse" />
+              <Sparkles className="w-4 h-4 mr-2 animate-pulse" />
               AI Signals
-            </button>
+            </Button>
           </div>
         </div>
 
