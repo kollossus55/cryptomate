@@ -252,9 +252,9 @@ export default function BacktestForm({ onRun }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div>
+          <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
             <Label className="text-slate-300 mb-3 block">
-              Min AI Confidence: {config.strategy.minConfidence}%
+              Min AI Confidence: <span className="text-purple-400 font-bold">{config.strategy.minConfidence}%</span>
             </Label>
             <Slider
               value={[config.strategy.minConfidence]}
@@ -265,14 +265,14 @@ export default function BacktestForm({ onRun }) {
               min={50}
               max={95}
               step={5}
-              className="mb-2"
+              className="mb-2 [&_[role=slider]]:bg-purple-500 [&_[role=slider]]:border-purple-400 [&_.bg-primary]:bg-purple-500"
             />
-            <p className="text-xs text-slate-500">Only execute trades with AI confidence above this level</p>
+            <p className="text-xs text-slate-400">Only execute trades with AI confidence above this level</p>
           </div>
 
-          <div>
+          <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
             <Label className="text-slate-300 mb-3 block">
-              Max Position Size: {config.strategy.maxPositionSize}%
+              Max Position Size: <span className="text-blue-400 font-bold">{config.strategy.maxPositionSize}%</span>
             </Label>
             <Slider
               value={[config.strategy.maxPositionSize]}
@@ -283,9 +283,9 @@ export default function BacktestForm({ onRun }) {
               min={5}
               max={50}
               step={5}
-              className="mb-2"
+              className="mb-2 [&_[role=slider]]:bg-blue-500 [&_[role=slider]]:border-blue-400 [&_.bg-primary]:bg-blue-500"
             />
-            <p className="text-xs text-slate-500">Maximum % of capital per trade</p>
+            <p className="text-xs text-slate-400">Maximum % of capital per trade</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
