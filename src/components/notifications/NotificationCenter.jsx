@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -52,10 +51,10 @@ export default function NotificationCenter() {
   });
 
   const clearAllMutation = useMutation({
-    mutationFn: async () => {
-      // Ensure we only try to delete if there are notifications
-      if (notifications.length > 0) {
-        await Promise.all(notifications.map(n => base44.entities.Notification.delete(n.id)));
+    mutationFn: async (notificationsToDelete) => {
+      // Use the notifications passed to the mutation to avoid stale closure
+      if (notificationsToDelete.length > 0) {
+        await Promise.all(notificationsToDelete.map(n => base44.entities.Notification.delete(n.id)));
       }
     },
     onSuccess: () => {
@@ -93,7 +92,7 @@ export default function NotificationCenter() {
 
   const handleClearAll = async () => {
     if (window.confirm('Are you sure you want to delete all notifications? This action cannot be undone.')) {
-      await clearAllMutation.mutateAsync();
+      await clearAllMutation.mutateAsync(notifications);
     }
   };
 
