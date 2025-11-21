@@ -128,12 +128,14 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
       const timeSinceLastCall = Date.now() - parseInt(lastLLMCall);
       if (timeSinceLastCall < MIN_TIME_BETWEEN_LLM_CALLS) {
         console.log(`⏳ Rate limit: Skipping LLM call. Last call was ${Math.round(timeSinceLastCall / 1000)}s ago`);
+        console.log('🔍 Checking for altcoin opportunities:', window.altcoinOpportunities?.length || 0, 'found');
         // Use cached recommendations if available
         const cachedRecs = localStorage.getItem('cached_ai_recommendations');
         if (cachedRecs) {
           setRecommendations(JSON.parse(cachedRecs));
         } else {
           // Generate basic recommendations if no cache
+          console.log('📊 Generating basic recommendations...');
           generateBasicRecommendations();
         }
         setIsLoading(false);
@@ -347,6 +349,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
         if (!signalData && window.altcoinOpportunities) {
           const altcoin = window.altcoinOpportunities.find(a => a.symbol === asset.symbol);
           if (altcoin && altcoin.confidence) {
+            console.log(`✅ Found altcoin opportunity: ${altcoin.symbol} - ${altcoin.confidence}% confidence`);
             signalData = {
               confidence: altcoin.confidence,
               recommendation: altcoin.signal === 'strong_buy' || altcoin.signal === 'buy' ? 'buy' : 
@@ -369,29 +372,36 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
       .sort((a, b) => b.signalData.confidence - a.signalData.confidence)
       .slice(0, 3);
 
+    console.log(`📋 Assets with signals (>= 70% confidence): ${assetsWithSignals.length}`);
+
     if (assetsWithSignals.length === 0) {
-      setRecommendations(null); // Clear recommendations if no signals found
+      console.log('⚠️ No signals found with >= 70% confidence');
+      setRecommendations(null);
       return;
     }
 
-    const recommendations = assetsWithSignals.map(({ asset, signalData }) => ({
-      symbol: asset.symbol,
-      action: signalData.recommendation === 'sell' ? 'sell' : 'buy',
-      confidence: signalData.confidence,
-      reasoning: `${asset.symbol} shows ${signalData.recommendation.toUpperCase()} signal with ${signalData.confidence}% confidence based on technical analysis${signalData.breakdown?.news ? `, ${signalData.breakdown.news.sentiment_label} news sentiment` : ''}${signalData.breakdown?.social ? `, and ${signalData.breakdown.social.engagement_level} social engagement` : ''}.`,
-      risk_level: signalData.riskLevel || 'medium',
-      target_price: asset.price * (signalData.recommendation === 'buy' ? 1.08 : 0.92), // Placeholder target price
-      data_sources: {
-        technical_score: signalData.breakdown?.technical || 0,
-        news_sentiment: signalData.breakdown?.news?.sentiment_label || 'neutral',
-        social_score: signalData.breakdown?.social?.social_score || 0,
-        onchain_signal: signalData.breakdown?.onchain?.signal || 'neutral'
-      }
-    }));
+    const recommendations = assetsWithSignals.map(({ asset, signalData }) => {
+      const rec = {
+        symbol: asset.symbol,
+        action: signalData.recommendation === 'sell' ? 'sell' : 'buy',
+        confidence: signalData.confidence,
+        reasoning: `${asset.symbol} shows ${signalData.recommendation.toUpperCase()} signal with ${signalData.confidence}% confidence based on ${signalData.source === 'altcoin_scanner' ? 'altcoin scanner analysis' : 'technical analysis'}${signalData.breakdown?.news ? `, ${signalData.breakdown.news.sentiment_label} news sentiment` : ''}${signalData.breakdown?.social ? `, and strong social engagement` : ''}.`,
+        risk_level: signalData.riskLevel || 'medium',
+        target_price: asset.price * (signalData.recommendation === 'buy' ? 1.08 : 0.92),
+        data_sources: {
+          technical_score: signalData.breakdown?.technical || 0,
+          news_sentiment: signalData.breakdown?.news?.sentiment_label || 'neutral',
+          social_score: signalData.breakdown?.social?.social_score || 0,
+          onchain_signal: signalData.breakdown?.onchain?.signal || 'neutral'
+        }
+      };
+      console.log(`✅ Created recommendation for ${rec.symbol}: ${rec.action} at ${rec.confidence}%`);
+      return rec;
+    });
 
     setRecommendations({
       recommendations,
-      market_summary: `Market analysis based on cached signal data. ${recommendations.length} opportunities identified.`
+      market_summary: `Market analysis based on cached signal data${window.altcoinOpportunities?.length ? ' including altcoin scanner' : ''}. ${recommendations.length} opportunities identified.`
     });
   };
 
