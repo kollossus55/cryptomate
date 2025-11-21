@@ -121,7 +121,7 @@ export default function BacktestForm({ onRun }) {
                   ...config,
                   period: {...config.period, startDate: e.target.value}
                 })}
-                className="bg-slate-800 border-slate-700 text-white"
+                className="bg-slate-800 border-slate-700 text-white [color-scheme:dark]"
               />
             </div>
             <div>
@@ -133,7 +133,7 @@ export default function BacktestForm({ onRun }) {
                   ...config,
                   period: {...config.period, endDate: e.target.value}
                 })}
-                className="bg-slate-800 border-slate-700 text-white"
+                className="bg-slate-800 border-slate-700 text-white [color-scheme:dark]"
                 max={new Date().toISOString().split('T')[0]}
               />
             </div>
