@@ -549,7 +549,26 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
                   )}
 
                   {recommendations.recommendations?.map((rec, idx) => {
-                    const asset = assets.find(a => a.symbol === rec.symbol);
+                    // Look for asset in both main assets and altcoin opportunities
+                    let asset = assets.find(a => a.symbol === rec.symbol);
+
+                    // If not found in main assets, check altcoin opportunities
+                    if (!asset && window.altcoinOpportunities) {
+                      const altcoin = window.altcoinOpportunities.find(a => a.symbol === rec.symbol);
+                      if (altcoin) {
+                        asset = {
+                          symbol: altcoin.symbol,
+                          name: altcoin.name,
+                          price: altcoin.simulated_price,
+                          change24h: altcoin.momentum,
+                          volume24h: altcoin.marketCap * 0.1,
+                          marketCap: altcoin.marketCap,
+                          icon: altcoin.symbol.substring(0, 2),
+                          color: "bg-cyan-500"
+                        };
+                      }
+                    }
+
                     if (!asset || !asset.price) return null;
 
                     return (
