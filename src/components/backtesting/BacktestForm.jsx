@@ -1,11 +1,13 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Play, Sparkles, Calendar, DollarSign, Target, Shield } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 export default function BacktestForm({ onRun }) {
   const [config, setConfig] = useState({
@@ -152,7 +154,7 @@ export default function BacktestForm({ onRun }) {
                   }
                 });
               }}
-              className="border-slate-700 text-slate-300"
+              className="border-slate-700 text-slate-300 hover:bg-slate-800"
             >
               1 Month
             </Button>
@@ -170,7 +172,7 @@ export default function BacktestForm({ onRun }) {
                   }
                 });
               }}
-              className="border-slate-700 text-slate-300"
+              className="border-slate-700 text-slate-300 hover:bg-slate-800"
             >
               3 Months
             </Button>
@@ -188,7 +190,7 @@ export default function BacktestForm({ onRun }) {
                   }
                 });
               }}
-              className="border-slate-700 text-slate-300"
+              className="border-slate-700 text-slate-300 hover:bg-slate-800"
             >
               6 Months
             </Button>
@@ -206,7 +208,7 @@ export default function BacktestForm({ onRun }) {
                   }
                 });
               }}
-              className="border-slate-700 text-slate-300"
+              className="border-slate-700 text-slate-300 hover:bg-slate-800"
             >
               1 Year
             </Button>
