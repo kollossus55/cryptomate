@@ -50,6 +50,12 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
   // Initial analysis on mount
   useEffect(() => {
     if (assetsRef.current && assetsRef.current.length > 0) {
+      console.log('🎬 AI Signals popup opened');
+      console.log('📊 Main assets available:', assetsRef.current.length);
+      console.log('🔍 Altcoin opportunities:', window.altcoinOpportunities?.length || 0);
+      if (window.altcoinOpportunities?.length > 0) {
+        console.log('🪙 Altcoins found:', window.altcoinOpportunities.map(a => `${a.symbol} (${a.confidence}%)`).join(', '));
+      }
       analyzeTopAssets();
     }
   }, []);
