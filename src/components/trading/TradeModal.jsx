@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertCircle, TrendingUp, Sparkles, Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -135,7 +136,7 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-2xl">
+      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl flex items-center gap-2">
             {tradeType === 'buy' ? 'Buy' : 'Sell'} {asset.symbol}
@@ -148,7 +149,8 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <ScrollArea className="flex-1 px-1">
+          <div className="space-y-6 py-4 pr-4">
           {/* Asset Info */}
           <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
             <div className="grid grid-cols-2 gap-4">
@@ -414,7 +416,8 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
               {isExecuting ? 'Executing Trade...' : `${tradeType === 'buy' ? 'Buy' : 'Sell'} ${asset.symbol}`}
             </Button>
           </div>
-        </div>
+          </div>
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );
