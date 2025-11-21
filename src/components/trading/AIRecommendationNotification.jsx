@@ -15,6 +15,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
   const [isMinimized, setIsMinimized] = useState(false);
   const [hasNewSignals, setHasNewSignals] = useState(false);
   const [lastInteractionTime, setLastInteractionTime] = useState(Date.now());
+  const [userPreferences, setUserPreferences] = useState(null);
   
   const autoRefreshIntervalRef = useRef(null);
   const inactivityTimerRef = useRef(null);
@@ -30,6 +31,21 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
   useEffect(() => {
     assetsRef.current = assets;
   }, [assets]);
+
+  // Fetch user preferences
+  useEffect(() => {
+    const fetchPreferences = async () => {
+      try {
+        const prefs = await base44.entities.TradingPreferences.list();
+        if (prefs && prefs.length > 0) {
+          setUserPreferences(prefs[0]);
+        }
+      } catch (error) {
+        console.log('No user preferences found, using defaults');
+      }
+    };
+    fetchPreferences();
+  }, []);
 
   // Initial analysis on mount
   useEffect(() => {
