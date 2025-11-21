@@ -1,101 +1,89 @@
-/**
- * Trading Scheduler - Triggers Auto-Trading Worker
- * Runs on a schedule (every 1-5 minutes) to execute trading checks for all users
- * 
- * This is the entry point that gets triggered by the platform's scheduler
- */
-
-import { base44 } from '@/api/base44Client';
-import autoTradingWorker from './autoTradingWorker';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
 
 /**
- * Main scheduler function - finds all users with auto-trading enabled
- * and triggers the worker for each user
+ * Trading Scheduler - Runs every 2 minutes
+ * Processes auto-trading for all users with enabled settings
  */
-export default async function tradingScheduler() {
-  console.log('[Trading Scheduler] Starting scheduled auto-trading check...');
-  
+Deno.serve(async (req) => {
   try {
-    // Fetch all users with auto-trading enabled
-    const allSettings = await base44.entities.AutoTradingSettings.filter({
-      is_enabled: true
-    });
+    const base44 = createClientFromRequest(req);
     
-    if (!allSettings || allSettings.length === 0) {
-      console.log('[Trading Scheduler] No active auto-trading users found');
-      return {
-        success: true,
-        message: 'No active auto-trading users',
-        timestamp: new Date().toISOString()
-      };
+    // Health check endpoint
+    const url = new URL(req.url);
+    if (url.searchParams.get('check_only') === 'true') {
+      return Response.json({ 
+        status: 'healthy',
+        backend_trading: true,
+        message: '24/7 server-side trading active'
+      });
     }
+
+    console.log('🤖 Trading Scheduler: Starting auto-trading check for all users');
     
-    console.log(`[Trading Scheduler] Found ${allSettings.length} active auto-trading users`);
+    // Get all users with auto-trading enabled (using service role)
+    const autoTradingSettings = await base44.asServiceRole.entities.AutoTradingSettings.list();
+    const enabledSettings = autoTradingSettings.filter(s => s.is_enabled);
     
-    const results = [];
+    console.log(`📊 Found ${enabledSettings.length} users with auto-trading enabled`);
     
-    // Process each user sequentially to avoid overwhelming the system
-    for (const settings of allSettings) {
-      const user_email = settings.created_by;
-      
+    let processed = 0;
+    let executed = 0;
+    let errors = 0;
+    
+    for (const settings of enabledSettings) {
       try {
-        console.log(`[Trading Scheduler] Processing user: ${user_email}`);
+        // Get user's portfolio
+        const portfolios = await base44.asServiceRole.entities.Portfolio.filter({
+          created_by: settings.created_by
+        });
         
-        // Check if it's time to reset daily counters
-        const now = new Date();
-        const lastTradeDate = settings.last_trade_date ? new Date(settings.last_trade_date) : null;
-        
-        if (!lastTradeDate || lastTradeDate.getDate() !== now.getDate()) {
-          // Reset daily counters
-          await base44.entities.AutoTradingSettings.update(settings.id, {
-            trades_today: 0,
-            daily_loss: 0,
-            assets_traded_today: []
-          });
-          console.log(`[Trading Scheduler] Reset daily counters for ${user_email}`);
+        if (!portfolios || portfolios.length === 0) {
+          console.log(`⚠️ No portfolio found for user ${settings.created_by}`);
+          continue;
         }
         
-        // Execute auto-trading worker for this user
-        const result = await autoTradingWorker({ user_email });
-        results.push({
-          user_email,
-          ...result
+        const portfolio = portfolios[0];
+        
+        // Invoke auto-trading worker for this user
+        const result = await base44.asServiceRole.functions.invoke('autoTradingWorker', {
+          settings,
+          portfolio,
+          user_email: settings.created_by
         });
         
-        // Small delay between users to prevent rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        processed++;
+        
+        if (result.data?.executed) {
+          executed++;
+          console.log(`✅ Trade executed for ${settings.created_by}: ${result.data.opportunity?.asset?.symbol}`);
+        }
         
       } catch (error) {
-        console.error(`[Trading Scheduler] Error processing ${user_email}:`, error);
-        results.push({
-          user_email,
-          success: false,
-          error: error.message
-        });
+        errors++;
+        console.error(`❌ Error processing user ${settings.created_by}:`, error.message);
       }
     }
     
-    // Calculate summary
-    const successful = results.filter(r => r.success).length;
-    const executed = results.filter(r => r.executed).length;
-    
-    console.log(`[Trading Scheduler] Completed: ${successful}/${results.length} successful, ${executed} trades executed`);
-    
-    return {
-      success: true,
-      processed: results.length,
-      successful,
-      executed,
-      results,
-      timestamp: new Date().toISOString()
+    const summary = {
+      timestamp: new Date().toISOString(),
+      users_checked: enabledSettings.length,
+      users_processed: processed,
+      trades_executed: executed,
+      errors: errors
     };
+    
+    console.log('📊 Trading Scheduler Summary:', summary);
+    
+    return Response.json({
+      success: true,
+      summary
+    });
     
   } catch (error) {
-    console.error('[Trading Scheduler] Scheduler error:', error);
-    return {
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    };
+    console.error('❌ Trading Scheduler Error:', error);
+    return Response.json({ 
+      success: false, 
+      error: error.message 
+    }, { status: 500 });
   }
-}
+});

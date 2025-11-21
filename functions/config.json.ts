@@ -2,14 +2,12 @@
   "functions": [
     {
       "name": "tradingScheduler",
-      "description": "Scheduled function that triggers auto-trading checks for all users every 2 minutes",
       "schedule": "*/2 * * * *",
-      "timeout": 300
+      "description": "Runs auto-trading check every 2 minutes for all users"
     },
     {
       "name": "autoTradingWorker",
-      "description": "Worker function that executes auto-trading logic for a specific user",
-      "timeout": 60
+      "description": "Executes auto-trading logic for a single user"
     }
   ]
 }
