@@ -121,7 +121,7 @@ export default function BacktestForm({ onRun }) {
                   ...config,
                   period: {...config.period, startDate: e.target.value}
                 })}
-                className="bg-slate-800 border-slate-700 text-white [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:brightness-50"
+                className="bg-white border-slate-700 text-black"
               />
             </div>
             <div>
@@ -133,7 +133,7 @@ export default function BacktestForm({ onRun }) {
                   ...config,
                   period: {...config.period, endDate: e.target.value}
                 })}
-                className="bg-slate-800 border-slate-700 text-white [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:brightness-50"
+                className="bg-white border-slate-700 text-black"
                 max={new Date().toISOString().split('T')[0]}
               />
             </div>
