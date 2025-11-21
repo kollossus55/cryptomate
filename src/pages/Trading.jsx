@@ -558,17 +558,12 @@ export default function Trading() {
     // Check if backend functions are available (server-side trading)
     const checkBackend = async () => {
       try {
-        // Try to detect if backend functions exist
-        // In production, this would be an API call to check function availability
-        const backendAvailable = false; // Set to true when backend functions are deployed
-        setHasBackendFunctions(backendAvailable);
-        
-        if (backendAvailable) {
-          console.log('✅ Backend functions detected - 24/7 trading enabled');
-        } else {
-          console.log('ℹ️ Using browser-based trading (requires tab open)');
-        }
+        // Check if tradingScheduler function exists by attempting to invoke it
+        await base44.functions.invoke('tradingScheduler', { check_only: true });
+        setHasBackendFunctions(true);
+        console.log('✅ Backend functions detected - 24/7 trading enabled');
       } catch (error) {
+        // If function doesn't exist or returns error, backend not available
         console.log('ℹ️ Backend functions not available, using browser-based trading');
         setHasBackendFunctions(false);
       }
