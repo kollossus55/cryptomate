@@ -151,8 +151,27 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
         return;
       }
 
+      // Combine main assets with altcoin opportunities
+      let combinedAssets = [...currentAssets];
+      if (window.altcoinOpportunities && window.altcoinOpportunities.length > 0) {
+        window.altcoinOpportunities.forEach(opp => {
+          if (!combinedAssets.find(a => a.symbol === opp.symbol)) {
+            combinedAssets.push({
+              symbol: opp.symbol,
+              name: opp.name,
+              price: opp.simulated_price,
+              change24h: opp.momentum,
+              volume24h: opp.marketCap * 0.1,
+              marketCap: opp.marketCap,
+              icon: opp.symbol.substring(0, 2),
+              color: "bg-cyan-500"
+            });
+          }
+        });
+      }
+
       // Apply user preference filters
-      let topAssets = currentAssets.slice(0, 10);
+      let topAssets = combinedAssets.slice(0, 10);
 
       // Filter by user preferences if available
       if (userPreferences) {
@@ -300,7 +319,26 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
     const currentAssets = assetsRef.current;
     if (!currentAssets || currentAssets.length === 0) return;
 
-    const assetsWithSignals = currentAssets
+    // Combine main assets with altcoin opportunities
+    let combinedAssets = [...currentAssets];
+    if (window.altcoinOpportunities && window.altcoinOpportunities.length > 0) {
+      window.altcoinOpportunities.forEach(opp => {
+        if (!combinedAssets.find(a => a.symbol === opp.symbol)) {
+          combinedAssets.push({
+            symbol: opp.symbol,
+            name: opp.name,
+            price: opp.simulated_price,
+            change24h: opp.momentum,
+            volume24h: opp.marketCap * 0.1,
+            marketCap: opp.marketCap,
+            icon: opp.symbol.substring(0, 2),
+            color: "bg-cyan-500"
+          });
+        }
+      });
+    }
+
+    const assetsWithSignals = combinedAssets
       .filter(asset => window.assetSignalData?.[asset.symbol])
       .map(asset => ({
         asset,
