@@ -435,7 +435,7 @@ export default function AdvancedChart({ asset }) {
             onClick={() => setChartType('candles')}
             className={chartType === 'candles' ? "bg-indigo-600 hover:bg-indigo-700" : "text-slate-300 hover:bg-slate-800"}
           >
-            <Candle className="w-4 h-4 mr-1" />
+            <CandlestickChart className="w-4 h-4 mr-1" />
             Candles
           </Button>
           <Button
