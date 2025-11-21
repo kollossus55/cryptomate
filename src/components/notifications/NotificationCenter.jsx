@@ -41,11 +41,19 @@ export default function NotificationCenter() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
+    onError: (error) => {
+      console.log('Notification already deleted:', error);
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
   });
 
   const deleteNotificationMutation = useMutation({
     mutationFn: (id) => base44.entities.Notification.delete(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+    onError: (error) => {
+      console.log('Notification already deleted:', error);
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
@@ -54,7 +62,11 @@ export default function NotificationCenter() {
     mutationFn: async (notificationsToDelete) => {
       // Delete sequentially to avoid race conditions
       for (const notification of notificationsToDelete) {
-        await base44.entities.Notification.delete(notification.id);
+        try {
+          await base44.entities.Notification.delete(notification.id);
+        } catch (error) {
+          console.log('Notification already deleted:', notification.id);
+        }
       }
     },
     onSuccess: () => {
@@ -75,12 +87,12 @@ export default function NotificationCenter() {
 
   const handleMarkAllAsRead = async () => {
     const unreadNotifications = notifications.filter(n => !n.is_read);
-    await Promise.all(
+    await Promise.allSettled(
       unreadNotifications.map(n =>
         markAsReadMutation.mutateAsync({
           id: n.id,
           data: { ...n, is_read: true }
-        })
+        }).catch(() => {})
       )
     );
   };
