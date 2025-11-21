@@ -339,12 +339,33 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
     }
 
     const assetsWithSignals = combinedAssets
-      .filter(asset => window.assetSignalData?.[asset.symbol])
-      .map(asset => ({
-        asset,
-        signalData: window.assetSignalData[asset.symbol]
-      }))
-      .filter(({ signalData }) => signalData.confidence >= 70)
+      .map(asset => {
+        // Check if we have signal data from assetSignalData
+        let signalData = window.assetSignalData?.[asset.symbol];
+        
+        // If not, check if this is an altcoin opportunity
+        if (!signalData && window.altcoinOpportunities) {
+          const altcoin = window.altcoinOpportunities.find(a => a.symbol === asset.symbol);
+          if (altcoin && altcoin.confidence) {
+            signalData = {
+              confidence: altcoin.confidence,
+              recommendation: altcoin.signal === 'strong_buy' || altcoin.signal === 'buy' ? 'buy' : 
+                             altcoin.signal === 'strong_sell' || altcoin.signal === 'sell' ? 'sell' : 'hold',
+              timestamp: Date.now(),
+              source: 'altcoin_scanner',
+              breakdown: {
+                technical: altcoin.opportunity_score || 0,
+                news: { sentiment_label: 'positive' },
+                social: { social_score: 75 }
+              },
+              riskLevel: altcoin.risk_level || 'medium'
+            };
+          }
+        }
+        
+        return { asset, signalData };
+      })
+      .filter(({ signalData }) => signalData && signalData.confidence >= 70)
       .sort((a, b) => b.signalData.confidence - a.signalData.confidence)
       .slice(0, 3);
 
