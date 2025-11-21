@@ -3,7 +3,7 @@ import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, Cartesia
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TrendingUp, Activity, BarChart3, AlertCircle, RefreshCw, Candle } from "lucide-react";
+import { TrendingUp, Activity, BarChart3, AlertCircle, RefreshCw, CandlestickChart } from "lucide-react";
 
 export default function AdvancedChart({ asset }) {
   const [priceData, setPriceData] = useState([]);
