@@ -136,8 +136,8 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-2xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-2xl max-h-[90vh]">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="text-xl flex items-center gap-2">
             {tradeType === 'buy' ? 'Buy' : 'Sell'} {asset.symbol}
             <Badge className={tradeType === 'buy' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}>
@@ -149,8 +149,8 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[calc(90vh-120px)] px-1">
-          <div className="space-y-6 py-4 pr-4">
+        <div className="overflow-y-auto flex-1" style={{ maxHeight: "calc(90vh - 120px)" }}>
+          <div className="space-y-6 py-4 px-1">
           {/* Asset Info */}
           <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
             <div className="grid grid-cols-2 gap-4">
