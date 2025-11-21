@@ -560,17 +560,27 @@ export default function Trading() {
       try {
         // Check if tradingScheduler function exists by attempting to invoke it
         await base44.functions.invoke('tradingScheduler', { check_only: true });
+        if (!hasBackendFunctions) {
+          console.log('✅ Backend functions detected - 24/7 trading enabled');
+        }
         setHasBackendFunctions(true);
-        console.log('✅ Backend functions detected - 24/7 trading enabled');
       } catch (error) {
         // If function doesn't exist or returns error, backend not available
-        console.log('ℹ️ Backend functions not available, using browser-based trading');
+        if (hasBackendFunctions) {
+          console.log('⚠️ Backend functions stopped - switching to browser-based trading');
+        }
         setHasBackendFunctions(false);
       }
     };
     
+    // Initial check
     checkBackend();
-  }, []);
+    
+    // Check every 2 minutes if backend is still available
+    const backendCheckInterval = setInterval(checkBackend, 2 * 60 * 1000);
+    
+    return () => clearInterval(backendCheckInterval);
+  }, [hasBackendFunctions]);
 
   useEffect(() => {
     if (!autoTradingSettings?.is_enabled || !portfolio || !assets || assets.length === 0) {
