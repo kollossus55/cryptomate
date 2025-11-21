@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
-import { LineChart, Line, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from "recharts";
+import React, { useState, useEffect } from "react";
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TrendingUp, Activity, BarChart3, AlertCircle, RefreshCw } from "lucide-react";
+import { TrendingUp, Activity, BarChart3, AlertCircle, RefreshCw, Candle } from "lucide-react";
 
 export default function AdvancedChart({ asset }) {
   const [priceData, setPriceData] = useState([]);
   const [timeframe, setTimeframe] = useState('1H');
+  const [chartType, setChartType] = useState('candles');
   const [indicators, setIndicators] = useState({
     sma20: true,
     sma50: false,
@@ -204,15 +205,22 @@ export default function AdvancedChart({ asset }) {
     
     const config = timeframeConfig[timeframe] || timeframeConfig['1H'];
     let currentPrice = basePrice;
-    let prevPrice = basePrice;
     
     for (let i = 0; i < config.points; i++) {
       const trend = (Math.random() - 0.48) * 0.02;
       const volatility = Math.random() * 0.03;
-      const change = currentPrice * (trend + volatility);
       
-      prevPrice = currentPrice;
-      currentPrice = Math.max(currentPrice + change, basePrice * 0.8);
+      // Generate OHLC candle data
+      const open = currentPrice;
+      const priceChange = currentPrice * (trend + volatility);
+      const close = Math.max(open + priceChange, basePrice * 0.8);
+      
+      // High and low based on volatility
+      const candleVolatility = Math.abs(close - open) * (1 + Math.random() * 0.5);
+      const high = Math.max(open, close) + candleVolatility * Math.random();
+      const low = Math.min(open, close) - candleVolatility * Math.random();
+      
+      currentPrice = close;
       
       const timestamp = Date.now() - (config.points - i) * config.interval;
       const date = new Date(timestamp);
@@ -232,10 +240,14 @@ export default function AdvancedChart({ asset }) {
         timestamp,
         date: date.toLocaleDateString(),
         time: timeDisplay,
-        price: currentPrice,
+        open,
+        high,
+        low,
+        close,
+        price: close, // Keep for compatibility with existing code
         volume: (Math.random() * 2) + 0.5,
-        isPositive: currentPrice >= prevPrice,
-        change: ((currentPrice - prevPrice) / prevPrice) * 100
+        isPositive: close >= open,
+        change: ((close - open) / open) * 100
       });
     }
     
@@ -256,14 +268,37 @@ export default function AdvancedChart({ asset }) {
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
+      const data = payload[0]?.payload;
+      
       return (
         <div className="bg-slate-900/95 border border-slate-700 rounded-lg p-3 shadow-xl backdrop-blur-sm">
           <p className="text-slate-300 text-sm mb-2 font-semibold">{label}</p>
-          {payload.map((entry, idx) => (
-            <p key={idx} className="text-sm" style={{ color: entry.color }}>
-              <span className="font-semibold">{entry.name}:</span> ${entry.value?.toFixed(2)}
-            </p>
-          ))}
+          
+          {chartType === 'candles' && data && data.open ? (
+            <div className="space-y-1">
+              <p className="text-sm text-slate-300">
+                <span className="font-semibold">Open:</span> ${data.open?.toFixed(2)}
+              </p>
+              <p className="text-sm text-slate-300">
+                <span className="font-semibold">High:</span> ${data.high?.toFixed(2)}
+              </p>
+              <p className="text-sm text-slate-300">
+                <span className="font-semibold">Low:</span> ${data.low?.toFixed(2)}
+              </p>
+              <p className="text-sm text-slate-300">
+                <span className="font-semibold">Close:</span> ${data.close?.toFixed(2)}
+              </p>
+              <p className={`text-sm font-semibold ${data.isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                {data.isPositive ? '+' : ''}{data.change?.toFixed(2)}%
+              </p>
+            </div>
+          ) : (
+            payload.map((entry, idx) => (
+              <p key={idx} className="text-sm" style={{ color: entry.color }}>
+                <span className="font-semibold">{entry.name}:</span> ${entry.value?.toFixed(2)}
+              </p>
+            ))
+          )}
         </div>
       );
     }
@@ -284,6 +319,58 @@ export default function AdvancedChart({ asset }) {
         fill={barColor}
         opacity={0.7}
       />
+    );
+  };
+
+  // Custom candlestick shape
+  const Candlestick = (props) => {
+    const { x, y, width, height, payload } = props;
+    if (!payload || !payload.open || !payload.close || !payload.high || !payload.low) return null;
+    
+    const { open, close, high, low } = payload;
+    const isPositive = close >= open;
+    const color = isPositive ? '#10b981' : '#ef4444';
+    
+    const maxPrice = Math.max(high, open, close, low);
+    const minPrice = Math.min(high, open, close, low);
+    const priceRange = maxPrice - minPrice;
+    
+    if (priceRange === 0) return null;
+    
+    // Calculate positions
+    const yScale = height / priceRange;
+    const highY = y + (maxPrice - high) * yScale;
+    const lowY = y + (maxPrice - low) * yScale;
+    const openY = y + (maxPrice - open) * yScale;
+    const closeY = y + (maxPrice - close) * yScale;
+    
+    const bodyTop = Math.min(openY, closeY);
+    const bodyHeight = Math.abs(openY - closeY);
+    const candleWidth = Math.max(width * 0.6, 2);
+    const wickX = x + width / 2;
+    
+    return (
+      <g>
+        {/* Wick (high-low line) */}
+        <line
+          x1={wickX}
+          y1={highY}
+          x2={wickX}
+          y2={lowY}
+          stroke={color}
+          strokeWidth={1}
+        />
+        {/* Body (open-close rectangle) */}
+        <rect
+          x={x + (width - candleWidth) / 2}
+          y={bodyTop}
+          width={candleWidth}
+          height={bodyHeight === 0 ? 1 : bodyHeight}
+          fill={isPositive ? color : '#1e293b'}
+          stroke={color}
+          strokeWidth={1}
+        />
+      </g>
     );
   };
 
@@ -341,6 +428,27 @@ export default function AdvancedChart({ asset }) {
           ))}
         </div>
 
+        <div className="flex gap-2 border border-slate-700 rounded-lg p-1">
+          <Button
+            variant={chartType === 'candles' ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setChartType('candles')}
+            className={chartType === 'candles' ? "bg-indigo-600 hover:bg-indigo-700" : "text-slate-300 hover:bg-slate-800"}
+          >
+            <Candle className="w-4 h-4 mr-1" />
+            Candles
+          </Button>
+          <Button
+            variant={chartType === 'area' ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setChartType('area')}
+            className={chartType === 'area' ? "bg-indigo-600 hover:bg-indigo-700" : "text-slate-300 hover:bg-slate-800"}
+          >
+            <Activity className="w-4 h-4 mr-1" />
+            Area
+          </Button>
+        </div>
+
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
@@ -390,25 +498,13 @@ export default function AdvancedChart({ asset }) {
         <TabsContent value="price" className="mt-4">
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-4 border border-slate-700">
             {priceData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={400}>
+              <ResponsiveContainer width="100%" height={500}>
                 <ComposedChart data={priceData}>
                   <defs>
                     <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#818cf8" stopOpacity={0.8}/>
                       <stop offset="50%" stopColor="#6366f1" stopOpacity={0.4}/>
                       <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.1}/>
-                    </linearGradient>
-                    <linearGradient id="colorSMA20" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.5}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorSMA50" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#a855f7" stopOpacity={0.5}/>
-                      <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorEMA12" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.5}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
                   
@@ -422,20 +518,28 @@ export default function AdvancedChart({ asset }) {
                   <YAxis 
                     stroke="#94a3b8" 
                     tick={{ fill: '#94a3b8', fontSize: 11 }}
-                    domain={['auto', 'auto']}
+                    domain={chartType === 'candles' ? ['auto', 'auto'] : ['dataMin - 10', 'dataMax + 10']}
                     tickMargin={8}
                   />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend wrapperStyle={{ color: '#94a3b8', paddingTop: '10px' }} />
                   
-                  <Area
-                    type="monotone"
-                    dataKey="price"
-                    fill="url(#colorPrice)"
-                    stroke="#818cf8"
-                    strokeWidth={3}
-                    name="Price"
-                  />
+                  {chartType === 'candles' ? (
+                    <Bar
+                      dataKey="high"
+                      shape={<Candlestick />}
+                      name="Price"
+                    />
+                  ) : (
+                    <Area
+                      type="monotone"
+                      dataKey="price"
+                      fill="url(#colorPrice)"
+                      stroke="#818cf8"
+                      strokeWidth={3}
+                      name="Price"
+                    />
+                  )}
                   
                   {indicators.sma20 && (
                     <Line
@@ -474,7 +578,7 @@ export default function AdvancedChart({ asset }) {
                 </ComposedChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[400px] flex items-center justify-center text-slate-400">
+              <div className="h-[500px] flex items-center justify-center text-slate-400">
                 No chart data available
               </div>
             )}
