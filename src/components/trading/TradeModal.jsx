@@ -149,7 +149,7 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-1">
+        <ScrollArea className="max-h-[calc(90vh-120px)] px-1">
           <div className="space-y-6 py-4 pr-4">
           {/* Asset Info */}
           <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
