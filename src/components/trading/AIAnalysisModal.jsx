@@ -1,6 +1,6 @@
-
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { base44 } from "@/api/base44Client";
 import { Sparkles, TrendingUp, TrendingDown, Activity, Target, AlertTriangle, BarChart3, Newspaper, MessageSquare, Database } from "lucide-react";
 import { motion } from "framer-motion";
@@ -198,7 +198,7 @@ Provide detailed trading recommendations with confidence scores.`;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-6xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-indigo-400" />
@@ -206,7 +206,8 @@ Provide detailed trading recommendations with confidence scores.`;
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="overview" className="w-full">
+        <ScrollArea className="flex-1 px-1">
+          <Tabs defaultValue="overview" className="w-full pr-4">
           <TabsList className="bg-slate-800 border-slate-700 w-full justify-start">
             <TabsTrigger value="overview" className="data-[state=active]:bg-indigo-600">
               <Sparkles className="w-4 h-4 mr-2" />
@@ -550,6 +551,7 @@ Provide detailed trading recommendations with confidence scores.`;
             {asset && <AdvancedChart asset={asset} />}
           </TabsContent>
         </Tabs>
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );
