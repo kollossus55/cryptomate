@@ -50,6 +50,22 @@ export default function Trading() {
 
   const queryClient = useQueryClient();
 
+  // Fetch user preferences
+  const { data: preferences } = useQuery({
+    queryKey: ['trading-preferences'],
+    queryFn: async () => {
+      const prefs = await base44.entities.TradingPreferences.list();
+      return prefs && prefs.length > 0 ? prefs[0] : null;
+    },
+    staleTime: 60000,
+  });
+
+  useEffect(() => {
+    if (preferences) {
+      setUserPreferences(preferences);
+    }
+  }, [preferences]);
+
   const coinGeckoIds = {
     BTC: "bitcoin",
     ETH: "ethereum",
