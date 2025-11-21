@@ -114,7 +114,6 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
     };
 
     resetInactivityTimer();
-    setLastInteractionTime(Date.now());
 
     return () => {
       if (inactivityTimerRef.current) {
@@ -370,7 +369,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
       })
       .filter(({ signalData }) => signalData && signalData.confidence >= 70)
       .sort((a, b) => b.signalData.confidence - a.signalData.confidence)
-      .slice(0, 3);
+      .slice(0, 10);
 
     console.log(`📋 Assets with signals (>= 70% confidence): ${assetsWithSignals.length}`);
 
