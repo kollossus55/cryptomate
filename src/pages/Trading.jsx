@@ -29,6 +29,7 @@ import {
 } from "../components/trading/autoTradingEngine";
 
 import { executeSmartOrder } from "../components/trading/smartOrderExecution";
+import { scanAltcoins } from "../components/trading/AltcoinScanner";
 
 export default function Trading() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -47,6 +48,7 @@ export default function Trading() {
   const [showNewsWidget, setShowNewsWidget] = useState(true);
   const [showWatchlistModal, setShowWatchlistModal] = useState(false);
   const [userPreferences, setUserPreferences] = useState(null);
+  const [altcoinOpportunities, setAltcoinOpportunities] = useState([]);
 
   const queryClient = useQueryClient();
 
@@ -312,9 +314,40 @@ export default function Trading() {
       console.log('📥 Auto-trading state restored from previous session');
     }
 
+    // Scan altcoins every 5 minutes for auto-trading opportunities
+    const scanAltcoinsForTrading = async () => {
+      try {
+        const opportunities = await scanAltcoins(10);
+        setAltcoinOpportunities(opportunities);
+        
+        // Store in global scope for auto-trading access
+        window.altcoinOpportunities = opportunities;
+        
+        // Add to assetSignalData for unified processing
+        opportunities.forEach(opp => {
+          if (!window.assetSignalData) window.assetSignalData = {};
+          window.assetSignalData[opp.symbol] = {
+            confidence: opp.confidence,
+            recommendation: opp.signal === 'strong_buy' || opp.signal === 'buy' ? 'buy' : 
+                          opp.signal === 'strong_sell' || opp.signal === 'sell' ? 'sell' : 'hold',
+            timestamp: Date.now(),
+            source: 'altcoin_scanner'
+          };
+        });
+        
+        console.log(`✅ Altcoin scanner: Found ${opportunities.length} opportunities for auto-trading`);
+      } catch (error) {
+        console.error('Failed to scan altcoins:', error);
+      }
+    };
+
+    scanAltcoinsForTrading();
+    const altcoinInterval = setInterval(scanAltcoinsForTrading, 5 * 60 * 1000); // Every 5 minutes
+
     return () => {
       clearInterval(priceInterval);
       clearInterval(timeInterval);
+      clearInterval(altcoinInterval);
       clearTimeout(timer);
     };
   }, []);
@@ -578,11 +611,40 @@ export default function Trading() {
 
       console.log('🔍 Checking auto-trading opportunities (Smart Execution Mode)...');
       console.log(`📊 Confidence data: ${Object.keys(assetConfidence).length} assets ready`);
+      
+      // Combine main assets with altcoin opportunities
+      const combinedAssets = [...assets];
+      if (window.altcoinOpportunities && window.altcoinOpportunities.length > 0) {
+        window.altcoinOpportunities.forEach(opp => {
+          // Only add if not already in main assets list
+          if (!combinedAssets.find(a => a.symbol === opp.symbol)) {
+            combinedAssets.push({
+              symbol: opp.symbol,
+              name: opp.name,
+              price: opp.simulated_price,
+              change24h: opp.momentum,
+              volume24h: opp.marketCap * 0.1, // Estimated volume
+              marketCap: opp.marketCap,
+              icon: opp.symbol.substring(0, 2),
+              color: "bg-cyan-500"
+            });
+          }
+        });
+        console.log(`📈 Added ${window.altcoinOpportunities.length} altcoin opportunities to trading pool`);
+      }
+
+      // Combine confidence data
+      const combinedConfidence = { ...assetConfidence };
+      if (window.altcoinOpportunities) {
+        window.altcoinOpportunities.forEach(opp => {
+          combinedConfidence[opp.symbol] = opp.confidence;
+        });
+      }
 
       try {
         const result = await executeAutoTradingCheckAdvanced(
-          assets,
-          assetConfidence,
+          combinedAssets,
+          combinedConfidence,
           autoTradingSettings,
           portfolio,
           async (opportunity) => {
