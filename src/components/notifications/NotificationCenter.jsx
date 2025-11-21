@@ -52,9 +52,9 @@ export default function NotificationCenter() {
 
   const clearAllMutation = useMutation({
     mutationFn: async (notificationsToDelete) => {
-      // Use the notifications passed to the mutation to avoid stale closure
-      if (notificationsToDelete.length > 0) {
-        await Promise.all(notificationsToDelete.map(n => base44.entities.Notification.delete(n.id)));
+      // Delete sequentially to avoid race conditions
+      for (const notification of notificationsToDelete) {
+        await base44.entities.Notification.delete(notification.id);
       }
     },
     onSuccess: () => {
