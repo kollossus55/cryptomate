@@ -3,7 +3,7 @@ import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, Cartesia
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TrendingUp, Activity, BarChart3, AlertCircle, RefreshCw, CandlestickChart } from "lucide-react";
+import { TrendingUp, Activity, BarChart3, AlertCircle, RefreshCw, BarChart2 } from "lucide-react";
 
 export default function AdvancedChart({ asset }) {
   const [priceData, setPriceData] = useState([]);
@@ -435,7 +435,7 @@ export default function AdvancedChart({ asset }) {
             onClick={() => setChartType('candles')}
             className={chartType === 'candles' ? "bg-indigo-600 hover:bg-indigo-700" : "text-slate-300 hover:bg-slate-800"}
           >
-            <CandlestickChart className="w-4 h-4 mr-1" />
+            <BarChart2 className="w-4 h-4 mr-1" />
             Candles
           </Button>
           <Button
