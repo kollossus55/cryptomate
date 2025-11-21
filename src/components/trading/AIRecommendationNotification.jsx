@@ -135,15 +135,9 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
       if (timeSinceLastCall < MIN_TIME_BETWEEN_LLM_CALLS) {
         console.log(`⏳ Rate limit: Skipping LLM call. Last call was ${Math.round(timeSinceLastCall / 1000)}s ago`);
         console.log('🔍 Checking for altcoin opportunities:', window.altcoinOpportunities?.length || 0, 'found');
-        // Use cached recommendations if available
-        const cachedRecs = localStorage.getItem('cached_ai_recommendations');
-        if (cachedRecs) {
-          setRecommendations(JSON.parse(cachedRecs));
-        } else {
-          // Generate basic recommendations if no cache
-          console.log('📊 Generating basic recommendations...');
-          generateBasicRecommendations();
-        }
+        // ALWAYS generate fresh recommendations with latest altcoin data
+        console.log('📊 Generating basic recommendations with latest data...');
+        generateBasicRecommendations();
         setIsLoading(false);
         return;
       }
