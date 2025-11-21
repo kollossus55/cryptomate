@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, TrendingUp, Sparkles, RefreshCw, AlertCircle, Settings, Eye, EyeOff, Newspaper, Scan } from "lucide-react";
+import { Search, TrendingUp, Sparkles, RefreshCw, AlertCircle, Settings, Eye, EyeOff, Newspaper, Scan, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 import AssetCard from "../components/trading/AssetCard";
@@ -11,6 +11,7 @@ import TradeModal from "../components/trading/TradeModal";
 import AIAnalysisModal from "../components/trading/AIAnalysisModal";
 import AIRecommendationNotification from "../components/trading/AIRecommendationNotification";
 import AltcoinScannerModal from "../components/trading/AltcoinScannerModal";
+import WatchlistModal from "../components/trading/WatchlistModal";
 import PortfolioCard from "../components/trading/PortfolioCard";
 import NotificationToast from "../components/notifications/NotificationToast";
 import { useNotificationMonitor } from "../components/notifications/useNotificationMonitor";
@@ -44,6 +45,8 @@ export default function Trading() {
   const [isPageVisible, setIsPageVisible] = useState(true);
   const [showVisibilityWarning, setShowVisibilityWarning] = useState(false);
   const [showNewsWidget, setShowNewsWidget] = useState(true);
+  const [showWatchlistModal, setShowWatchlistModal] = useState(false);
+  const [userPreferences, setUserPreferences] = useState(null);
 
   const queryClient = useQueryClient();
 
@@ -67,7 +70,37 @@ export default function Trading() {
     VET: "vechain",
     FIL: "filecoin",
     NEAR: "near",
-    APT: "aptos"
+    APT: "aptos",
+    ARB: "arbitrum",
+    OP: "optimism",
+    INJ: "injective-protocol",
+    TIA: "celestia",
+    SUI: "sui",
+    SEI: "sei-network",
+    HBAR: "hedera-hashgraph",
+    STX: "blockstack",
+    IMX: "immutable-x",
+    RUNE: "thorchain",
+    AAVE: "aave",
+    MKR: "maker",
+    LDO: "lido-dao",
+    CRV: "curve-dao-token",
+    SNX: "havven",
+    GRT: "the-graph",
+    SAND: "the-sandbox",
+    MANA: "decentraland",
+    APE: "apecoin",
+    AXS: "axie-infinity",
+    FTM: "fantom",
+    EGLD: "elrond-erd-2",
+    THETA: "theta-token",
+    XTZ: "tezos",
+    EOS: "eos",
+    FLOW: "flow",
+    ICP: "internet-computer",
+    QNT: "quant-network",
+    PEPE: "pepe",
+    WIF: "dogwifcoin"
   };
 
   const initialAssets = [
@@ -90,7 +123,37 @@ export default function Trading() {
     { symbol: "VET", name: "VeChain", price: 0.028, change24h: 4.21, volume24h: 120000000, marketCap: 2100000000, icon: "V", color: "bg-blue-700" },
     { symbol: "FIL", name: "Filecoin", price: 5.67, change24h: -2.34, volume24h: 180000000, marketCap: 3200000000, icon: "⨎", color: "bg-cyan-600" },
     { symbol: "NEAR", name: "NEAR Protocol", price: 2.87, change24h: 3.89, volume24h: 240000000, marketCap: 3000000000, icon: "N", color: "bg-green-600" },
-    { symbol: "APT", name: "Aptos", price: 11.42, change24h: 6.23, volume24h: 290000000, marketCap: 4500000000, icon: "A", color: "bg-emerald-500" }
+    { symbol: "APT", name: "Aptos", price: 11.42, change24h: 6.23, volume24h: 290000000, marketCap: 4500000000, icon: "A", color: "bg-emerald-500" },
+    { symbol: "ARB", name: "Arbitrum", price: 1.23, change24h: 2.34, volume24h: 380000000, marketCap: 5600000000, icon: "🔷", color: "bg-blue-500" },
+    { symbol: "OP", name: "Optimism", price: 2.45, change24h: 3.12, volume24h: 290000000, marketCap: 4100000000, icon: "🔴", color: "bg-red-600" },
+    { symbol: "INJ", name: "Injective", price: 28.34, change24h: 5.67, volume24h: 220000000, marketCap: 3800000000, icon: "💉", color: "bg-cyan-600" },
+    { symbol: "TIA", name: "Celestia", price: 8.92, change24h: 4.23, volume24h: 180000000, marketCap: 2900000000, icon: "🌟", color: "bg-purple-400" },
+    { symbol: "SUI", name: "Sui", price: 1.87, change24h: 6.45, volume24h: 310000000, marketCap: 5200000000, icon: "🌊", color: "bg-blue-400" },
+    { symbol: "SEI", name: "Sei", price: 0.67, change24h: 3.89, volume24h: 140000000, marketCap: 2100000000, icon: "⚡", color: "bg-red-400" },
+    { symbol: "HBAR", name: "Hedera", price: 0.084, change24h: 2.11, volume24h: 160000000, marketCap: 3400000000, icon: "ℏ", color: "bg-slate-600" },
+    { symbol: "STX", name: "Stacks", price: 1.92, change24h: 4.56, volume24h: 120000000, marketCap: 2800000000, icon: "⟁", color: "bg-orange-600" },
+    { symbol: "IMX", name: "Immutable X", price: 2.34, change24h: 3.21, volume24h: 95000000, marketCap: 2300000000, icon: "✕", color: "bg-cyan-700" },
+    { symbol: "RUNE", name: "THORChain", price: 5.67, change24h: 2.89, volume24h: 110000000, marketCap: 2000000000, icon: "⚔", color: "bg-green-700" },
+    { symbol: "AAVE", name: "Aave", price: 98.45, change24h: 1.23, volume24h: 180000000, marketCap: 1900000000, icon: "👻", color: "bg-pink-500" },
+    { symbol: "MKR", name: "Maker", price: 1567.23, change24h: -0.89, volume24h: 85000000, marketCap: 1800000000, icon: "🏛", color: "bg-green-500" },
+    { symbol: "LDO", name: "Lido DAO", price: 2.89, change24h: 3.45, volume24h: 140000000, marketCap: 2600000000, icon: "🛡", color: "bg-blue-600" },
+    { symbol: "CRV", name: "Curve DAO", price: 0.87, change24h: 2.11, volume24h: 95000000, marketCap: 1100000000, icon: "🔁", color: "bg-blue-500" },
+    { symbol: "SNX", name: "Synthetix", price: 3.45, change24h: 4.32, volume24h: 78000000, marketCap: 1400000000, icon: "⚗", color: "bg-purple-600" },
+    { symbol: "GRT", name: "The Graph", price: 0.23, change24h: 1.89, volume24h: 92000000, marketCap: 2200000000, icon: "📊", color: "bg-indigo-600" },
+    { symbol: "SAND", name: "The Sandbox", price: 0.56, change24h: 3.12, volume24h: 110000000, marketCap: 1300000000, icon: "🏝", color: "bg-yellow-400" },
+    { symbol: "MANA", name: "Decentraland", price: 0.67, change24h: 2.45, volume24h: 88000000, marketCap: 1200000000, icon: "🏛", color: "bg-red-500" },
+    { symbol: "APE", name: "ApeCoin", price: 1.89, change24h: 4.67, volume24h: 125000000, marketCap: 1500000000, icon: "🐵", color: "bg-blue-700" },
+    { symbol: "AXS", name: "Axie Infinity", price: 8.34, change24h: 2.89, volume24h: 95000000, marketCap: 1100000000, icon: "🎮", color: "bg-pink-600" },
+    { symbol: "FTM", name: "Fantom", price: 0.45, change24h: 3.56, volume24h: 140000000, marketCap: 1800000000, icon: "👻", color: "bg-blue-500" },
+    { symbol: "EGLD", name: "MultiversX", price: 42.67, change24h: 1.78, volume24h: 75000000, marketCap: 1600000000, icon: "⚡", color: "bg-cyan-500" },
+    { symbol: "THETA", name: "Theta Network", price: 1.23, change24h: 2.34, volume24h: 68000000, marketCap: 1200000000, icon: "θ", color: "bg-indigo-500" },
+    { symbol: "XTZ", name: "Tezos", price: 1.12, change24h: 1.45, volume24h: 82000000, marketCap: 1100000000, icon: "ꜩ", color: "bg-blue-600" },
+    { symbol: "EOS", name: "EOS", price: 0.89, change24h: 2.11, volume24h: 95000000, marketCap: 1000000000, icon: "Ξ", color: "bg-slate-700" },
+    { symbol: "FLOW", name: "Flow", price: 1.45, change24h: 3.21, volume24h: 72000000, marketCap: 1500000000, icon: "🌊", color: "bg-green-500" },
+    { symbol: "ICP", name: "Internet Computer", price: 5.67, change24h: 4.12, volume24h: 110000000, marketCap: 2700000000, icon: "∞", color: "bg-purple-500" },
+    { symbol: "QNT", name: "Quant", price: 112.34, change24h: 1.89, volume24h: 65000000, marketCap: 1400000000, icon: "Q", color: "bg-slate-600" },
+    { symbol: "PEPE", name: "Pepe", price: 0.0000089, change24h: 8.92, volume24h: 420000000, marketCap: 3700000000, icon: "🐸", color: "bg-green-400" },
+    { symbol: "WIF", name: "dogwifhat", price: 2.87, change24h: 7.23, volume24h: 280000000, marketCap: 2900000000, icon: "🐕", color: "bg-orange-400" }
   ];
 
   const [assets, setAssets] = useState(initialAssets);
@@ -624,7 +687,6 @@ export default function Trading() {
 
   const calculateAIConfidence = async () => {
     const confidence = {};
-    const assetsToProcess = assets.slice(0, 3);
     const lastConfidenceCalc = localStorage.getItem('last_confidence_calculation');
     const MIN_TIME_BETWEEN_CALCULATIONS = 120 * 1000;
 
@@ -639,7 +701,37 @@ export default function Trading() {
       }
     }
 
-    for (const asset of assetsToProcess) {
+    // Smart asset selection for deep AI analysis
+    const selectAssetsForDeepAnalysis = () => {
+      let priorityAssets = [];
+      
+      // 1. User's watchlist (highest priority)
+      const watchlist = userPreferences?.watchlist || [];
+      priorityAssets = assets.filter(a => watchlist.includes(a.symbol));
+      
+      // 2. User's preferred assets
+      const preferred = userPreferences?.preferred_assets || [];
+      priorityAssets = [...priorityAssets, ...assets.filter(a => preferred.includes(a.symbol) && !priorityAssets.find(p => p.symbol === a.symbol))];
+      
+      // 3. Rotate through high-volume/volatile assets
+      const rotationIndex = Math.floor(Date.now() / (5 * 60 * 1000)) % Math.ceil(assets.length / 10); // Rotate every 5 min
+      const sortedByActivity = [...assets].sort((a, b) => {
+        const scoreA = (Math.abs(a.change24h) * 2) + (a.volume24h / 1e9);
+        const scoreB = (Math.abs(b.change24h) * 2) + (b.volume24h / 1e9);
+        return scoreB - scoreA;
+      });
+      const rotatedAssets = sortedByActivity.slice(rotationIndex * 10, (rotationIndex + 1) * 10);
+      priorityAssets = [...priorityAssets, ...rotatedAssets.filter(a => !priorityAssets.find(p => p.symbol === a.symbol))];
+      
+      // Take top 10 for deep analysis
+      return priorityAssets.slice(0, 10);
+    };
+
+    const assetsForDeepAnalysis = selectAssetsForDeepAnalysis();
+    console.log(`🎯 Deep AI analysis for: ${assetsForDeepAnalysis.map(a => a.symbol).join(', ')}`);
+
+    // Process priority assets with advanced AI
+    for (const asset of assetsForDeepAnalysis) {
       try {
         const advancedSignal = await generateAdvancedSignal(asset);
         confidence[asset.symbol] = advancedSignal.confidence;
@@ -663,12 +755,19 @@ export default function Trading() {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    for (let i = 3; i < assets.length; i++) {
-      confidence[assets[i].symbol] = calculateBasicConfidence(assets[i]);
+    // Process remaining assets with basic confidence
+    const deepAnalysisSymbols = new Set(assetsForDeepAnalysis.map(a => a.symbol));
+    const excluded = userPreferences?.excluded_assets || [];
+    
+    for (const asset of assets) {
+      if (deepAnalysisSymbols.has(asset.symbol)) continue;
+      if (excluded.includes(asset.symbol)) continue; // Skip excluded assets
+      
+      confidence[asset.symbol] = calculateBasicConfidence(asset);
       if (!window.assetSignalData) window.assetSignalData = {};
-      window.assetSignalData[assets[i].symbol] = {
-        confidence: confidence[assets[i].symbol],
-        recommendation: confidence[assets[i].symbol] > 70 ? 'buy' : confidence[assets[i].symbol] < 40 ? 'sell' : 'hold',
+      window.assetSignalData[asset.symbol] = {
+        confidence: confidence[asset.symbol],
+        recommendation: confidence[asset.symbol] > 70 ? 'buy' : confidence[asset.symbol] < 40 ? 'sell' : 'hold',
         timestamp: Date.now()
       };
     }
@@ -941,6 +1040,14 @@ export default function Trading() {
             >
               <Scan className="w-5 h-5 mr-2" />
               Altcoin Scanner
+            </Button>
+            <Button
+              onClick={() => setShowWatchlistModal(true)}
+              size="lg"
+              className="bg-gradient-to-br from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold"
+            >
+              <TrendingUp className="w-5 h-5 mr-2" />
+              My Watchlist
             </Button>
           </div>
         </div>
@@ -1301,6 +1408,17 @@ export default function Trading() {
         <AltcoinScannerModal
           onTradeAsset={handleTrade}
           onClose={() => setShowAltcoinScanner(false)}
+        />
+      )}
+
+      {showWatchlistModal && (
+        <WatchlistModal
+          assets={assets}
+          userPreferences={userPreferences}
+          onClose={() => {
+            setShowWatchlistModal(false);
+            refetchPreferences();
+          }}
         />
       )}
 
