@@ -1417,7 +1417,7 @@ export default function Trading() {
           userPreferences={userPreferences}
           onClose={() => {
             setShowWatchlistModal(false);
-            refetchPreferences();
+            queryClient.invalidateQueries({ queryKey: ['trading-preferences'] });
           }}
         />
       )}
