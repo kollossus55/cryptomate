@@ -417,8 +417,8 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
             </Button>
           </div>
           </div>
-        </ScrollArea>
-      </DialogContent>
+          </div>
+          </DialogContent>
     </Dialog>
   );
 }
