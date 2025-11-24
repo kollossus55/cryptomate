@@ -96,21 +96,44 @@ Deno.serve(async (req) => {
     // In production, this would fetch from a market data API
     // For now, we'll generate simulated opportunities based on stored signal data
     
-    // Get top assets with high confidence from scanner
+    // Fetch real market data from CoinGecko
+    const coinGeckoIds = 'bitcoin,ethereum,binancecoin,solana,ripple,cardano,avalanche-2,dogecoin,polkadot,matic-network,litecoin,chainlink,uniswap,cosmos,stellar,algorand,vechain,filecoin,near,aptos,arbitrum,optimism,injective-protocol,celestia,sui,sei-network';
+    const symbolMap = {
+      'bitcoin': 'BTC', 'ethereum': 'ETH', 'binancecoin': 'BNB', 'solana': 'SOL',
+      'ripple': 'XRP', 'cardano': 'ADA', 'avalanche-2': 'AVAX', 'dogecoin': 'DOGE',
+      'polkadot': 'DOT', 'matic-network': 'MATIC', 'litecoin': 'LTC', 'chainlink': 'LINK',
+      'uniswap': 'UNI', 'cosmos': 'ATOM', 'stellar': 'XLM', 'algorand': 'ALGO',
+      'vechain': 'VET', 'filecoin': 'FIL', 'near': 'NEAR', 'aptos': 'APT',
+      'arbitrum': 'ARB', 'optimism': 'OP', 'injective-protocol': 'INJ', 'celestia': 'TIA',
+      'sui': 'SUI', 'sei-network': 'SEI'
+    };
+    
+    let marketData = {};
+    try {
+      const response = await fetch(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${coinGeckoIds}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+      if (response.ok) {
+        marketData = await response.json();
+        console.log('📊 Fetched market data for', Object.keys(marketData).length, 'assets');
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to fetch market data:', e.message);
+    }
+    
     const opportunities = [];
     
-    // Check if we have any positions to manage (stop loss, take profit)
+    // Check existing positions for stop loss / take profit
     if (portfolio.positions && portfolio.positions.length > 0) {
       for (const position of portfolio.positions) {
         const assetSymbol = position.asset_symbol.replace('/USDT', '');
-        
-        // Simulate current price (in production, fetch real price)
-        const priceChange = (Math.random() - 0.5) * 5; // -2.5% to +2.5%
-        const currentPrice = position.avg_entry_price * (1 + priceChange / 100);
+        const geckoId = Object.keys(symbolMap).find(k => symbolMap[k] === assetSymbol);
+        const liveData = geckoId ? marketData[geckoId] : null;
+        const currentPrice = liveData?.usd || position.avg_entry_price;
         
         const profitPercent = ((currentPrice - position.avg_entry_price) / position.avg_entry_price) * 100;
         
-        // Check stop loss
         if (profitPercent <= -(settings.stop_loss_percent || 3)) {
           opportunities.push({
             asset: { symbol: assetSymbol, price: currentPrice },
@@ -123,7 +146,6 @@ Deno.serve(async (req) => {
           break;
         }
         
-        // Check take profit
         if (profitPercent >= (settings.take_profit_percent || 8)) {
           opportunities.push({
             asset: { symbol: assetSymbol, price: currentPrice },
@@ -138,9 +160,68 @@ Deno.serve(async (req) => {
       }
     }
     
-    // If no position management needed, look for new buy opportunities
-    // This would integrate with real market data API
+    // Scan for NEW buy opportunities if no sell signals and balance available
+    if (opportunities.length === 0 && portfolio.available_balance > 50 && Object.keys(marketData).length > 0) {
+      const minConfidence = settings.min_confidence || 70;
+      
+      for (const [geckoId, data] of Object.entries(marketData)) {
+        const symbol = symbolMap[geckoId];
+        if (!symbol || !data.usd || !data.usd_24h_change) continue;
+        
+        // Skip if already traded today
+        if (hasAssetBeenTradedToday(symbol, settings)) continue;
+        
+        // Skip if already have position
+        if (portfolio.positions?.find(p => p.asset_symbol === `${symbol}/USDT`)) continue;
+        
+        const change24h = data.usd_24h_change;
+        const price = data.usd;
+        
+        // Calculate confidence score based on momentum and volume
+        let confidence = 50;
+        if (change24h > 5) confidence += 20;
+        else if (change24h > 2) confidence += 15;
+        else if (change24h > 0.5) confidence += 10;
+        else if (change24h < -3) confidence -= 15;
+        else if (change24h < 0) confidence -= 5;
+        
+        // Volume bonus (high volume = more reliable signal)
+        if (data.usd_24h_vol > 1000000000) confidence += 10;
+        else if (data.usd_24h_vol > 500000000) confidence += 5;
+        
+        // Add some variance
+        confidence += Math.floor(Math.random() * 10) - 5;
+        confidence = Math.max(30, Math.min(95, confidence));
+        
+        const riskLevel = calculateRiskLevel(confidence);
+        
+        // Check if meets criteria
+        if (confidence >= minConfidence && change24h > 0.5 && isRiskLevelAllowed(riskLevel, settings)) {
+          const positionSize = calculatePositionSize(portfolio.available_balance, settings, price);
+          
+          if (positionSize.valid) {
+            opportunities.push({
+              asset: { symbol, price },
+              action: 'buy',
+              reason: 'positive_momentum',
+              quantity: positionSize.quantity,
+              confidence,
+              riskLevel,
+              change24h
+            });
+          }
+        }
+      }
+      
+      // Sort by confidence and take best
+      opportunities.sort((a, b) => b.confidence - a.confidence);
+      if (opportunities.length > 1) {
+        opportunities.length = 1; // Keep only best opportunity
+      }
+    }
+    
     if (opportunities.length === 0) {
+      console.log(`📊 No opportunities found for ${user_email} (min confidence: ${settings.min_confidence}%)`);
       return Response.json({ 
         success: true,
         executed: false,
