@@ -29,10 +29,17 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [] 
   const winRate = completedTrades > 0 ? ((winningTrades / completedTrades) * 100).toFixed(0) : 0;
 
   const handleClosePosition = (position) => {
+    console.log('🔴 Close Position Button Clicked:', position.asset_symbol);
     if (window.confirm(`Close position for ${position.asset_symbol}?\n\nQuantity: ${position.quantity?.toFixed(6)}\nUnrealized P&L: ${position.profit_loss >= 0 ? '+' : ''}$${position.profit_loss?.toFixed(2)}`)) {
+      console.log('✅ User confirmed closing position');
       if (onClosePosition) {
+        console.log('📞 Calling onClosePosition callback');
         onClosePosition(position);
+      } else {
+        console.error('❌ onClosePosition callback is missing!');
       }
+    } else {
+      console.log('❌ User cancelled closing position');
     }
   };
 
