@@ -1009,15 +1009,22 @@ export default function Trading() {
     try {
       console.log('Closing position:', position);
       const assetSymbol = position.asset_symbol.replace('/USDT', '');
-      const asset = assets.find(a => a.symbol === assetSymbol);
+      let asset = assets.find(a => a.symbol === assetSymbol);
 
+      // If asset not in current list, create a minimal asset object using position data
       if (!asset) {
-        console.error(`Asset ${assetSymbol} not found in assets array. Available assets:`, assets.map(a => a.symbol));
-        alert(`Cannot close ${assetSymbol} - asset not found in current market data. Try refreshing the page.`);
-        return;
+        console.warn(`Asset ${assetSymbol} not in trading list, using position data to close`);
+        const currentPrice = position.current_value / position.quantity; // Calculate from position
+        asset = {
+          symbol: assetSymbol,
+          name: assetSymbol,
+          price: currentPrice,
+          icon: assetSymbol.charAt(0),
+          color: "bg-slate-500"
+        };
       }
 
-      console.log('Executing sell trade for:', assetSymbol, 'quantity:', position.quantity);
+      console.log('Executing sell trade for:', assetSymbol, 'quantity:', position.quantity, 'price:', asset.price);
 
       await handleExecuteTrade({
         asset: asset,
