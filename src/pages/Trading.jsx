@@ -1001,22 +1001,26 @@ export default function Trading() {
   };
 
   const handleClosePosition = async (position) => {
-    if (!portfolio) return;
+    if (!portfolio) {
+      console.error('No portfolio found');
+      return;
+    }
 
     try {
+      console.log('Closing position:', position);
       const assetSymbol = position.asset_symbol.replace('/USDT', '');
       const asset = assets.find(a => a.symbol === assetSymbol);
 
       if (!asset) {
-        alert(`Asset ${assetSymbol} not found in current market data`);
+        console.error(`Asset ${assetSymbol} not found in assets array. Available assets:`, assets.map(a => a.symbol));
+        alert(`Cannot close ${assetSymbol} - asset not found in current market data. Try refreshing the page.`);
         return;
       }
 
+      console.log('Executing sell trade for:', assetSymbol, 'quantity:', position.quantity);
+
       await handleExecuteTrade({
-        asset: {
-          ...asset,
-          symbol: assetSymbol
-        },
+        asset: asset,
         tradeType: 'sell',
         quantity: position.quantity,
         price: asset.price,
@@ -1026,7 +1030,7 @@ export default function Trading() {
       console.log(`✅ Position closed: ${position.asset_symbol}`);
     } catch (error) {
       console.error('Failed to close position:', error);
-      alert('Failed to close position. Please try again.');
+      alert(`Failed to close position: ${error.message || 'Unknown error'}`);
     }
   };
 
