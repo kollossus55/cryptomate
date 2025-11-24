@@ -1,4 +1,3 @@
-
 /**
  * Auto-Trading Engine Core Logic
  * 
@@ -489,7 +488,7 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
   
   // Buy signal: positive momentum + high confidence
   // BUT check if we've already traded this asset today
-  if (priceChange > 1.5 && confidence >= minConfidence) {
+  if (priceChange > 0.5 && confidence >= minConfidence) {
     if (hasAssetBeenTradedToday(asset.symbol, settings)) {
       return { 
         action: null, 
