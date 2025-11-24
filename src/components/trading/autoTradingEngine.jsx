@@ -867,6 +867,13 @@ export function scanTradingOpportunitiesAdvanced(assets, assetConfidence, settin
     }
   }
   
+  console.log(`\n✨ Found ${opportunities.length} total opportunities`);
+  if (opportunities.length > 0) {
+    opportunities.forEach((opp, i) => {
+      console.log(`  ${i+1}. ${opp.asset.symbol} - ${opp.action.toUpperCase()} - ${opp.confidence}% confidence`);
+    });
+  }
+  
   return opportunities;
 }
 
