@@ -757,6 +757,7 @@ export function scanTradingOpportunitiesAdvanced(assets, assetConfidence, settin
     
     if (checkedCount <= 5 || confidence >= adjustedMinConfidence) {
       console.log(`\n  ${asset.symbol}: price=$${asset.price.toFixed(2)}, change=${asset.change24h?.toFixed(2)}%, confidence=${confidence}%`);
+    }
     
     // Use advanced trade action determination
     const tradeDecision = determineTradeActionAdvanced(asset, confidence, settings, portfolio);
