@@ -608,14 +608,20 @@ export default function Trading() {
     console.log('✅ Auto-trading monitor initialized with smart order execution (browser-based)');
 
     const checkAutoTrading = async () => {
+      console.log('\n═══════════════════════════════════════════════════');
+      console.log('🤖 AUTO-TRADING CHECK STARTED');
+      console.log('═══════════════════════════════════════════════════');
+      
       BrowserState.save({
         lastCheck: Date.now(),
         isEnabled: true,
         tradesToday: autoTradingSettings.trades_today || 0
       });
 
-      console.log('🔍 Checking auto-trading opportunities (Smart Execution Mode)...');
-      console.log(`📊 Confidence data: ${Object.keys(assetConfidence).length} assets ready`);
+      console.log('📊 Confidence data:', Object.keys(assetConfidence).length, 'assets ready');
+      console.log('💰 Available balance:', portfolio?.available_balance);
+      console.log('📈 Trades today:', autoTradingSettings.trades_today, '/', autoTradingSettings.max_trades_per_day);
+      console.log('⚙️ Min confidence:', autoTradingSettings.min_confidence + '%');
       
       // Combine main assets with altcoin opportunities
       const combinedAssets = [...assets];
@@ -646,6 +652,8 @@ export default function Trading() {
         });
       }
 
+      console.log('🔍 Scanning for opportunities...\n');
+      
       try {
         const result = await executeAutoTradingCheckAdvanced(
           combinedAssets,
@@ -738,16 +746,26 @@ export default function Trading() {
           }
         );
 
+        console.log('\n📋 RESULT:', result.reason);
+        
         if (result.executed) {
-          console.log(`✅ Trade executed: ${formatOpportunityLog(result.opportunity)}`);
+          console.log('✅ ✅ ✅ TRADE EXECUTED!');
+          console.log('Asset:', result.opportunity.asset.symbol);
+          console.log('Action:', result.opportunity.action);
+          console.log('Quantity:', result.opportunity.quantity);
           if (result.executionDetails) {
-            console.log(`   Execution details:`, result.executionDetails);
+            console.log('Details:', result.executionDetails);
           }
         } else if (result.positionUpdates && result.positionUpdates.length > 0) {
           console.log(`📊 Updated ${result.positionUpdates.length} position(s)`);
         } else {
-          console.log(`ℹ️ Check complete: ${result.reason}`);
+          console.log('ℹ️ Reason:', result.reason);
+          if (result.circuitBreakerStatus) {
+            console.log('🛡️ Circuit breaker:', result.circuitBreakerStatus);
+          }
         }
+        
+        console.log('═══════════════════════════════════════════════════\n');
       } catch (error) {
         console.error('❌ Auto-trading check failed:', error);
       }

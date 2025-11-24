@@ -715,9 +715,14 @@ export async function executeAutoTradingCheck(
 export function scanTradingOpportunitiesAdvanced(assets, assetConfidence, settings, portfolio) {
   const opportunities = [];
   
+  console.log('🔎 SCANNING', assets.length, 'assets for opportunities...');
+  
   // Calculate market volatility and conditions
   const volatility = calculateMarketVolatility(assets);
   const marketAnalysis = detectExtremeMarketConditions(assets, settings);
+  
+  console.log('📊 Market volatility:', volatility.toFixed(2) + '%');
+  console.log('🌡️ Market condition:', marketAnalysis.condition);
   
   // Apply dynamic risk adjustments
   const riskAdjustments = applyDynamicRiskAdjustment(
@@ -741,15 +746,29 @@ export function scanTradingOpportunitiesAdvanced(assets, assetConfidence, settin
   const adjustedMinConfidence = (settings.min_confidence || 70) + 
     (riskAdjustments.adjustments.min_confidence_increase || 0);
   
+  console.log('🎯 Adjusted min confidence:', adjustedMinConfidence + '%');
+  console.log('💵 Available balance:', portfolio.available_balance);
+  console.log('\n🔍 Checking each asset...');
+  
+  let checkedCount = 0;
   for (const asset of assets) {
     const confidence = assetConfidence[asset.symbol] || 0;
+    checkedCount++;
+    
+    if (checkedCount <= 5 || confidence >= adjustedMinConfidence) {
+      console.log(`\n  ${asset.symbol}: price=$${asset.price.toFixed(2)}, change=${asset.change24h?.toFixed(2)}%, confidence=${confidence}%`);
     
     // Use advanced trade action determination
     const tradeDecision = determineTradeActionAdvanced(asset, confidence, settings, portfolio);
     
     if (!tradeDecision.action) {
+      if (checkedCount <= 5 || confidence >= adjustedMinConfidence - 10) {
+        console.log(`    ❌ No action: ${tradeDecision.reason}`);
+      }
       continue;
     }
+    
+    console.log(`    ✅ Signal detected: ${tradeDecision.action} (${tradeDecision.reason})`);
     
     // Handle position updates (non-trade actions)
     if (tradeDecision.action === 'update_trailing' || tradeDecision.action === 'update_breakeven') {
