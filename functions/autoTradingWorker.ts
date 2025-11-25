@@ -235,10 +235,12 @@ Deno.serve(async (req) => {
         
         console.log(`   📊 ${symbol}: price=$${price.toFixed(2)}, 24h=${change24h.toFixed(2)}%, conf=${confidence}%, risk=${riskLevel}`);
         
-        // Check if meets criteria - RELAXED: only need positive change OR high confidence
+        // Check if meets criteria - needs confidence threshold AND positive change
         const meetsConfidence = confidence >= minConfidence;
         const hasPositiveMomentum = change24h > 0;
         const riskAllowed = isRiskLevelAllowed(riskLevel, settings);
+        
+        console.log(`   🔍 ${symbol}: conf=${confidence}>=${minConfidence}? ${meetsConfidence}, momentum=${change24h.toFixed(2)}>0? ${hasPositiveMomentum}, risk=${riskLevel} allowed? ${riskAllowed}`);
         
         if (meetsConfidence && hasPositiveMomentum && riskAllowed) {
           const positionSize = calculatePositionSize(portfolio.available_balance, settings, price);
