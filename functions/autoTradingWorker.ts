@@ -167,43 +167,66 @@ Deno.serve(async (req) => {
     if (opportunities.length === 0 && portfolio.available_balance > 50 && Object.keys(marketData).length > 0) {
       const minConfidence = settings.min_confidence || 70;
       
+      console.log(`🔍 Scanning ${Object.keys(marketData).length} assets for buy opportunities...`);
+      
+      const candidates = [];
+      
       for (const [geckoId, data] of Object.entries(marketData)) {
         const symbol = symbolMap[geckoId];
-        if (!symbol || !data.usd || !data.usd_24h_change) continue;
+        if (!symbol || !data.usd) continue;
         
         // Skip if already traded today
-        if (hasAssetBeenTradedToday(symbol, settings)) continue;
+        if (hasAssetBeenTradedToday(symbol, settings)) {
+          console.log(`   ⏭️ ${symbol}: Already traded today`);
+          continue;
+        }
         
         // Skip if already have position
-        if (portfolio.positions?.find(p => p.asset_symbol === `${symbol}/USDT`)) continue;
+        if (portfolio.positions?.find(p => p.asset_symbol === `${symbol}/USDT`)) {
+          console.log(`   ⏭️ ${symbol}: Already have position`);
+          continue;
+        }
         
-        const change24h = data.usd_24h_change;
+        const change24h = data.usd_24h_change || 0;
         const price = data.usd;
+        const volume = data.usd_24h_vol || 0;
         
         // Calculate confidence score based on momentum and volume
-        let confidence = 50;
-        if (change24h > 5) confidence += 20;
-        else if (change24h > 2) confidence += 15;
-        else if (change24h > 0.5) confidence += 10;
-        else if (change24h < -3) confidence -= 15;
-        else if (change24h < 0) confidence -= 5;
+        let confidence = 55; // Start higher base
+        
+        // Momentum scoring (more granular)
+        if (change24h > 8) confidence += 25;
+        else if (change24h > 5) confidence += 20;
+        else if (change24h > 3) confidence += 15;
+        else if (change24h > 1) confidence += 10;
+        else if (change24h > 0) confidence += 5;
+        else if (change24h > -2) confidence += 0;
+        else if (change24h > -5) confidence -= 10;
+        else confidence -= 20;
         
         // Volume bonus (high volume = more reliable signal)
-        if (data.usd_24h_vol > 1000000000) confidence += 10;
-        else if (data.usd_24h_vol > 500000000) confidence += 5;
+        if (volume > 2000000000) confidence += 15;
+        else if (volume > 1000000000) confidence += 10;
+        else if (volume > 500000000) confidence += 5;
         
-        // Add some variance
-        confidence += Math.floor(Math.random() * 10) - 5;
+        // Small variance for randomness
+        confidence += Math.floor(Math.random() * 6) - 3;
         confidence = Math.max(30, Math.min(95, confidence));
         
         const riskLevel = calculateRiskLevel(confidence);
         
-        // Check if meets criteria
-        if (confidence >= minConfidence && change24h > 0.5 && isRiskLevelAllowed(riskLevel, settings)) {
+        console.log(`   📊 ${symbol}: price=$${price.toFixed(2)}, 24h=${change24h.toFixed(2)}%, conf=${confidence}%, risk=${riskLevel}`);
+        
+        // Check if meets criteria - RELAXED: only need positive change OR high confidence
+        const meetsConfidence = confidence >= minConfidence;
+        const hasPositiveMomentum = change24h > 0;
+        const riskAllowed = isRiskLevelAllowed(riskLevel, settings);
+        
+        if (meetsConfidence && hasPositiveMomentum && riskAllowed) {
           const positionSize = calculatePositionSize(portfolio.available_balance, settings, price);
           
           if (positionSize.valid) {
-            opportunities.push({
+            candidates.push({
               asset: { symbol, price },
               action: 'buy',
               reason: 'positive_momentum',
@@ -212,14 +235,18 @@ Deno.serve(async (req) => {
               riskLevel,
               change24h
             });
+            console.log(`   ✅ ${symbol}: CANDIDATE - conf=${confidence}%, change=${change24h.toFixed(2)}%`);
           }
         }
       }
       
+      console.log(`📈 Found ${candidates.length} buy candidates`);
+      
       // Sort by confidence and take best
-      opportunities.sort((a, b) => b.confidence - a.confidence);
-      if (opportunities.length > 1) {
-        opportunities.length = 1; // Keep only best opportunity
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => b.confidence - a.confidence);
+        opportunities.push(candidates[0]);
+        console.log(`🎯 Best opportunity: ${candidates[0].asset.symbol} (${candidates[0].confidence}% confidence)`);
       }
     }
     
