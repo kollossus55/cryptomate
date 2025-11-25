@@ -1182,60 +1182,98 @@ export default function Trading() {
         </div>
 
         {autoTradingSettings?.is_enabled && (
-          <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 border-2 border-green-500/40 rounded-2xl p-4 mb-6">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center relative shadow-lg">
-                  <Sparkles className="w-6 h-6 text-white" />
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-ping"></div>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge className="bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold shadow-md">
-                      AUTO-TRADING ACTIVE
-                    </Badge>
-                    {hasBackendFunctions ? (
-                      <Badge className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold shadow-md">
-                        ⚡ 24/7 Server-Side Mode
-                      </Badge>
-                    ) : (
-                      <>
-                        <Badge className="bg-slate-700 border-green-500/50 text-green-400 font-semibold">
-                          Browser-Assisted Mode
-                        </Badge>
-                        {!isPageVisible && (
-                          <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 animate-pulse">
-                            <EyeOff className="w-3 h-3 mr-1" />
-                            Tab Hidden
-                          </Badge>
-                        )}
-                      </>
-                    )}
+            <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 border-2 border-green-500/40 rounded-2xl p-4 mb-6">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center relative shadow-lg">
+                    <Sparkles className="w-6 h-6 text-white" />
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-ping"></div>
                   </div>
-                  <p className="text-slate-300 text-sm">
-                    {hasBackendFunctions 
-                      ? '🚀 Trading 24/7 on server - no browser required • '
-                      : 'AI is monitoring markets and executing trades automatically • '
-                    }
-                    {autoTradingSettings.trades_today || 0}/{autoTradingSettings.max_trades_per_day || 10} trades today
-                    {((autoTradingSettings.daily_loss || 0) >= (autoTradingSettings.max_daily_loss_percent || 0)) && (
-                      <span className="ml-2 text-red-400 font-bold">⚠️ CIRCUIT BREAKER TRIGGERED</span>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge className="bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold shadow-md">
+                        AUTO-TRADING ACTIVE
+                      </Badge>
+                      {hasBackendFunctions ? (
+                        <Badge className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold shadow-md">
+                          ⚡ 24/7 Server-Side Mode
+                        </Badge>
+                      ) : (
+                        <>
+                          <Badge className="bg-slate-700 border-green-500/50 text-green-400 font-semibold">
+                            Browser-Assisted Mode
+                          </Badge>
+                          {!isPageVisible && (
+                            <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 animate-pulse">
+                              <EyeOff className="w-3 h-3 mr-1" />
+                              Tab Hidden
+                            </Badge>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <p className="text-slate-300 text-sm">
+                      {hasBackendFunctions 
+                        ? '🚀 Trading 24/7 on server - no browser required • '
+                        : 'AI is monitoring markets and executing trades automatically • '
+                      }
+                      {autoTradingSettings.trades_today || 0}/{autoTradingSettings.max_trades_per_day || 10} trades today
+                      {((autoTradingSettings.daily_loss || 0) >= (autoTradingSettings.max_daily_loss_percent || 0)) && (
+                        <span className="ml-2 text-red-400 font-bold">⚠️ CIRCUIT BREAKER TRIGGERED</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={async () => {
+                      setIsRunningManualTrade(true);
+                      try {
+                        const result = await base44.functions.invoke('tradingScheduler', {});
+                        setBackendDebugLog(result.data);
+                        if (result.data?.summary?.trades_executed > 0) {
+                          queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+                          queryClient.invalidateQueries({ queryKey: ['trades'] });
+                        }
+                        alert(`Trade check complete!\n\nUsers processed: ${result.data?.summary?.users_processed || 0}\nTrades executed: ${result.data?.summary?.trades_executed || 0}\nErrors: ${result.data?.summary?.errors || 0}`);
+                      } catch (err) {
+                        alert('Error: ' + err.message);
+                      }
+                      setIsRunningManualTrade(false);
+                    }}
+                    disabled={isRunningManualTrade}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                    size="sm"
+                  >
+                    {isRunningManualTrade ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-2" />
                     )}
-                  </p>
+                    Run Trade Check Now
+                  </Button>
+                  <Button
+                    onClick={() => window.location.href = '/AutoTrading'}
+                    variant="outline"
+                    className="border-green-500/50 bg-slate-800 text-green-400 hover:bg-green-500/10 hover:border-green-500"
+                    size="sm"
+                  >
+                    <Settings className="w-4 h-4 mr-2" />
+                    Manage Settings
+                  </Button>
                 </div>
               </div>
-              <Button
-                onClick={() => window.location.href = '/AutoTrading'}
-                variant="outline"
-                className="border-green-500/50 bg-slate-800 text-green-400 hover:bg-green-500/10 hover:border-green-500"
-                size="sm"
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Manage Settings
-              </Button>
+
+              {backendDebugLog && (
+                <div className="mt-4 p-3 bg-slate-900 rounded-lg border border-slate-700">
+                  <p className="text-xs text-slate-400 mb-1">Last Backend Result:</p>
+                  <pre className="text-xs text-green-400 overflow-x-auto whitespace-pre-wrap">
+                    {JSON.stringify(backendDebugLog, null, 2)}
+                  </pre>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )}
 
         {showVisibilityWarning && !isPageVisible && autoTradingSettings?.is_enabled && (
           <div className="bg-orange-500/10 border-2 border-orange-500/50 rounded-xl p-4 mb-6">
