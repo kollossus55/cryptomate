@@ -271,11 +271,20 @@ Deno.serve(async (req) => {
     }
     
     if (opportunities.length === 0) {
-      console.log(`📊 No opportunities found for ${user_email} (min confidence: ${settings.min_confidence}%)`);
+      console.log(`📊 No opportunities found for ${user_email}`);
+      console.log(`   Settings: min_confidence=${settings.min_confidence}%, allowed_risk=${JSON.stringify(settings.allowed_risk_levels)}`);
+      console.log(`   Portfolio: balance=$${portfolio.available_balance}, positions=${portfolio.positions?.length || 0}`);
+      console.log(`   Market data fetched: ${Object.keys(marketData).length} assets`);
       return Response.json({ 
         success: true,
         executed: false,
-        reason: 'no_opportunities'
+        reason: 'no_opportunities',
+        debug: {
+          min_confidence: settings.min_confidence,
+          allowed_risk_levels: settings.allowed_risk_levels,
+          available_balance: portfolio.available_balance,
+          market_data_count: Object.keys(marketData).length
+        }
       });
     }
     
