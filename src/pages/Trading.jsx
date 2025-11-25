@@ -554,6 +554,8 @@ export default function Trading() {
   // Check if backend functions are available
   const [hasBackendFunctions, setHasBackendFunctions] = useState(false);
   const [lastBackendRun, setLastBackendRun] = useState(null);
+  const [backendDebugLog, setBackendDebugLog] = useState(null);
+  const [isRunningManualTrade, setIsRunningManualTrade] = useState(false);
 
   useEffect(() => {
     // Check if backend functions are available and TRIGGER them periodically
