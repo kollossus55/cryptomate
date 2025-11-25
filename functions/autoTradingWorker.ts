@@ -212,15 +212,16 @@ Deno.serve(async (req) => {
         // Calculate confidence score based on momentum and volume
         let confidence = 55; // Start higher base
         
-        // Momentum scoring (more granular)
-        if (change24h > 8) confidence += 25;
-        else if (change24h > 5) confidence += 20;
-        else if (change24h > 3) confidence += 15;
-        else if (change24h > 1) confidence += 10;
-        else if (change24h > 0) confidence += 5;
-        else if (change24h > -2) confidence += 0;
-        else if (change24h > -5) confidence -= 10;
-        else confidence -= 20;
+        // Momentum scoring (more aggressive to find trades)
+        if (change24h > 8) confidence += 30;
+        else if (change24h > 5) confidence += 25;
+        else if (change24h > 3) confidence += 20;
+        else if (change24h > 1) confidence += 15;
+        else if (change24h > 0) confidence += 10;
+        else if (change24h > -1) confidence += 5;
+        else if (change24h > -3) confidence += 0;
+        else if (change24h > -5) confidence -= 5;
+        else confidence -= 10;
         
         // Volume bonus (high volume = more reliable signal)
         if (volume > 2000000000) confidence += 15;
