@@ -189,6 +189,8 @@ Deno.serve(async (req) => {
       
       const candidates = [];
       
+      console.log(`📋 Checking criteria: minConfidence=${minConfidence}, allowedRisk=${JSON.stringify(settings.allowed_risk_levels)}`);
+      
       for (const [geckoId, data] of Object.entries(marketData)) {
         const symbol = symbolMap[geckoId];
         if (!symbol || !data.usd) continue;
