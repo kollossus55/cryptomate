@@ -553,34 +553,46 @@ export default function Trading() {
 
   // Check if backend functions are available
   const [hasBackendFunctions, setHasBackendFunctions] = useState(false);
-  
+  const [lastBackendRun, setLastBackendRun] = useState(null);
+
   useEffect(() => {
-    // Check if backend functions are available (server-side trading)
-    const checkBackend = async () => {
+    // Check if backend functions are available and TRIGGER them periodically
+    const runBackendTrading = async () => {
       try {
-        // Check if tradingScheduler function exists by attempting to invoke it
-        await base44.functions.invoke('tradingScheduler', { check_only: true });
-        setHasBackendFunctions(prev => {
-          if (!prev) console.log('✅ Backend functions detected - 24/7 trading enabled');
-          return true;
-        });
+        console.log('🚀 Triggering server-side trading scheduler...');
+        const result = await base44.functions.invoke('tradingScheduler', {});
+
+        if (result.data?.success) {
+          setHasBackendFunctions(true);
+          setLastBackendRun(new Date());
+          console.log('✅ Backend trading completed:', result.data.summary);
+
+          // Refresh portfolio data if trades were executed
+          if (result.data.summary?.trades_executed > 0) {
+            queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+            queryClient.invalidateQueries({ queryKey: ['trades'] });
+          }
+        }
       } catch (error) {
-        // If function doesn't exist or returns error, backend not available
-        setHasBackendFunctions(prev => {
-          if (prev) console.log('⚠️ Backend functions stopped - switching to browser-based trading');
-          return false;
-        });
+        console.warn('⚠️ Backend trading not available:', error.message);
+        setHasBackendFunctions(false);
       }
     };
-    
-    // Initial check
-    checkBackend();
-    
-    // Check every 2 minutes if backend is still available
-    const backendCheckInterval = setInterval(checkBackend, 2 * 60 * 1000);
-    
-    return () => clearInterval(backendCheckInterval);
-  }, []);
+
+    // Only run if auto-trading is enabled
+    if (autoTradingSettings?.is_enabled) {
+      // Initial run after 5 seconds
+      const initialRun = setTimeout(runBackendTrading, 5000);
+
+      // Run every 2 minutes
+      const backendInterval = setInterval(runBackendTrading, 2 * 60 * 1000);
+
+      return () => {
+        clearTimeout(initialRun);
+        clearInterval(backendInterval);
+      };
+    }
+  }, [autoTradingSettings?.is_enabled]);
 
   useEffect(() => {
     if (!autoTradingSettings?.is_enabled || !portfolio || !assets || assets.length === 0) {

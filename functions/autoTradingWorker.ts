@@ -22,7 +22,10 @@ function hasReachedTradeLimit(settings) {
 }
 
 function isCircuitBreakerTriggered(settings) {
-  return (settings.daily_loss || 0) >= (settings.max_daily_loss_percent || 0);
+  const dailyLoss = settings.daily_loss || 0;
+  const maxLoss = settings.max_daily_loss_percent || 5;
+  // Only trigger if max loss is set to something meaningful and we've exceeded it
+  return maxLoss > 0 && dailyLoss >= maxLoss;
 }
 
 function hasAssetBeenTradedToday(assetSymbol, settings) {
