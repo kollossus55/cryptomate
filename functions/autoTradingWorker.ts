@@ -70,6 +70,24 @@ Deno.serve(async (req) => {
     
     console.log(`🤖 Auto-Trading Worker: Processing user ${user_email}`);
     
+    // Check if we need to reset daily counters (new day)
+    const lastTradeDate = settings.last_trade_date ? new Date(settings.last_trade_date).toDateString() : null;
+    const today = new Date().toDateString();
+    
+    if (lastTradeDate && lastTradeDate !== today) {
+      console.log(`📅 New day detected - resetting daily counters`);
+      settings.trades_today = 0;
+      settings.daily_loss = 0;
+      settings.assets_traded_today = [];
+      
+      // Persist the reset
+      await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
+        trades_today: 0,
+        daily_loss: 0,
+        assets_traded_today: []
+      });
+    }
+    
     // Safety checks
     if (!settings.is_enabled) {
       return Response.json({ 
