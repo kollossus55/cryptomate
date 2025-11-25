@@ -265,11 +265,17 @@ Deno.serve(async (req) => {
       
       console.log(`📈 Found ${candidates.length} buy candidates`);
       
-      // Sort by confidence and take best
+      // Sort by confidence and take best - prefer positive momentum
       if (candidates.length > 0) {
-        candidates.sort((a, b) => b.confidence - a.confidence);
-        opportunities.push(candidates[0]);
-        console.log(`🎯 Best opportunity: ${candidates[0].asset.symbol} (${candidates[0].confidence}% confidence)`);
+        // First filter to positive momentum, then sort by confidence
+        const positiveCandidates = candidates.filter(c => c.change24h > 0);
+        const finalCandidates = positiveCandidates.length > 0 ? positiveCandidates : candidates;
+        
+        finalCandidates.sort((a, b) => b.confidence - a.confidence);
+        opportunities.push(finalCandidates[0]);
+        console.log(`🎯 Best opportunity: ${finalCandidates[0].asset.symbol} (${finalCandidates[0].confidence}% confidence, ${finalCandidates[0].change24h.toFixed(2)}% change)`);
+      } else {
+        console.log(`❌ No candidates passed criteria. Check logs above for individual asset evaluations.`);
       }
     }
     
