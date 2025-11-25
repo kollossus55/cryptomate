@@ -567,6 +567,7 @@ export default function Trading() {
         if (result.data?.success) {
           setHasBackendFunctions(true);
           setLastBackendRun(new Date());
+          setBackendDebugLog(result.data);
           console.log('✅ Backend trading completed:', result.data.summary);
 
           // Refresh portfolio data if trades were executed
@@ -574,6 +575,8 @@ export default function Trading() {
             queryClient.invalidateQueries({ queryKey: ['portfolio'] });
             queryClient.invalidateQueries({ queryKey: ['trades'] });
           }
+        } else {
+          setBackendDebugLog(result.data);
         }
       } catch (error) {
         console.warn('⚠️ Backend trading not available:', error.message);
