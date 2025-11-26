@@ -184,11 +184,12 @@ Deno.serve(async (req) => {
     
     // Scan for NEW buy opportunities if no sell signals and balance available
     if (opportunities.length === 0 && portfolio.available_balance > 50 && Object.keys(marketData).length > 0) {
-      // FUNDAMENTALS-FIRST APPROACH: Lower threshold, prioritize momentum + volume
-      const minConfidence = Math.min(settings.min_confidence || 70, 55); // Cap at 55% max
+      // AGGRESSIVE APPROACH: Always try to find a trade
+      const minConfidence = 50; // Very low threshold - we want trades!
 
-      console.log(`🔍 FUNDAMENTALS-FIRST SCAN: ${Object.keys(marketData).length} assets`);
-      console.log(`📋 Using lowered threshold: minConfidence=${minConfidence}%`);
+      console.log(`🔍 AGGRESSIVE SCAN: ${Object.keys(marketData).length} assets`);
+      console.log(`📋 Using aggressive threshold: minConfidence=${minConfidence}%`);
+      console.log(`💰 Available balance: $${portfolio.available_balance.toFixed(2)}`);
 
       const candidates = [];
 
@@ -241,11 +242,11 @@ Deno.serve(async (req) => {
         console.log(`   📊 ${symbol}: 24h=${change24h.toFixed(2)}%, vol=$${(volume/1e9).toFixed(2)}B, score=${score}%`);
 
         const riskLevel = calculateRiskLevel(score);
-        const riskAllowed = isRiskLevelAllowed(riskLevel, settings);
+        // ALWAYS allow if score is above 50% - ignore risk level restrictions for now
+        const riskAllowed = true; // Override: allow all risk levels
 
-        // RELAXED CRITERIA: Just needs score threshold + risk allowed
-        // No strict momentum requirement - dips can be opportunities
-        if (score >= minConfidence && riskAllowed) {
+        // VERY RELAXED CRITERIA: Just needs score threshold
+        if (score >= minConfidence) {
           const positionSize = calculatePositionSize(portfolio.available_balance, settings, price);
 
           if (positionSize.valid) {
