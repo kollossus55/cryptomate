@@ -183,99 +183,103 @@ Deno.serve(async (req) => {
     
     // Scan for NEW buy opportunities if no sell signals and balance available
     if (opportunities.length === 0 && portfolio.available_balance > 50 && Object.keys(marketData).length > 0) {
-      const minConfidence = settings.min_confidence || 70;
-      
-      console.log(`🔍 Scanning ${Object.keys(marketData).length} assets for buy opportunities...`);
-      
+      // FUNDAMENTALS-FIRST APPROACH: Lower threshold, prioritize momentum + volume
+      const minConfidence = Math.min(settings.min_confidence || 70, 55); // Cap at 55% max
+
+      console.log(`🔍 FUNDAMENTALS-FIRST SCAN: ${Object.keys(marketData).length} assets`);
+      console.log(`📋 Using lowered threshold: minConfidence=${minConfidence}%`);
+
       const candidates = [];
-      
-      console.log(`📋 Checking criteria: minConfidence=${minConfidence}, allowedRisk=${JSON.stringify(settings.allowed_risk_levels)}`);
-      
+
       for (const [geckoId, data] of Object.entries(marketData)) {
         const symbol = symbolMap[geckoId];
         if (!symbol || !data.usd) continue;
-        
+
         // Skip if already traded today
         if (hasAssetBeenTradedToday(symbol, settings)) {
-          console.log(`   ⏭️ ${symbol}: Already traded today`);
           continue;
         }
-        
+
         // Skip if already have position
         if (portfolio.positions?.find(p => p.asset_symbol === `${symbol}/USDT`)) {
-          console.log(`   ⏭️ ${symbol}: Already have position`);
           continue;
         }
-        
+
         const change24h = data.usd_24h_change || 0;
         const price = data.usd;
         const volume = data.usd_24h_vol || 0;
-        
-        // Calculate confidence score based on momentum and volume
-        let confidence = 55; // Start higher base
-        
-        // Momentum scoring (more aggressive to find trades)
-        if (change24h > 8) confidence += 30;
-        else if (change24h > 5) confidence += 25;
-        else if (change24h > 3) confidence += 20;
-        else if (change24h > 1) confidence += 15;
-        else if (change24h > 0) confidence += 10;
-        else if (change24h > -1) confidence += 5;
-        else if (change24h > -3) confidence += 0;
-        else if (change24h > -5) confidence -= 5;
-        else confidence -= 10;
-        
-        // Volume bonus (high volume = more reliable signal)
-        if (volume > 2000000000) confidence += 15;
-        else if (volume > 1000000000) confidence += 10;
-        else if (volume > 500000000) confidence += 5;
-        
-        // Small variance for randomness
-        confidence += Math.floor(Math.random() * 6) - 3;
-        confidence = Math.max(30, Math.min(95, confidence));
-        
-        const riskLevel = calculateRiskLevel(confidence);
-        
-        console.log(`   📊 ${symbol}: price=$${price.toFixed(2)}, 24h=${change24h.toFixed(2)}%, conf=${confidence}%, risk=${riskLevel}`);
-        
-        // Check if meets criteria - needs confidence threshold (momentum already baked into confidence)
-        const meetsConfidence = confidence >= minConfidence;
+
+        // FUNDAMENTALS-BASED SCORING
+        let score = 50; // Base score
+
+        // PRIMARY: Momentum (strongest weight)
+        if (change24h > 10) score += 35;
+        else if (change24h > 7) score += 30;
+        else if (change24h > 5) score += 25;
+        else if (change24h > 3) score += 20;
+        else if (change24h > 2) score += 15;
+        else if (change24h > 1) score += 10;
+        else if (change24h > 0) score += 5;
+        else if (change24h > -2) score += 0; // Slight dip OK
+        else if (change24h > -5) score -= 10;
+        else score -= 20; // Big drops penalized
+
+        // SECONDARY: Volume (liquidity matters)
+        if (volume > 5000000000) score += 15;      // $5B+ volume
+        else if (volume > 2000000000) score += 12; // $2B+ volume
+        else if (volume > 1000000000) score += 10; // $1B+ volume
+        else if (volume > 500000000) score += 7;   // $500M+ volume
+        else if (volume > 100000000) score += 5;   // $100M+ volume
+        else score += 2; // Low volume still OK
+
+        // Small variance
+        score += Math.floor(Math.random() * 4) - 2;
+        score = Math.max(30, Math.min(95, score));
+
+        const riskLevel = calculateRiskLevel(score);
         const riskAllowed = isRiskLevelAllowed(riskLevel, settings);
-        
-        // Log all assets to see what we're working with
-        console.log(`   🔍 ${symbol}: conf=${confidence}, min=${minConfidence}, risk=${riskLevel}, change=${change24h.toFixed(2)}%`);
-        
-        if (meetsConfidence && riskAllowed) {
+
+        // RELAXED CRITERIA: Just needs score threshold + risk allowed
+        // No strict momentum requirement - dips can be opportunities
+        if (score >= minConfidence && riskAllowed) {
           const positionSize = calculatePositionSize(portfolio.available_balance, settings, price);
-          
+
           if (positionSize.valid) {
             candidates.push({
               asset: { symbol, price },
               action: 'buy',
-              reason: 'positive_momentum',
+              reason: change24h > 2 ? 'strong_momentum' : change24h > 0 ? 'positive_momentum' : 'dip_opportunity',
               quantity: positionSize.quantity,
-              confidence,
+              confidence: score,
               riskLevel,
-              change24h
+              change24h,
+              volume
             });
-            console.log(`   ✅ ${symbol}: CANDIDATE - conf=${confidence}%, change=${change24h.toFixed(2)}%`);
+            console.log(`   ✅ ${symbol}: score=${score}%, 24h=${change24h.toFixed(2)}%, vol=$${(volume/1e9).toFixed(2)}B`);
           }
         }
       }
-      
-      console.log(`📈 Found ${candidates.length} buy candidates`);
-      
-      // Sort by confidence and take best - prefer positive momentum
+
+      console.log(`📈 Found ${candidates.length} candidates`);
+
       if (candidates.length > 0) {
-        // First filter to positive momentum, then sort by confidence
-        const positiveCandidates = candidates.filter(c => c.change24h > 0);
-        const finalCandidates = positiveCandidates.length > 0 ? positiveCandidates : candidates;
-        
-        finalCandidates.sort((a, b) => b.confidence - a.confidence);
-        opportunities.push(finalCandidates[0]);
-        console.log(`🎯 Best opportunity: ${finalCandidates[0].asset.symbol} (${finalCandidates[0].confidence}% confidence, ${finalCandidates[0].change24h.toFixed(2)}% change)`);
+        // Sort by: momentum first, then volume, then score
+        candidates.sort((a, b) => {
+          // Prefer positive momentum
+          if (a.change24h > 0 && b.change24h <= 0) return -1;
+          if (b.change24h > 0 && a.change24h <= 0) return 1;
+          // Then by change magnitude
+          if (Math.abs(a.change24h - b.change24h) > 2) {
+            return b.change24h - a.change24h;
+          }
+          // Then by volume
+          return b.volume - a.volume;
+        });
+
+        opportunities.push(candidates[0]);
+        console.log(`🎯 SELECTED: ${candidates[0].asset.symbol} - ${candidates[0].reason} (${candidates[0].confidence}%, ${candidates[0].change24h.toFixed(2)}%)`);
       } else {
-        console.log(`❌ No candidates passed criteria. Check logs above for individual asset evaluations.`);
+        console.log(`❌ No candidates met criteria`);
       }
     }
     
