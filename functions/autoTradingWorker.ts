@@ -8,8 +8,9 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
 
 // Import core trading logic (copy of the engine for server-side use)
 function calculateRiskLevel(confidence) {
-  if (confidence >= 80) return 'low';
-  if (confidence >= 65) return 'medium';
+  // More lenient risk levels to allow more trades
+  if (confidence >= 70) return 'low';
+  if (confidence >= 55) return 'medium';
   return 'high';
 }
 
@@ -209,32 +210,35 @@ Deno.serve(async (req) => {
         const price = data.usd;
         const volume = data.usd_24h_vol || 0;
 
-        // FUNDAMENTALS-BASED SCORING
-        let score = 50; // Base score
+        // FUNDAMENTALS-BASED SCORING - More aggressive to find trades
+        let score = 55; // Higher base score
 
         // PRIMARY: Momentum (strongest weight)
         if (change24h > 10) score += 35;
         else if (change24h > 7) score += 30;
         else if (change24h > 5) score += 25;
-        else if (change24h > 3) score += 20;
-        else if (change24h > 2) score += 15;
-        else if (change24h > 1) score += 10;
-        else if (change24h > 0) score += 5;
-        else if (change24h > -2) score += 0; // Slight dip OK
-        else if (change24h > -5) score -= 10;
-        else score -= 20; // Big drops penalized
+        else if (change24h > 3) score += 22;
+        else if (change24h > 2) score += 18;
+        else if (change24h > 1) score += 14;
+        else if (change24h > 0) score += 10;
+        else if (change24h > -1) score += 5; // Small dip OK
+        else if (change24h > -2) score += 0;
+        else if (change24h > -5) score -= 5;
+        else score -= 10; // Big drops penalized less
 
         // SECONDARY: Volume (liquidity matters)
-        if (volume > 5000000000) score += 15;      // $5B+ volume
-        else if (volume > 2000000000) score += 12; // $2B+ volume
-        else if (volume > 1000000000) score += 10; // $1B+ volume
-        else if (volume > 500000000) score += 7;   // $500M+ volume
-        else if (volume > 100000000) score += 5;   // $100M+ volume
-        else score += 2; // Low volume still OK
+        if (volume > 5000000000) score += 18;      // $5B+ volume
+        else if (volume > 2000000000) score += 15; // $2B+ volume
+        else if (volume > 1000000000) score += 12; // $1B+ volume
+        else if (volume > 500000000) score += 10;  // $500M+ volume
+        else if (volume > 100000000) score += 7;   // $100M+ volume
+        else score += 3; // Low volume still OK
 
         // Small variance
-        score += Math.floor(Math.random() * 4) - 2;
-        score = Math.max(30, Math.min(95, score));
+        score += Math.floor(Math.random() * 6) - 3;
+        score = Math.max(40, Math.min(95, score));
+        
+        console.log(`   📊 ${symbol}: 24h=${change24h.toFixed(2)}%, vol=$${(volume/1e9).toFixed(2)}B, score=${score}%`);
 
         const riskLevel = calculateRiskLevel(score);
         const riskAllowed = isRiskLevelAllowed(riskLevel, settings);
