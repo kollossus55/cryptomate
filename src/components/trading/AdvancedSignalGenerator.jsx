@@ -129,19 +129,22 @@ export const generateAdvancedSignal = async (asset, userPreferences = null) => {
     const technicalScore = calculateTechnicalScore(asset);
 
     // Dynamic weights based on user preferences or defaults
-    // Defaulting to Technical (70%) + AI Sentiment (30%) model
+    const newsWeight = userPreferences?.signal_alert_thresholds?.news_sentiment_weight ?? 0.25;
     const weights = {
-      technical: 0.70,
-      news: 0.30,
-      social: 0.0,
-      onchain: 0.0,
-      predictive: 0.0
+      technical: 0.30,
+      news: newsWeight,
+      social: 0.20,
+      onchain: 0.25 - (newsWeight - 0.25), // Adjust onchain to compensate
+      predictive: 0.25
     };
 
-    // Composite score (Technical + AI Sentiment)
+    // Composite score with predictive analysis
     const compositeScore = 
       (technicalScore * weights.technical) +
-      ((newsData.sentiment_score + 1) * 50 * weights.news);  // Convert -1 to 1 scale to 0-100
+      ((newsData.sentiment_score + 1) * 50 * weights.news) +  // Convert -1 to 1 scale to 0-100
+      (socialData.social_score * weights.social) +
+      (onChainData.onchain_score * weights.onchain) +
+      (prediction.prediction_confidence * weights.predictive);
 
     // Determine confidence level with news sentiment boost
     let confidence = Math.max(30, Math.min(95, Math.round(compositeScore)));
@@ -154,18 +157,16 @@ export const generateAdvancedSignal = async (asset, userPreferences = null) => {
     // Determine risk level
     let riskLevel = 'medium';
     const volatility = Math.abs(asset.change24h || 0);
-    if (confidence >= 80 && volatility < 5) riskLevel = 'low';
-    else if (confidence < 60 || volatility > 10) riskLevel = 'high';
+    if (confidence >= 80 && volatility < 5 && prediction.prediction_confidence > 70) riskLevel = 'low';
+    else if (confidence < 60 || volatility > 10 || prediction.prediction_confidence < 50) riskLevel = 'high';
 
-    // Generate trading recommendation (Threshold: 65/100)
+    // Generate trading recommendation with predictive influence
     let recommendation = 'hold';
+    const newsInfluence = newsData.sentiment_score * (newsData.impact_level === 'high' ? 1.5 : 1.0);
     
-    // Veto logic: If sentiment is very bearish, block buys
-    const isVetoed = newsData.sentiment_label === 'very_bearish';
-
-    if (confidence >= 65 && !isVetoed) {
+    if (confidence >= 75 && asset.change24h > 1 && newsInfluence > 0.2 && prediction.predicted_change > 0) {
       recommendation = 'buy';
-    } else if (confidence <= 40 || isVetoed) {
+    } else if (confidence < 50 || asset.change24h < -3 || newsInfluence < -0.3 || prediction.predicted_change < -3) {
       recommendation = 'sell';
     }
 
@@ -343,24 +344,19 @@ const generateSimulatedOnChainData = (asset) => {
 
 const generateBasicSignal = (asset) => {
   const basicScore = calculateTechnicalScore(asset);
-  // Simulate AI sentiment for basic fallback
-  const simulatedNews = generateSimulatedNewsSentiment(asset);
-  const sentimentScore = (simulatedNews.sentiment_score + 1) * 50;
-  const combinedScore = (basicScore * 0.7) + (sentimentScore * 0.3);
-  
   return {
-    confidence: Math.max(30, Math.min(95, Math.round(combinedScore))),
-    recommendation: combinedScore >= 65 ? 'buy' : combinedScore <= 40 ? 'sell' : 'hold',
-    riskLevel: combinedScore > 70 ? 'low' : combinedScore > 50 ? 'medium' : 'high',
+    confidence: Math.max(30, Math.min(95, basicScore)),
+    recommendation: basicScore > 70 ? 'buy' : basicScore < 40 ? 'sell' : 'hold',
+    riskLevel: basicScore > 70 ? 'low' : basicScore > 50 ? 'medium' : 'high',
     breakdown: {
       technical: basicScore,
-      news: simulatedNews,
+      news: generateSimulatedNewsSentiment(asset),
       social: generateSimulatedSocialTrends(asset),
       onchain: generateSimulatedOnChainData(asset)
     },
     signals: {
-      strength: combinedScore > 70 ? 'strong' : combinedScore > 50 ? 'moderate' : 'weak',
-      direction: combinedScore > 60 ? 'bullish' : combinedScore < 40 ? 'bearish' : 'neutral'
+      strength: basicScore > 70 ? 'strong' : basicScore > 50 ? 'moderate' : 'weak',
+      direction: basicScore > 60 ? 'bullish' : basicScore < 40 ? 'bearish' : 'neutral'
     }
   };
 };
