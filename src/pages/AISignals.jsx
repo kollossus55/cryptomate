@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,11 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  Sparkles,
   Settings,
   TrendingUp,
   AlertTriangle,
   Activity,
   Brain,
+  Save,
   RefreshCw,
   Eye,
   BarChart3,
@@ -24,7 +25,7 @@ import {
 import { motion } from "framer-motion";
 
 import { generatePredictiveSignal, detectMarketRegime } from "../components/trading/PredictiveModels";
-import { detectAnomalies } from "../components/trading/AnomalyDetection";
+import { detectAnomalies, detectCorrelationAnomalies } from "../components/trading/AnomalyDetection";
 import { generateAdvancedSignal } from "../components/trading/AdvancedSignalGenerator";
 
 export default function AISignals() {
@@ -77,26 +78,26 @@ export default function AISignals() {
     },
   });
 
-  // Initialize default config if none exists
+  // Initialize default config if none exists - Updated to reflect Technical + AI Sentiment priority
   useEffect(() => {
     if (configs && configs.length === 0) {
       createConfigMutation.mutate({
-        config_name: "Default AI Signals",
+        config_name: "Technical + AI Sentiment",
         is_active: true,
         data_sources: {
           technical_indicators: true,
           news_sentiment: true,
-          social_media: true,
-          on_chain_data: true,
+          social_media: false,
+          on_chain_data: false,
           predictive_models: true,
           anomaly_detection: true
         },
         weights: {
-          technical: 30,
-          news: 20,
-          social: 15,
-          onchain: 20,
-          predictive: 15
+          technical: 70,
+          news: 30,
+          social: 0,
+          onchain: 0,
+          predictive: 0
         }
       });
     }
@@ -153,35 +154,41 @@ export default function AISignals() {
   const calculateCompositeScore = (results, config) => {
     if (!config) return { score: 50, signal: 'hold' };
 
-    const weights = config.weights || {};
-    let totalScore = 0;
-    let totalWeight = 0;
-
-    // Technical score
-    if (results.advanced_signal && weights.technical) {
-      totalScore += results.advanced_signal.confidence * (weights.technical / 100);
-      totalWeight += weights.technical;
+    // PRIORITY: Technical Analysis (70%) + AI Sentiment (30%)
+    const technicalWeight = 0.70;
+    const sentimentWeight = 0.30;
+    
+    let technicalScore = results.advanced_signal?.confidence || 50;
+    let sentimentScore = 50; // Neutral default
+    
+    // Convert sentiment to score if available
+    if (results.advanced_signal?.sentiment) {
+      const sentimentMap = {
+        'very_bullish': 90,
+        'bullish': 70,
+        'neutral': 50,
+        'bearish': 30,
+        'very_bearish': 10
+      };
+      sentimentScore = sentimentMap[results.advanced_signal.sentiment] || 50;
     }
-
-    // Predictive score
-    if (results.predictive && weights.predictive) {
-      totalScore += results.predictive.confidence * (weights.predictive / 100);
-      totalWeight += weights.predictive;
-    }
+    
+    // Calculate weighted score
+    let finalScore = (technicalScore * technicalWeight) + (sentimentScore * sentimentWeight);
 
     // Adjust for anomalies
     if (results.anomalies?.anomalies_detected?.length > 0) {
       if (results.anomalies.overall_risk === 'high') {
-        totalScore *= 0.7; // Reduce score for high-risk anomalies
+        finalScore *= 0.7; // Reduce score for high-risk anomalies
+      } else if (results.anomalies.overall_risk === 'medium') {
+        finalScore *= 0.85;
       }
     }
 
-    const finalScore = totalWeight > 0 ? (totalScore / totalWeight) * 100 : 50;
-
-    // Determine signal
+    // Determine signal based on combined score
     const thresholds = config.signal_thresholds || {
       strong_buy: 80,
-      buy: 70,
+      buy: 65,
       hold: 50,
       sell: 40,
       strong_sell: 30
@@ -197,7 +204,8 @@ export default function AISignals() {
       score: Math.round(finalScore),
       signal,
       breakdown: {
-        technical: results.advanced_signal?.confidence || 0,
+        technical: Math.round(technicalScore),
+        sentiment: Math.round(sentimentScore),
         predictive: results.predictive?.confidence || 0,
         anomaly_impact: results.anomalies?.overall_risk || 'none'
       }
@@ -226,10 +234,10 @@ export default function AISignals() {
             </div>
             <div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                Advanced AI Signals
+                Technical + AI Signals
               </h1>
               <p className="text-slate-400">
-                Multi-model predictions • Anomaly detection • Real-time analysis
+                Technical Analysis (70%) • AI Sentiment (30%) • Real-time scoring
               </p>
             </div>
           </div>
@@ -367,11 +375,17 @@ export default function AISignals() {
                             {signalResults.composite_score.score}
                             <span className="text-xl text-slate-400">/100</span>
                           </div>
-                          <div className="grid grid-cols-3 gap-4 mt-4">
+                          <div className="grid grid-cols-4 gap-4 mt-4">
                             <div className="bg-slate-800 rounded p-3">
-                              <div className="text-xs text-slate-400 mb-1">Technical</div>
+                              <div className="text-xs text-slate-400 mb-1">Technical (70%)</div>
                               <div className="text-lg font-bold text-white">
                                 {signalResults.composite_score.breakdown.technical}
+                              </div>
+                            </div>
+                            <div className="bg-slate-800 rounded p-3">
+                              <div className="text-xs text-slate-400 mb-1">AI Sentiment (30%)</div>
+                              <div className="text-lg font-bold text-white">
+                                {signalResults.composite_score.breakdown.sentiment || 'N/A'}
                               </div>
                             </div>
                             <div className="bg-slate-800 rounded p-3">
