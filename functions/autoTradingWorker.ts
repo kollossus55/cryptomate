@@ -357,10 +357,11 @@ function shouldVetoTrade(aiSentiment, action) {
   return false;
 }
 
-// Calculate combined score (Technical 70% + Sentiment 30%)
-function calculateCombinedScore(technicalScore, aiSentiment) {
-  const technicalWeight = 0.70;
-  const sentimentWeight = 0.30;
+// Calculate combined score based on dynamic weights
+function calculateCombinedScore(technicalScore, aiSentiment, weights = null) {
+  // Default to 70/30 if no weights provided
+  const technicalWeight = (weights?.technical ?? 70) / 100;
+  const sentimentWeight = (weights?.news ?? 30) / 100;
   
   const sentimentModifier = sentimentToScore(aiSentiment?.sentiment || 'neutral');
   const sentimentScore = 50 + sentimentModifier; // Convert to 0-100 scale
@@ -397,6 +398,13 @@ Deno.serve(async (req) => {
       });
     }
     
+    // Fetch AI Signal Config
+    const aiConfigs = await base44.asServiceRole.entities.AISignalConfig.list();
+    const activeConfig = aiConfigs.find(c => c.is_active) || null;
+    const signalWeights = activeConfig?.weights || { technical: 70, news: 30 };
+
+    console.log(`⚙️ Signal Logic: Technical ${signalWeights.technical}% + AI Sentiment ${signalWeights.news}%`);
+
     // Safety checks
     if (!settings.is_enabled) {
       return Response.json({ success: true, executed: false, reason: 'disabled' });
@@ -540,7 +548,7 @@ Deno.serve(async (req) => {
           }
           
           // Calculate combined score
-          const combinedScore = calculateCombinedScore(candidate.score, aiSentiment);
+          const combinedScore = calculateCombinedScore(candidate.score, aiSentiment, signalWeights);
           console.log(`   ${candidate.symbol}: Technical ${candidate.score} + AI ${aiSentiment.sentiment} = Combined ${combinedScore}`);
           
           if (combinedScore >= 65 && combinedScore > bestCombinedScore) {

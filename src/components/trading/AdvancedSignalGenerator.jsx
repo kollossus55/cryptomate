@@ -113,7 +113,7 @@ const predictPriceMovement = (asset) => {
 };
 
 // Generate comprehensive AI signal combining all data sources
-export const generateAdvancedSignal = async (asset, userPreferences = null) => {
+export const generateAdvancedSignal = async (asset, signalConfig = null) => {
   try {
     // Fetch all data sources in parallel (now using cached/simulated data)
     const [newsData, socialData, onChainData] = await Promise.all([
@@ -128,31 +128,32 @@ export const generateAdvancedSignal = async (asset, userPreferences = null) => {
     // Technical indicators (from asset data)
     const technicalScore = calculateTechnicalScore(asset);
 
-    // Dynamic weights based on user preferences or defaults
-    const newsWeight = userPreferences?.signal_alert_thresholds?.news_sentiment_weight ?? 0.25;
-    const weights = {
-      technical: 0.30,
-      news: newsWeight,
-      social: 0.20,
-      onchain: 0.25 - (newsWeight - 0.25), // Adjust onchain to compensate
-      predictive: 0.25
+    // Default to 70% Technical + 30% AI Sentiment (new standard)
+    const weights = signalConfig?.weights || {
+      technical: 70,
+      news: 30,
+      social: 0,
+      onchain: 0,
+      predictive: 0
     };
 
-    // Composite score with predictive analysis
-    const compositeScore = 
-      (technicalScore * weights.technical) +
-      ((newsData.sentiment_score + 1) * 50 * weights.news) +  // Convert -1 to 1 scale to 0-100
-      (socialData.social_score * weights.social) +
-      (onChainData.onchain_score * weights.onchain) +
-      (prediction.prediction_confidence * weights.predictive);
+    // Calculate weights as decimals
+    const wTech = weights.technical / 100;
+    const wNews = weights.news / 100;
+    const wSocial = (weights.social || 0) / 100;
+    const wOnChain = (weights.onchain || 0) / 100;
+    const wPred = (weights.predictive || 0) / 100;
 
-    // Determine confidence level with news sentiment boost
+    // Composite score
+    const compositeScore = 
+      (technicalScore * wTech) +
+      ((newsData.sentiment_score + 1) * 50 * wNews) +  // Convert -1 to 1 scale to 0-100
+      (socialData.social_score * wSocial) +
+      (onChainData.onchain_score * wOnChain) +
+      (prediction.prediction_confidence * wPred);
+
+    // Determine confidence level
     let confidence = Math.max(30, Math.min(95, Math.round(compositeScore)));
-    
-    // Boost confidence if news sentiment is strong
-    if (Math.abs(newsData.sentiment_score) > 0.6) {
-      confidence = Math.min(95, confidence + 5);
-    }
 
     // Determine risk level
     let riskLevel = 'medium';
