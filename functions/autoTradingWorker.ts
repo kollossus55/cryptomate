@@ -1,405 +1,497 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
 
 /**
- * Auto-Trading Worker
- * Executes auto-trading logic for a single user
- * Called by tradingScheduler for each user
+ * Auto-Trading Worker V2 - Technical Analysis Based
+ * Uses real indicators: RSI, MACD, Moving Averages, Support/Resistance
  */
 
-// Import core trading logic (copy of the engine for server-side use)
-function calculateRiskLevel(confidence) {
-  // More lenient risk levels to allow more trades
-  if (confidence >= 70) return 'low';
-  if (confidence >= 55) return 'medium';
-  return 'high';
+const COINGECKO_IDS = {
+  'BTC': 'bitcoin', 'ETH': 'ethereum', 'BNB': 'binancecoin', 'SOL': 'solana',
+  'XRP': 'ripple', 'ADA': 'cardano', 'AVAX': 'avalanche-2', 'DOGE': 'dogecoin',
+  'DOT': 'polkadot', 'MATIC': 'matic-network', 'LTC': 'litecoin', 'LINK': 'chainlink',
+  'UNI': 'uniswap', 'ATOM': 'cosmos', 'XLM': 'stellar', 'ALGO': 'algorand',
+  'NEAR': 'near', 'APT': 'aptos', 'ARB': 'arbitrum', 'OP': 'optimism',
+  'INJ': 'injective-protocol', 'SUI': 'sui', 'SEI': 'sei-network'
+};
+
+// Fetch historical data from CoinGecko
+async function fetchHistoricalData(coinId) {
+  try {
+    const response = await fetch(
+      `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=30&interval=daily`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    return {
+      prices: (data.prices || []).map(p => p[1]),
+      volumes: (data.total_volumes || []).map(v => v[1])
+    };
+  } catch (e) {
+    return null;
+  }
 }
 
-function isRiskLevelAllowed(riskLevel, settings) {
-  return settings.allowed_risk_levels?.includes(riskLevel);
+// Calculate RSI
+function calculateRSI(prices, period = 14) {
+  if (prices.length < period + 1) return null;
+  const changes = [];
+  for (let i = 1; i < prices.length; i++) {
+    changes.push(prices[i] - prices[i - 1]);
+  }
+  const recentChanges = changes.slice(-period);
+  let gains = 0, losses = 0;
+  recentChanges.forEach(change => {
+    if (change > 0) gains += change;
+    else losses += Math.abs(change);
+  });
+  if (losses === 0) return 100;
+  const rs = (gains / period) / (losses / period);
+  return 100 - (100 / (1 + rs));
 }
 
-function hasReachedTradeLimit(settings) {
-  return (settings.trades_today || 0) >= (settings.max_trades_per_day || 10);
+// Calculate SMA
+function calculateSMA(prices, period) {
+  if (prices.length < period) return null;
+  return prices.slice(-period).reduce((sum, p) => sum + p, 0) / period;
 }
 
-function isCircuitBreakerTriggered(settings) {
-  const dailyLoss = settings.daily_loss || 0;
-  const maxLoss = settings.max_daily_loss_percent || 5;
-  // Only trigger if max loss is set to something meaningful and we've exceeded it
-  return maxLoss > 0 && dailyLoss >= maxLoss;
+// Calculate EMA
+function calculateEMA(prices, period) {
+  if (prices.length < period) return null;
+  const multiplier = 2 / (period + 1);
+  let ema = prices.slice(0, period).reduce((sum, p) => sum + p, 0) / period;
+  for (let i = period; i < prices.length; i++) {
+    ema = (prices[i] - ema) * multiplier + ema;
+  }
+  return ema;
 }
 
-function hasAssetBeenTradedToday(assetSymbol, settings) {
-  const assetsTraded = settings.assets_traded_today || [];
-  return assetsTraded.includes(assetSymbol);
+// Calculate MACD
+function calculateMACD(prices) {
+  const ema12 = calculateEMA(prices, 12);
+  const ema26 = calculateEMA(prices, 26);
+  if (!ema12 || !ema26) return null;
+  return { value: ema12 - ema26, bullish: ema12 > ema26 };
 }
 
-function calculatePositionSize(availableBalance, settings, assetPrice) {
-  if (availableBalance <= 0 || !assetPrice || assetPrice === 0) {
-    return { value: 0, quantity: 0, valid: false, reason: 'insufficient_balance' };
+// Detect trend
+function detectTrend(prices) {
+  if (prices.length < 20) return 'neutral';
+  const sma7 = calculateSMA(prices, 7);
+  const sma20 = calculateSMA(prices, 20);
+  const current = prices[prices.length - 1];
+  
+  if (current > sma7 && sma7 > sma20) return 'strong_uptrend';
+  if (current > sma20) return 'uptrend';
+  if (current < sma7 && sma7 < sma20) return 'strong_downtrend';
+  if (current < sma20) return 'downtrend';
+  return 'neutral';
+}
+
+// Calculate volatility
+function calculateVolatility(prices) {
+  if (prices.length < 14) return 5;
+  const returns = [];
+  for (let i = 1; i < prices.length; i++) {
+    returns.push(Math.abs((prices[i] - prices[i-1]) / prices[i-1]) * 100);
+  }
+  return returns.slice(-14).reduce((sum, r) => sum + r, 0) / 14;
+}
+
+// Find support/resistance
+function findSupportResistance(prices) {
+  if (prices.length < 20) return null;
+  const current = prices[prices.length - 1];
+  const recentPrices = prices.slice(-30);
+  
+  let support = Math.min(...recentPrices);
+  let resistance = Math.max(...recentPrices);
+  
+  return {
+    support,
+    resistance,
+    distanceToSupport: ((current - support) / current) * 100,
+    distanceToResistance: ((resistance - current) / current) * 100
+  };
+}
+
+// MAIN TECHNICAL SCORING FUNCTION
+function scoreTechnicals(symbol, prices, volumes, currentPrice, change24h) {
+  let score = 50; // Start neutral
+  const reasons = [];
+  
+  // 1. RSI Analysis (25 points max)
+  const rsi = calculateRSI(prices);
+  if (rsi !== null) {
+    if (rsi < 30) {
+      score += 25;
+      reasons.push(`RSI oversold: ${rsi.toFixed(1)}`);
+    } else if (rsi < 40) {
+      score += 15;
+      reasons.push(`RSI low: ${rsi.toFixed(1)}`);
+    } else if (rsi > 70) {
+      score -= 25;
+      reasons.push(`RSI overbought: ${rsi.toFixed(1)} - AVOID`);
+    } else if (rsi > 60) {
+      score -= 10;
+      reasons.push(`RSI elevated: ${rsi.toFixed(1)}`);
+    } else {
+      score += 5; // Neutral RSI is slightly positive
+      reasons.push(`RSI neutral: ${rsi.toFixed(1)}`);
+    }
   }
   
-  const maxPositionSize = (settings.max_position_size_percent || 10) / 100;
-  const positionValue = Math.min(
-    availableBalance * maxPositionSize,
-    availableBalance * 0.2
-  );
-  
-  const quantity = positionValue / assetPrice;
-  const minTradeValue = 10;
-  
-  if (positionValue < minTradeValue) {
-    return { value: positionValue, quantity, valid: false, reason: 'position_too_small' };
+  // 2. Trend Analysis (20 points max)
+  const trend = detectTrend(prices);
+  if (trend === 'strong_uptrend') {
+    score += 20;
+    reasons.push('Strong uptrend');
+  } else if (trend === 'uptrend') {
+    score += 10;
+    reasons.push('Uptrend');
+  } else if (trend === 'strong_downtrend') {
+    score -= 25;
+    reasons.push('Strong downtrend - AVOID');
+  } else if (trend === 'downtrend') {
+    score -= 15;
+    reasons.push('Downtrend');
   }
   
-  return { value: positionValue, quantity, valid: true };
+  // 3. MACD Analysis (15 points max)
+  const macd = calculateMACD(prices);
+  if (macd) {
+    if (macd.bullish && macd.value > 0) {
+      score += 15;
+      reasons.push('MACD bullish');
+    } else if (!macd.bullish) {
+      score -= 15;
+      reasons.push('MACD bearish');
+    }
+  }
+  
+  // 4. Support/Resistance (15 points max)
+  const sr = findSupportResistance(prices);
+  if (sr) {
+    if (sr.distanceToSupport < 3) {
+      score += 15;
+      reasons.push(`Near support (${sr.distanceToSupport.toFixed(1)}% above)`);
+    } else if (sr.distanceToSupport < 6) {
+      score += 8;
+      reasons.push('Approaching support');
+    }
+    if (sr.distanceToResistance < 3) {
+      score -= 10;
+      reasons.push(`Near resistance - limited upside`);
+    }
+  }
+  
+  // 5. Volatility Check (10 points max)
+  const volatility = calculateVolatility(prices);
+  if (volatility > 8) {
+    score -= 15;
+    reasons.push(`High volatility: ${volatility.toFixed(1)}% - RISKY`);
+  } else if (volatility < 3) {
+    score += 10;
+    reasons.push('Low volatility');
+  }
+  
+  // 6. Price vs Moving Averages (10 points max)
+  const sma20 = calculateSMA(prices, 20);
+  if (sma20) {
+    const priceVsSma = ((currentPrice - sma20) / sma20) * 100;
+    if (priceVsSma > 10) {
+      score -= 10;
+      reasons.push(`${priceVsSma.toFixed(1)}% above SMA20 - extended`);
+    } else if (priceVsSma < -5 && trend !== 'strong_downtrend') {
+      score += 10;
+      reasons.push(`${Math.abs(priceVsSma).toFixed(1)}% below SMA20 - potential bounce`);
+    }
+  }
+  
+  // 7. Volume Confirmation (5 points max)
+  if (volumes.length >= 7) {
+    const recentVol = volumes.slice(-3).reduce((s,v) => s+v, 0) / 3;
+    const olderVol = volumes.slice(-7, -3).reduce((s,v) => s+v, 0) / 4;
+    if (recentVol > olderVol * 1.5 && trend?.includes('uptrend')) {
+      score += 5;
+      reasons.push('Volume confirming uptrend');
+    }
+  }
+  
+  // Clamp score
+  score = Math.max(0, Math.min(100, score));
+  
+  // Determine action
+  let action = 'hold';
+  if (score >= 70) action = 'strong_buy';
+  else if (score >= 60) action = 'buy';
+  else if (score <= 30) action = 'strong_sell';
+  else if (score <= 40) action = 'sell';
+  
+  return {
+    symbol,
+    score,
+    action,
+    rsi,
+    trend,
+    macd: macd?.bullish ? 'bullish' : 'bearish',
+    volatility,
+    reasons
+  };
+}
+
+// Position sizing
+function calculatePositionSize(balance, settings, price) {
+  if (balance <= 0 || !price) return { valid: false };
+  const maxSize = (settings.max_position_size_percent || 10) / 100;
+  const value = Math.min(balance * maxSize, balance * 0.15);
+  if (value < 10) return { valid: false, reason: 'too_small' };
+  return { valid: true, value, quantity: value / price };
 }
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    
-    // Get request payload
     const { settings, portfolio, user_email } = await req.json();
     
     if (!settings || !portfolio || !user_email) {
-      return Response.json({ 
-        success: false, 
-        error: 'Missing required parameters' 
-      }, { status: 400 });
+      return Response.json({ success: false, error: 'Missing parameters' }, { status: 400 });
     }
     
-    console.log(`🤖 Auto-Trading Worker: Processing user ${user_email}`);
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`🤖 AUTO-TRADING V2 - Technical Analysis Mode`);
+    console.log(`📧 User: ${user_email}`);
+    console.log(`${'='.repeat(60)}`);
     
-    // Check if we need to reset daily counters (new day)
+    // Reset daily counters if new day
     const lastTradeDate = settings.last_trade_date ? new Date(settings.last_trade_date).toDateString() : null;
     const today = new Date().toDateString();
-    
     if (lastTradeDate && lastTradeDate !== today) {
-      console.log(`📅 New day detected - resetting daily counters`);
+      console.log(`📅 New day - resetting counters`);
       settings.trades_today = 0;
       settings.daily_loss = 0;
       settings.assets_traded_today = [];
-      
-      // Persist the reset
       await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
-        trades_today: 0,
-        daily_loss: 0,
-        assets_traded_today: []
+        trades_today: 0, daily_loss: 0, assets_traded_today: []
       });
     }
     
     // Safety checks
     if (!settings.is_enabled) {
-      return Response.json({ 
-        success: true,
-        executed: false,
-        reason: 'auto_trading_disabled'
-      });
+      return Response.json({ success: true, executed: false, reason: 'disabled' });
+    }
+    if ((settings.daily_loss || 0) >= (settings.max_daily_loss_percent || 5)) {
+      return Response.json({ success: true, executed: false, reason: 'circuit_breaker' });
+    }
+    if ((settings.trades_today || 0) >= (settings.max_trades_per_day || 10)) {
+      return Response.json({ success: true, executed: false, reason: 'trade_limit' });
     }
     
-    if (isCircuitBreakerTriggered(settings)) {
-      return Response.json({ 
-        success: true,
-        executed: false,
-        reason: 'circuit_breaker_triggered'
-      });
-    }
+    console.log(`💰 Balance: $${portfolio.available_balance.toFixed(2)}`);
+    console.log(`📊 Trades today: ${settings.trades_today || 0}/${settings.max_trades_per_day || 10}`);
     
-    if (hasReachedTradeLimit(settings)) {
-      return Response.json({ 
-        success: true,
-        executed: false,
-        reason: 'trade_limit_reached'
-      });
-    }
-    
-    // Fetch market data and signals (using global signal data)
-    // In production, this would fetch from a market data API
-    // For now, we'll generate simulated opportunities based on stored signal data
-    
-    // Fetch real market data from CoinGecko
-    const coinGeckoIds = 'bitcoin,ethereum,binancecoin,solana,ripple,cardano,avalanche-2,dogecoin,polkadot,matic-network,litecoin,chainlink,uniswap,cosmos,stellar,algorand,vechain,filecoin,near,aptos,arbitrum,optimism,injective-protocol,celestia,sui,sei-network';
-    const symbolMap = {
-      'bitcoin': 'BTC', 'ethereum': 'ETH', 'binancecoin': 'BNB', 'solana': 'SOL',
-      'ripple': 'XRP', 'cardano': 'ADA', 'avalanche-2': 'AVAX', 'dogecoin': 'DOGE',
-      'polkadot': 'DOT', 'matic-network': 'MATIC', 'litecoin': 'LTC', 'chainlink': 'LINK',
-      'uniswap': 'UNI', 'cosmos': 'ATOM', 'stellar': 'XLM', 'algorand': 'ALGO',
-      'vechain': 'VET', 'filecoin': 'FIL', 'near': 'NEAR', 'aptos': 'APT',
-      'arbitrum': 'ARB', 'optimism': 'OP', 'injective-protocol': 'INJ', 'celestia': 'TIA',
-      'sui': 'SUI', 'sei-network': 'SEI'
-    };
-    
+    // Fetch current prices
+    const ids = Object.values(COINGECKO_IDS).join(',');
     let marketData = {};
     try {
-      const response = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${coinGeckoIds}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true`,
+      const resp = await fetch(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`,
         { headers: { 'Accept': 'application/json' } }
       );
-      if (response.ok) {
-        marketData = await response.json();
-        console.log('📊 Fetched market data for', Object.keys(marketData).length, 'assets');
-      }
+      if (resp.ok) marketData = await resp.json();
     } catch (e) {
-      console.warn('⚠️ Failed to fetch market data:', e.message);
+      console.warn('Failed to fetch prices');
     }
     
+    // Check existing positions for stop-loss/take-profit first
     const opportunities = [];
     
-    // Check existing positions for stop loss / take profit
-    if (portfolio.positions && portfolio.positions.length > 0) {
+    if (portfolio.positions?.length > 0) {
+      console.log(`\n📦 Checking ${portfolio.positions.length} positions...`);
+      
       for (const position of portfolio.positions) {
-        const assetSymbol = position.asset_symbol.replace('/USDT', '');
-        const geckoId = Object.keys(symbolMap).find(k => symbolMap[k] === assetSymbol);
-        const liveData = geckoId ? marketData[geckoId] : null;
+        const symbol = position.asset_symbol.replace('/USDT', '');
+        const coinId = COINGECKO_IDS[symbol];
+        const liveData = coinId ? marketData[coinId] : null;
         const currentPrice = liveData?.usd || position.avg_entry_price;
+        const pnlPercent = ((currentPrice - position.avg_entry_price) / position.avg_entry_price) * 100;
         
-        const profitPercent = ((currentPrice - position.avg_entry_price) / position.avg_entry_price) * 100;
+        console.log(`  ${symbol}: Entry $${position.avg_entry_price.toFixed(2)} → Now $${currentPrice.toFixed(2)} (${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)`);
         
-        if (profitPercent <= -(settings.stop_loss_percent || 3)) {
+        // Stop-loss
+        if (pnlPercent <= -(settings.stop_loss_percent || 3)) {
           opportunities.push({
-            asset: { symbol: assetSymbol, price: currentPrice },
-            action: 'sell',
-            reason: 'stop_loss',
-            quantity: position.quantity,
-            confidence: 100,
-            profitPercent
+            symbol, action: 'sell', reason: 'stop_loss',
+            price: currentPrice, quantity: position.quantity, pnlPercent
           });
+          console.log(`    ⛔ STOP-LOSS triggered`);
           break;
         }
         
-        if (profitPercent >= (settings.take_profit_percent || 8)) {
+        // Take-profit
+        if (pnlPercent >= (settings.take_profit_percent || 8)) {
           opportunities.push({
-            asset: { symbol: assetSymbol, price: currentPrice },
-            action: 'sell',
-            reason: 'take_profit',
-            quantity: position.quantity,
-            confidence: 100,
-            profitPercent
+            symbol, action: 'sell', reason: 'take_profit',
+            price: currentPrice, quantity: position.quantity, pnlPercent
           });
+          console.log(`    ✅ TAKE-PROFIT triggered`);
           break;
         }
       }
     }
     
-    // Scan for NEW buy opportunities if no sell signals and balance available
-    if (opportunities.length === 0 && portfolio.available_balance > 50 && Object.keys(marketData).length > 0) {
-      // AGGRESSIVE APPROACH: Always try to find a trade
-      const minConfidence = 50; // Very low threshold - we want trades!
-
-      console.log(`🔍 AGGRESSIVE SCAN: ${Object.keys(marketData).length} assets`);
-      console.log(`📋 Using aggressive threshold: minConfidence=${minConfidence}%`);
-      console.log(`💰 Available balance: $${portfolio.available_balance.toFixed(2)}`);
-
+    // Scan for buy opportunities if no sell signals
+    if (opportunities.length === 0 && portfolio.available_balance > 50) {
+      console.log(`\n🔍 Scanning for BUY opportunities...`);
+      
       const candidates = [];
-
-      for (const [geckoId, data] of Object.entries(marketData)) {
-        const symbol = symbolMap[geckoId];
-        if (!symbol || !data.usd) continue;
-
-        // Skip if already traded today
-        if (hasAssetBeenTradedToday(symbol, settings)) {
-          continue;
-        }
-
-        // Skip if already have position
-        if (portfolio.positions?.find(p => p.asset_symbol === `${symbol}/USDT`)) {
-          continue;
-        }
-
-        const change24h = data.usd_24h_change || 0;
-        const price = data.usd;
-        const volume = data.usd_24h_vol || 0;
-
-        // FUNDAMENTALS-BASED SCORING - More aggressive to find trades
-        let score = 55; // Higher base score
-
-        // PRIMARY: Momentum (strongest weight)
-        if (change24h > 10) score += 35;
-        else if (change24h > 7) score += 30;
-        else if (change24h > 5) score += 25;
-        else if (change24h > 3) score += 22;
-        else if (change24h > 2) score += 18;
-        else if (change24h > 1) score += 14;
-        else if (change24h > 0) score += 10;
-        else if (change24h > -1) score += 5; // Small dip OK
-        else if (change24h > -2) score += 0;
-        else if (change24h > -5) score -= 5;
-        else score -= 10; // Big drops penalized less
-
-        // SECONDARY: Volume (liquidity matters)
-        if (volume > 5000000000) score += 18;      // $5B+ volume
-        else if (volume > 2000000000) score += 15; // $2B+ volume
-        else if (volume > 1000000000) score += 12; // $1B+ volume
-        else if (volume > 500000000) score += 10;  // $500M+ volume
-        else if (volume > 100000000) score += 7;   // $100M+ volume
-        else score += 3; // Low volume still OK
-
-        // Small variance
-        score += Math.floor(Math.random() * 6) - 3;
-        score = Math.max(40, Math.min(95, score));
+      const assetsTraded = settings.assets_traded_today || [];
+      
+      for (const [symbol, coinId] of Object.entries(COINGECKO_IDS)) {
+        // Skip if already traded today or have position
+        if (assetsTraded.includes(symbol)) continue;
+        if (portfolio.positions?.find(p => p.asset_symbol === `${symbol}/USDT`)) continue;
         
-        console.log(`   📊 ${symbol}: 24h=${change24h.toFixed(2)}%, vol=$${(volume/1e9).toFixed(2)}B, score=${score}%`);
-
-        const riskLevel = calculateRiskLevel(score);
-        // ALWAYS allow if score is above 50% - ignore risk level restrictions for now
-        const riskAllowed = true; // Override: allow all risk levels
-
-        // VERY RELAXED CRITERIA: Just needs score threshold
-        if (score >= minConfidence) {
-          const positionSize = calculatePositionSize(portfolio.available_balance, settings, price);
-
-          if (positionSize.valid) {
+        const liveData = marketData[coinId];
+        if (!liveData?.usd) continue;
+        
+        // Fetch historical data for technical analysis
+        const historical = await fetchHistoricalData(coinId);
+        if (!historical || historical.prices.length < 14) continue;
+        
+        // Calculate technical score
+        const technicals = scoreTechnicals(
+          symbol,
+          historical.prices,
+          historical.volumes,
+          liveData.usd,
+          liveData.usd_24h_change || 0
+        );
+        
+        console.log(`\n  📊 ${symbol}: Score ${technicals.score}/100 → ${technicals.action.toUpperCase()}`);
+        console.log(`     RSI: ${technicals.rsi?.toFixed(1) || 'N/A'} | Trend: ${technicals.trend} | MACD: ${technicals.macd}`);
+        console.log(`     Reasons: ${technicals.reasons.slice(0, 3).join(', ')}`);
+        
+        // Only consider if technical score >= 65 (was 50, now stricter)
+        if (technicals.score >= 65 && (technicals.action === 'buy' || technicals.action === 'strong_buy')) {
+          const posSize = calculatePositionSize(portfolio.available_balance, settings, liveData.usd);
+          if (posSize.valid) {
             candidates.push({
-              asset: { symbol, price },
+              symbol,
               action: 'buy',
-              reason: change24h > 2 ? 'strong_momentum' : change24h > 0 ? 'positive_momentum' : 'dip_opportunity',
-              quantity: positionSize.quantity,
-              confidence: score,
-              riskLevel,
-              change24h,
-              volume
+              reason: technicals.action,
+              price: liveData.usd,
+              quantity: posSize.quantity,
+              value: posSize.value,
+              score: technicals.score,
+              technicals
             });
-            console.log(`   ✅ ${symbol}: score=${score}%, 24h=${change24h.toFixed(2)}%, vol=$${(volume/1e9).toFixed(2)}B`);
           }
         }
+        
+        // Rate limit API calls
+        await new Promise(r => setTimeout(r, 300));
       }
-
-      console.log(`📈 Found ${candidates.length} candidates`);
-
+      
+      // Sort by technical score and pick best
       if (candidates.length > 0) {
-        // Sort by: momentum first, then volume, then score
-        candidates.sort((a, b) => {
-          // Prefer positive momentum
-          if (a.change24h > 0 && b.change24h <= 0) return -1;
-          if (b.change24h > 0 && a.change24h <= 0) return 1;
-          // Then by change magnitude
-          if (Math.abs(a.change24h - b.change24h) > 2) {
-            return b.change24h - a.change24h;
-          }
-          // Then by volume
-          return b.volume - a.volume;
-        });
-
+        candidates.sort((a, b) => b.score - a.score);
         opportunities.push(candidates[0]);
-        console.log(`🎯 SELECTED: ${candidates[0].asset.symbol} - ${candidates[0].reason} (${candidates[0].confidence}%, ${candidates[0].change24h.toFixed(2)}%)`);
-      } else {
-        console.log(`❌ No candidates met criteria`);
+        console.log(`\n🎯 BEST OPPORTUNITY: ${candidates[0].symbol} (Score: ${candidates[0].score})`);
       }
     }
     
+    // Execute trade if we have an opportunity
     if (opportunities.length === 0) {
-      console.log(`📊 No opportunities found for ${user_email}`);
-      console.log(`   Settings: min_confidence=${settings.min_confidence}%, allowed_risk=${JSON.stringify(settings.allowed_risk_levels)}`);
-      console.log(`   Portfolio: balance=$${portfolio.available_balance}, positions=${portfolio.positions?.length || 0}`);
-      console.log(`   Market data fetched: ${Object.keys(marketData).length} assets`);
-      return Response.json({ 
-        success: true,
-        executed: false,
-        reason: 'no_opportunities',
-        debug: {
-          min_confidence: settings.min_confidence,
-          allowed_risk_levels: settings.allowed_risk_levels,
-          available_balance: portfolio.available_balance,
-          market_data_count: Object.keys(marketData).length
-        }
-      });
+      console.log(`\n❌ No opportunities met technical criteria`);
+      return Response.json({ success: true, executed: false, reason: 'no_opportunities' });
     }
     
-    // Execute the best opportunity
-    const opportunity = opportunities[0];
+    const opp = opportunities[0];
+    console.log(`\n🚀 EXECUTING: ${opp.action.toUpperCase()} ${opp.symbol}`);
+    console.log(`   Quantity: ${opp.quantity.toFixed(6)} @ $${opp.price.toFixed(2)}`);
     
-    if (opportunity.action === 'buy' && hasAssetBeenTradedToday(opportunity.asset.symbol, settings)) {
-      return Response.json({ 
-        success: true,
-        executed: false,
-        reason: 'asset_already_traded_today'
-      });
-    }
-    
-    // Execute trade
+    // Create trade record
     const tradeData = {
-      asset_symbol: `${opportunity.asset.symbol}/USDT`,
-      trade_type: opportunity.action,
-      quantity: opportunity.quantity,
-      price: opportunity.asset.price,
-      total_value: opportunity.quantity * opportunity.asset.price,
-      exchange: "Paper Trading (Server)",
-      status: "completed",
-      profit_loss: opportunity.profitPercent ? 
-        (opportunity.asset.price - (opportunity.quantity * opportunity.asset.price / opportunity.quantity)) * opportunity.quantity : 0,
+      asset_symbol: `${opp.symbol}/USDT`,
+      trade_type: opp.action,
+      quantity: opp.quantity,
+      price: opp.price,
+      total_value: opp.quantity * opp.price,
+      exchange: 'Paper Trading (Auto-V2)',
+      status: 'completed',
+      profit_loss: opp.pnlPercent ? (opp.price * opp.quantity) * (opp.pnlPercent / 100) : 0,
+      ai_signal: opp.technicals ? {
+        confidence: opp.score,
+        reasoning: opp.technicals.reasons.join('; '),
+        indicators: [`RSI: ${opp.technicals.rsi?.toFixed(1)}`, `Trend: ${opp.technicals.trend}`, `MACD: ${opp.technicals.macd}`]
+      } : null,
       created_by: user_email
     };
     
     await base44.asServiceRole.entities.Trade.create(tradeData);
     
     // Update portfolio
-    let updatedPositions = [...(portfolio.positions || [])];
-    const assetSymbol = `${opportunity.asset.symbol}/USDT`;
+    let positions = [...(portfolio.positions || [])];
+    const assetSymbol = `${opp.symbol}/USDT`;
     
-    if (opportunity.action === 'sell') {
-      updatedPositions = updatedPositions.filter(p => p.asset_symbol !== assetSymbol);
-    } else if (opportunity.action === 'buy') {
-      const positionSize = calculatePositionSize(
-        portfolio.available_balance,
-        settings,
-        opportunity.asset.price
-      );
-      
-      if (positionSize.valid) {
-        updatedPositions.push({
-          asset_symbol: assetSymbol,
-          quantity: positionSize.quantity,
-          avg_entry_price: opportunity.asset.price,
-          current_value: positionSize.value,
-          profit_loss: 0,
-          highest_price: opportunity.asset.price
-        });
-      }
+    if (opp.action === 'sell') {
+      positions = positions.filter(p => p.asset_symbol !== assetSymbol);
+    } else {
+      positions.push({
+        asset_symbol: assetSymbol,
+        quantity: opp.quantity,
+        avg_entry_price: opp.price,
+        current_value: opp.value,
+        profit_loss: 0,
+        highest_price: opp.price
+      });
     }
     
-    const newBalance = opportunity.action === 'buy'
-      ? portfolio.available_balance - tradeData.total_value
-      : portfolio.available_balance + tradeData.total_value;
+    const newBalance = opp.action === 'buy'
+      ? portfolio.available_balance - (opp.quantity * opp.price)
+      : portfolio.available_balance + (opp.quantity * opp.price);
     
     await base44.asServiceRole.entities.Portfolio.update(portfolio.id, {
       available_balance: newBalance,
       total_balance: portfolio.total_balance + (tradeData.profit_loss || 0),
-      positions: updatedPositions,
+      positions,
       total_trades: (portfolio.total_trades || 0) + 1,
       total_profit_loss: (portfolio.total_profit_loss || 0) + (tradeData.profit_loss || 0)
     });
     
     // Update settings
-    const newTradesCount = (settings.trades_today || 0) + 1;
-    const assetsTraded = [...(settings.assets_traded_today || [])];
-    if (opportunity.action === 'buy' && !assetsTraded.includes(opportunity.asset.symbol)) {
-      assetsTraded.push(opportunity.asset.symbol);
+    const newAssetsTraded = [...(settings.assets_traded_today || [])];
+    if (opp.action === 'buy' && !newAssetsTraded.includes(opp.symbol)) {
+      newAssetsTraded.push(opp.symbol);
     }
     
     await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
-      trades_today: newTradesCount,
+      trades_today: (settings.trades_today || 0) + 1,
       last_trade_date: new Date().toISOString(),
-      assets_traded_today: assetsTraded
+      assets_traded_today: newAssetsTraded,
+      daily_loss: (settings.daily_loss || 0) + (tradeData.profit_loss < 0 ? Math.abs(tradeData.profit_loss) : 0)
     });
     
-    console.log(`✅ Trade executed: ${opportunity.action.toUpperCase()} ${opportunity.asset.symbol}`);
+    console.log(`\n✅ TRADE EXECUTED SUCCESSFULLY`);
+    console.log(`${'='.repeat(60)}\n`);
     
     return Response.json({
       success: true,
       executed: true,
-      opportunity: {
-        asset: { symbol: opportunity.asset.symbol },
-        action: opportunity.action,
-        reason: opportunity.reason
+      trade: {
+        symbol: opp.symbol,
+        action: opp.action,
+        quantity: opp.quantity,
+        price: opp.price,
+        reason: opp.reason,
+        technicalScore: opp.score
       }
     });
     
   } catch (error) {
-    console.error('❌ Auto-Trading Worker Error:', error);
-    return Response.json({ 
-      success: false, 
-      error: error.message 
-    }, { status: 500 });
+    console.error('❌ Error:', error);
+    return Response.json({ success: false, error: error.message }, { status: 500 });
   }
 });
