@@ -527,26 +527,48 @@ export default function AISignals() {
 
                 <TabsContent value="weights" className="space-y-4 mt-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {Object.entries(activeConfig.weights || {}).map(([key, value]) => (
-                      <div key={key}>
-                        <Label className="text-white capitalize mb-2 block">
-                          {key} Weight: {value}%
-                        </Label>
-                        <Slider
-                          value={[value]}
-                          onValueChange={(val) => {
-                            const newWeights = { ...activeConfig.weights, [key]: val[0] };
-                            updateConfigMutation.mutate({
-                              id: activeConfig.id,
-                              data: { ...activeConfig, weights: newWeights }
-                            });
-                          }}
-                          max={100}
-                          step={5}
-                          className="w-full"
-                        />
-                      </div>
-                    ))}
+                    {Object.entries(activeConfig.weights || {}).map(([key, value]) => {
+                      const colorMap = {
+                        technical: { bg: 'bg-gradient-to-r from-indigo-600/20 to-purple-600/20', border: 'border-indigo-500/50', text: 'text-indigo-300', bar: 'bg-indigo-500' },
+                        news: { bg: 'bg-gradient-to-r from-cyan-600/20 to-blue-600/20', border: 'border-cyan-500/50', text: 'text-cyan-300', bar: 'bg-cyan-500' },
+                        social: { bg: 'bg-gradient-to-r from-pink-600/20 to-rose-600/20', border: 'border-pink-500/50', text: 'text-pink-300', bar: 'bg-pink-500' },
+                        onchain: { bg: 'bg-gradient-to-r from-green-600/20 to-emerald-600/20', border: 'border-green-500/50', text: 'text-green-300', bar: 'bg-green-500' },
+                        predictive: { bg: 'bg-gradient-to-r from-amber-600/20 to-orange-600/20', border: 'border-amber-500/50', text: 'text-amber-300', bar: 'bg-amber-500' }
+                      };
+                      const colors = colorMap[key] || { bg: 'bg-slate-800', border: 'border-slate-600', text: 'text-slate-300', bar: 'bg-slate-500' };
+                      
+                      return (
+                        <div key={key} className={`p-4 rounded-xl border-2 ${colors.bg} ${colors.border}`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <Label className={`capitalize font-semibold ${colors.text}`}>
+                              {key}
+                            </Label>
+                            <span className={`text-2xl font-bold ${colors.text}`}>{value}%</span>
+                          </div>
+                          <div className="relative">
+                            <div className="h-3 bg-slate-700 rounded-full overflow-hidden mb-2">
+                              <div 
+                                className={`h-full ${colors.bar} transition-all duration-300`} 
+                                style={{ width: `${value}%` }}
+                              />
+                            </div>
+                            <Slider
+                              value={[value]}
+                              onValueChange={(val) => {
+                                const newWeights = { ...activeConfig.weights, [key]: val[0] };
+                                updateConfigMutation.mutate({
+                                  id: activeConfig.id,
+                                  data: { ...activeConfig, weights: newWeights }
+                                });
+                              }}
+                              max={100}
+                              step={5}
+                              className="w-full"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </TabsContent>
 
