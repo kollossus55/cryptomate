@@ -1,8 +1,13 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
 
 /**
- * Auto-Trading Worker V2 - Technical Analysis Based
- * Uses real indicators: RSI, MACD, Moving Averages, Support/Resistance
+ * Auto-Trading Worker V3 - Technical Analysis + AI Sentiment
+ * 
+ * PRIORITY ORDER:
+ * 1. Technical Analysis (70% weight) - RSI, MACD, Trend, Support/Resistance
+ * 2. AI Sentiment (30% weight) - News sentiment, market context
+ * 
+ * Technicals must pass first, then AI confirms or vetoes.
  */
 
 const COINGECKO_IDS = {
@@ -250,6 +255,121 @@ function calculatePositionSize(balance, settings, price) {
   return { valid: true, value, quantity: value / price };
 }
 
+// AI Sentiment Analysis using LLM
+async function analyzeAISentiment(base44, symbol, technicalData) {
+  try {
+    console.log(`  🤖 Fetching AI sentiment for ${symbol}...`);
+    
+    const prompt = `You are a crypto trading analyst. Analyze the current market sentiment for ${symbol}.
+
+Technical Context:
+- RSI: ${technicalData.rsi?.toFixed(1) || 'N/A'}
+- Trend: ${technicalData.trend}
+- MACD: ${technicalData.macd}
+- Technical Score: ${technicalData.score}/100
+
+Based on your knowledge of:
+1. Recent news about ${symbol}
+2. Overall crypto market sentiment
+3. Any major events or announcements
+4. Social media buzz and trader sentiment
+
+Provide a sentiment analysis. Be concise and decisive.`;
+
+    const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
+      prompt,
+      add_context_from_internet: true,
+      response_json_schema: {
+        type: "object",
+        properties: {
+          sentiment: {
+            type: "string",
+            enum: ["very_bullish", "bullish", "neutral", "bearish", "very_bearish"],
+            description: "Overall sentiment"
+          },
+          confidence: {
+            type: "number",
+            description: "Confidence in sentiment 0-100"
+          },
+          key_factors: {
+            type: "array",
+            items: { type: "string" },
+            description: "Top 3 factors influencing sentiment"
+          },
+          recommendation: {
+            type: "string",
+            enum: ["strong_buy", "buy", "hold", "sell", "strong_sell"],
+            description: "Trading recommendation based on sentiment"
+          },
+          risk_warning: {
+            type: "string",
+            description: "Any risk warnings or concerns"
+          }
+        },
+        required: ["sentiment", "confidence", "recommendation"]
+      }
+    });
+    
+    console.log(`  ✅ AI Sentiment: ${result.sentiment} (${result.confidence}% confidence)`);
+    console.log(`     Factors: ${result.key_factors?.slice(0, 2).join(', ') || 'N/A'}`);
+    
+    return result;
+  } catch (error) {
+    console.warn(`  ⚠️ AI sentiment failed: ${error.message}`);
+    return {
+      sentiment: 'neutral',
+      confidence: 50,
+      recommendation: 'hold',
+      key_factors: ['Unable to fetch sentiment'],
+      error: true
+    };
+  }
+}
+
+// Convert sentiment to score modifier (-30 to +30)
+function sentimentToScore(sentiment) {
+  const scores = {
+    'very_bullish': 30,
+    'bullish': 15,
+    'neutral': 0,
+    'bearish': -15,
+    'very_bearish': -30
+  };
+  return scores[sentiment] || 0;
+}
+
+// Check if AI sentiment vetoes the trade
+function shouldVetoTrade(aiSentiment, action) {
+  if (!aiSentiment || aiSentiment.error) return false;
+  
+  // Veto buy if sentiment is bearish or very_bearish
+  if (action === 'buy') {
+    if (aiSentiment.sentiment === 'very_bearish') {
+      console.log(`  ⛔ AI VETO: Very bearish sentiment blocks buy`);
+      return true;
+    }
+    if (aiSentiment.sentiment === 'bearish' && aiSentiment.confidence >= 70) {
+      console.log(`  ⛔ AI VETO: Strong bearish sentiment blocks buy`);
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// Calculate combined score (Technical 70% + Sentiment 30%)
+function calculateCombinedScore(technicalScore, aiSentiment) {
+  const technicalWeight = 0.70;
+  const sentimentWeight = 0.30;
+  
+  const sentimentModifier = sentimentToScore(aiSentiment?.sentiment || 'neutral');
+  const sentimentScore = 50 + sentimentModifier; // Convert to 0-100 scale
+  
+  const combined = (technicalScore * technicalWeight) + (sentimentScore * sentimentWeight);
+  
+  return Math.round(Math.max(0, Math.min(100, combined)));
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -373,8 +493,8 @@ Deno.serve(async (req) => {
         console.log(`     RSI: ${technicals.rsi?.toFixed(1) || 'N/A'} | Trend: ${technicals.trend} | MACD: ${technicals.macd}`);
         console.log(`     Reasons: ${technicals.reasons.slice(0, 3).join(', ')}`);
         
-        // Only consider if technical score >= 65 (was 50, now stricter)
-        if (technicals.score >= 65 && (technicals.action === 'buy' || technicals.action === 'strong_buy')) {
+        // Only consider if technical score >= 60 (gate check)
+        if (technicals.score >= 60 && (technicals.action === 'buy' || technicals.action === 'strong_buy')) {
           const posSize = calculatePositionSize(portfolio.available_balance, settings, liveData.usd);
           if (posSize.valid) {
             candidates.push({
@@ -394,11 +514,56 @@ Deno.serve(async (req) => {
         await new Promise(r => setTimeout(r, 300));
       }
       
-      // Sort by technical score and pick best
+      // Sort by technical score and pick top 3 for AI sentiment analysis
       if (candidates.length > 0) {
         candidates.sort((a, b) => b.score - a.score);
-        opportunities.push(candidates[0]);
-        console.log(`\n🎯 BEST OPPORTUNITY: ${candidates[0].symbol} (Score: ${candidates[0].score})`);
+        const topCandidates = candidates.slice(0, 3);
+        
+        console.log(`\n🎯 TOP ${topCandidates.length} TECHNICAL CANDIDATES:`);
+        topCandidates.forEach((c, i) => {
+          console.log(`   ${i+1}. ${c.symbol} - Technical Score: ${c.score}`);
+        });
+        
+        // Get AI sentiment for top candidates
+        console.log(`\n🤖 PHASE 2: AI SENTIMENT ANALYSIS`);
+        
+        let bestCandidate = null;
+        let bestCombinedScore = 0;
+        
+        for (const candidate of topCandidates) {
+          const aiSentiment = await analyzeAISentiment(base44, candidate.symbol, candidate.technicals);
+          
+          // Check for AI veto
+          if (shouldVetoTrade(aiSentiment, 'buy')) {
+            console.log(`   ${candidate.symbol}: VETOED by AI sentiment`);
+            continue;
+          }
+          
+          // Calculate combined score
+          const combinedScore = calculateCombinedScore(candidate.score, aiSentiment);
+          console.log(`   ${candidate.symbol}: Technical ${candidate.score} + AI ${aiSentiment.sentiment} = Combined ${combinedScore}`);
+          
+          if (combinedScore >= 65 && combinedScore > bestCombinedScore) {
+            bestCombinedScore = combinedScore;
+            bestCandidate = {
+              ...candidate,
+              score: combinedScore,
+              aiSentiment,
+              technicalScore: candidate.score
+            };
+          }
+          
+          // Small delay between AI calls
+          await new Promise(r => setTimeout(r, 500));
+        }
+        
+        if (bestCandidate) {
+          opportunities.push(bestCandidate);
+          console.log(`\n✅ SELECTED: ${bestCandidate.symbol}`);
+          console.log(`   Technical: ${bestCandidate.technicalScore} | AI: ${bestCandidate.aiSentiment.sentiment} | Combined: ${bestCandidate.score}`);
+        } else {
+          console.log(`\n❌ All candidates vetoed or below threshold`);
+        }
       }
     }
     
@@ -422,11 +587,19 @@ Deno.serve(async (req) => {
       exchange: 'Paper Trading (Auto-V2)',
       status: 'completed',
       profit_loss: opp.pnlPercent ? (opp.price * opp.quantity) * (opp.pnlPercent / 100) : 0,
-      ai_signal: opp.technicals ? {
+      ai_signal: {
         confidence: opp.score,
-        reasoning: opp.technicals.reasons.join('; '),
-        indicators: [`RSI: ${opp.technicals.rsi?.toFixed(1)}`, `Trend: ${opp.technicals.trend}`, `MACD: ${opp.technicals.macd}`]
-      } : null,
+        reasoning: opp.technicals ? 
+          `TECHNICALS: ${opp.technicals.reasons.slice(0, 3).join('; ')}` + 
+          (opp.aiSentiment ? ` | AI: ${opp.aiSentiment.sentiment} - ${opp.aiSentiment.key_factors?.slice(0, 2).join(', ') || 'N/A'}` : '') 
+          : opp.reason,
+        indicators: opp.technicals ? [
+          `RSI: ${opp.technicals.rsi?.toFixed(1)}`, 
+          `Trend: ${opp.technicals.trend}`, 
+          `MACD: ${opp.technicals.macd}`,
+          opp.aiSentiment ? `AI: ${opp.aiSentiment.sentiment}` : null
+        ].filter(Boolean) : []
+      },
       created_by: user_email
     };
     
@@ -486,7 +659,9 @@ Deno.serve(async (req) => {
         quantity: opp.quantity,
         price: opp.price,
         reason: opp.reason,
-        technicalScore: opp.score
+        technicalScore: opp.technicalScore || opp.score,
+        combinedScore: opp.score,
+        aiSentiment: opp.aiSentiment?.sentiment || 'N/A'
       }
     });
     
