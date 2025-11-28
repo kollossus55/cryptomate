@@ -69,9 +69,9 @@ export default function AIAnalysisModal({ isOpen, onClose, asset }) {
       if (cachedSignal) {
         // Use cached data if available
         setAdvancedData({
-          news: cachedSignal.breakdown.news,
-          social: cachedSignal.breakdown.social,
-          onchain: cachedSignal.breakdown.onchain
+          news: cachedSignal.breakdown?.news,
+          social: cachedSignal.breakdown?.social,
+          onchain: cachedSignal.breakdown?.onchain
         });
       } else {
         // Fetch fresh data
@@ -165,9 +165,9 @@ Provide detailed trading recommendations with confidence scores.`;
       const cachedSignal = window.assetSignalData?.[asset.symbol];
       if (cachedSignal) {
         setAdvancedData({ // Ensure advancedData is still set for other tabs
-          news: cachedSignal.breakdown.news,
-          social: cachedSignal.breakdown.social,
-          onchain: cachedSignal.breakdown.onchain
+          news: cachedSignal.breakdown?.news,
+          social: cachedSignal.breakdown?.social,
+          onchain: cachedSignal.breakdown?.onchain
         });
         generateBasicAnalysisFromSignal(cachedSignal); // Fallback to basic analysis
       } else {
