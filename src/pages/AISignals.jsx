@@ -93,8 +93,8 @@ export default function AISignals() {
           anomaly_detection: true
         },
         weights: {
-          technical: 70,
-          news: 30,
+          technical: 90,
+          news: 10,
           social: 0,
           onchain: 0,
           predictive: 0
@@ -154,9 +154,9 @@ export default function AISignals() {
   const calculateCompositeScore = (results, config) => {
     if (!config) return { score: 50, signal: 'hold' };
 
-    // PRIORITY: Technical Analysis (70%) + AI Sentiment (30%)
-    const technicalWeight = 0.70;
-    const sentimentWeight = 0.30;
+    // PRIORITY: Technical Analysis (90%) + AI Sentiment (10%)
+    const technicalWeight = 0.90;
+    const sentimentWeight = 0.10;
     
     let technicalScore = results.advanced_signal?.confidence || 50;
     let sentimentScore = 50; // Neutral default
