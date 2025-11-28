@@ -382,7 +382,7 @@ export default function AutoTrading() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
           {/* AI Settings */}
-          <Card className="bg-slate-900 border-slate-700">
+          <Card className="bg-slate-800 border-slate-700">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-white">
                 <Sparkles className="w-5 h-5 text-indigo-400" />
@@ -462,7 +462,7 @@ export default function AutoTrading() {
           </Card>
 
           {/* Risk Management */}
-          <Card className="bg-slate-900 border-slate-700">
+          <Card className="bg-slate-800 border-slate-700">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-white">
                 <Shield className="w-5 h-5 text-green-400" />
@@ -506,7 +506,7 @@ export default function AutoTrading() {
                   type="number"
                   value={settings.max_trades_per_day}
                   onChange={(e) => setSettings({...settings, max_trades_per_day: parseInt(e.target.value) || 0})}
-                  className="bg-slate-800 border-slate-700 text-white"
+                  className="bg-slate-900 border-slate-600 text-white"
                   min="1"
                   max="100"
                 />
@@ -519,7 +519,7 @@ export default function AutoTrading() {
                     type="number"
                     value={settings.stop_loss_percent}
                     onChange={(e) => setSettings({...settings, stop_loss_percent: parseFloat(e.target.value) || 0})}
-                    className="bg-slate-800 border-slate-700 text-white"
+                    className="bg-slate-900 border-slate-600 text-white"
                     step="0.5"
                   />
                 </div>
@@ -529,7 +529,7 @@ export default function AutoTrading() {
                     type="number"
                     value={settings.take_profit_percent}
                     onChange={(e) => setSettings({...settings, take_profit_percent: parseFloat(e.target.value) || 0})}
-                    className="bg-slate-800 border-slate-700 text-white"
+                    className="bg-slate-900 border-slate-600 text-white"
                     step="0.5"
                   />
                 </div>
@@ -539,7 +539,7 @@ export default function AutoTrading() {
         </div>
 
         {/* Advanced Risk Management */}
-        <Card className="bg-slate-900 border-slate-700 mt-6">
+        <Card className="bg-slate-800 border-slate-700 mt-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
               <Target className="w-5 h-5 text-purple-400" />
@@ -549,7 +549,7 @@ export default function AutoTrading() {
           <CardContent className="space-y-6">
             
             {/* Trailing Stop Loss */}
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-600">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h4 className="text-white font-semibold flex items-center gap-2">
@@ -603,7 +603,7 @@ export default function AutoTrading() {
             </div>
 
             {/* Break-Even Protection */}
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-600">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h4 className="text-white font-semibold flex items-center gap-2">
@@ -657,7 +657,7 @@ export default function AutoTrading() {
             </div>
 
             {/* Partial Profit Taking */}
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-600">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h4 className="text-white font-semibold flex items-center gap-2">
@@ -759,7 +759,7 @@ export default function AutoTrading() {
         </Card>
 
         {/* Smart Order Execution */}
-        <Card className="bg-slate-900 border-slate-700 mt-6">
+        <Card className="bg-slate-800 border-slate-700 mt-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
               <Zap className="w-5 h-5 text-yellow-400" />
@@ -769,7 +769,7 @@ export default function AutoTrading() {
           <CardContent className="space-y-6">
             
             {/* Smart Order Routing */}
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-600">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h4 className="text-white font-semibold flex items-center gap-2">
@@ -796,7 +796,7 @@ export default function AutoTrading() {
                     <select
                       value={settings.execution_strategy || 'smart_limit'}
                       onChange={(e) => setSettings({...settings, execution_strategy: e.target.value})}
-                      className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm"
+                      className="w-full bg-slate-900 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm"
                     >
                       <option value="market">Market (Immediate, Higher Slippage)</option>
                       <option value="limit">Limit (Better Price, May Not Fill)</option>
@@ -842,7 +842,7 @@ export default function AutoTrading() {
             </div>
 
             {/* Slippage Control */}
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-600">
               <div className="mb-4">
                 <h4 className="text-white font-semibold flex items-center gap-2 mb-1">
                   <AlertCircle className="w-4 h-4 text-orange-400" />
@@ -886,7 +886,7 @@ export default function AutoTrading() {
             </div>
 
             {/* TWAP Execution */}
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-600">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h4 className="text-white font-semibold flex items-center gap-2">
