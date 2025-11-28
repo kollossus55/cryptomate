@@ -271,8 +271,8 @@ export default function AdvancedChart({ asset }) {
       const data = payload[0]?.payload;
       
       return (
-        <div className="bg-slate-900/95 border border-slate-700 rounded-lg p-3 shadow-xl backdrop-blur-sm">
-          <p className="text-slate-300 text-sm mb-2 font-semibold">{label}</p>
+        <div className="bg-[#1e222d] border border-[#2a2e39] rounded p-3 shadow-xl">
+          <p className="text-[#b2b5be] text-sm mb-2 font-medium">{label}</p>
           
           {chartType === 'candles' && data && data.open ? (
             <div className="space-y-1">
