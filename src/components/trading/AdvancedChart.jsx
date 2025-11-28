@@ -329,7 +329,8 @@ export default function AdvancedChart({ asset }) {
     
     const { open, close, high, low } = payload;
     const isPositive = close >= open;
-    const color = isPositive ? '#10b981' : '#ef4444';
+    const color = isPositive ? '#26a69a' : '#ef5350';
+    const fill = isPositive ? '#26a69a' : '#ef5350';
     
     const maxPrice = Math.max(high, open, close, low);
     const minPrice = Math.min(high, open, close, low);
@@ -346,29 +347,20 @@ export default function AdvancedChart({ asset }) {
     
     const bodyTop = Math.min(openY, closeY);
     const bodyHeight = Math.abs(openY - closeY);
-    const candleWidth = Math.max(width * 0.6, 2);
+    const candleWidth = Math.max(width * 0.7, 3);
     const wickX = x + width / 2;
     
     return (
       <g>
-        {/* Wick (high-low line) */}
-        <line
-          x1={wickX}
-          y1={highY}
-          x2={wickX}
-          y2={lowY}
-          stroke={color}
-          strokeWidth={1}
-        />
-        {/* Body (open-close rectangle) */}
+        <line x1={wickX} y1={highY} x2={wickX} y2={lowY} stroke={color} strokeWidth={1.5} />
         <rect
           x={x + (width - candleWidth) / 2}
           y={bodyTop}
           width={candleWidth}
-          height={bodyHeight === 0 ? 1 : bodyHeight}
-          fill={isPositive ? color : '#1e293b'}
+          height={bodyHeight < 1 ? 1 : bodyHeight}
+          fill={fill}
           stroke={color}
-          strokeWidth={1}
+          strokeWidth={0}
         />
       </g>
     );
