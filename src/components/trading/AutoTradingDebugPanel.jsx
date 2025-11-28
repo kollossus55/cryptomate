@@ -1,10 +1,9 @@
-
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronDown, ChevronUp, Bug, Activity, AlertCircle, CheckCircle2, XCircle, Clock, TrendingUp, Settings as SettingsIcon, RefreshCw, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, Bug, Activity, AlertCircle, CheckCircle2, XCircle, Clock, TrendingUp, Settings as SettingsIcon, RefreshCw, Sparkles, Zap, PlayCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -20,6 +19,7 @@ export default function AutoTradingDebugPanel({
   const [nextCheckIn, setNextCheckIn] = useState(45);
   const [lastRefresh, setLastRefresh] = useState(Date.now());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
   const [lastSettingsUpdate, setLastSettingsUpdate] = useState(null);
   const [lastPortfolioUpdate, setLastPortfolioUpdate] = useState(null);
   
@@ -54,6 +54,51 @@ export default function AutoTradingDebugPanel({
       setLastPortfolioUpdate(Date.now());
     }
   }, [portfolio?.total_balance, portfolio?.available_balance, portfolio?.positions?.length]);
+
+  // Trigger manual auto-trade cycle
+  const handleRunAutoTrade = async () => {
+    setIsRunning(true);
+    const timestamp = new Date().toLocaleTimeString();
+    setLogs(prev => [{
+      id: Date.now(),
+      timestamp,
+      message: '🚀 Triggering manual auto-trade cycle...',
+      type: 'info'
+    }, ...prev].slice(0, 50));
+
+    try {
+      const { base44 } = await import('@/api/base44Client');
+      
+      // Invoke the scheduler directly
+      const result = await base44.functions.invoke('tradingScheduler');
+      
+      // Refresh data to show results
+      await queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+      await queryClient.invalidateQueries({ queryKey: ['auto-trading-settings'] });
+      await queryClient.refetchQueries({ queryKey: ['portfolio'] });
+      
+      const successTimestamp = new Date().toLocaleTimeString();
+      setLogs(prev => [{
+        id: Date.now() + 1,
+        timestamp: successTimestamp,
+        message: `✅ Cycle complete: ${result.data?.summary?.trades_executed || 0} trades executed`,
+        type: 'success'
+      }, ...prev].slice(0, 50));
+      
+    } catch (error) {
+      console.error('Failed to run auto-trade:', error);
+      const errorTimestamp = new Date().toLocaleTimeString();
+      setLogs(prev => [{
+        id: Date.now() + 2,
+        timestamp: errorTimestamp,
+        message: `❌ Cycle failed: ${error.message}`,
+        type: 'error'
+      }, ...prev].slice(0, 50));
+    } finally {
+      setIsRunning(false);
+      setLastRefresh(Date.now());
+    }
+  };
 
   // Force refresh function
   const handleForceRefresh = async () => {
@@ -329,6 +374,20 @@ export default function AutoTradingDebugPanel({
                 Reset Counters
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRunAutoTrade}
+              disabled={isRunning}
+              className="text-green-400 hover:text-green-300 border-green-500/30 hover:bg-green-500/10 bg-green-500/5"
+            >
+              {isRunning ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <PlayCircle className="w-4 h-4 mr-2" />
+              )}
+              {isRunning ? 'Running Cycle...' : 'Run Auto-Trade'}
+            </Button>
             <Button
               variant="ghost"
               size="sm"
