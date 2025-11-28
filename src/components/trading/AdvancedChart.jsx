@@ -317,7 +317,7 @@ export default function AdvancedChart({ asset }) {
         width={width}
         height={height}
         fill={barColor}
-        opacity={0.7}
+        opacity={0.3}
       />
     );
   };
