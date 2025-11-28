@@ -584,8 +584,8 @@ export default function Trading() {
       }
     };
 
-    // Only run if auto-trading is enabled
-    if (autoTradingSettings?.is_enabled) {
+    // Only run if auto-trading is enabled AND not forced to browser mode
+    if (autoTradingSettings?.is_enabled && autoTradingSettings?.execution_mode !== 'browser') {
       // Initial run after 5 seconds
       const initialRun = setTimeout(runBackendTrading, 5000);
 
@@ -597,7 +597,7 @@ export default function Trading() {
         clearInterval(backendInterval);
       };
     }
-  }, [autoTradingSettings?.is_enabled]);
+  }, [autoTradingSettings?.is_enabled, autoTradingSettings?.execution_mode]);
 
   useEffect(() => {
     if (!autoTradingSettings?.is_enabled || !portfolio || !assets || assets.length === 0) {
@@ -616,13 +616,25 @@ export default function Trading() {
       return;
     }
     
-    // If backend functions are available, browser-based trading is just for monitoring
-    if (hasBackendFunctions) {
+    // Determine if we should run browser-side trading
+    const executionMode = autoTradingSettings.execution_mode || 'auto';
+    const shouldRunBrowserTrading = 
+      executionMode === 'browser' || 
+      (executionMode === 'auto' && !hasBackendFunctions);
+
+    // If backend functions are available AND we are not forcing browser mode, browser-based trading is just for monitoring
+    if (hasBackendFunctions && executionMode !== 'browser') {
       console.log('✅ Server-side auto-trading active - browser provides monitoring only');
       return;
     }
 
-    console.log('✅ Auto-trading monitor initialized with smart order execution (browser-based)');
+    // If execution mode is 'server' but backend is not available, warn user
+    if (executionMode === 'server' && !hasBackendFunctions) {
+      console.warn('⚠️ Server-only mode selected but backend functions unavailable. Auto-trading paused.');
+      return;
+    }
+
+    console.log(`✅ Auto-trading monitor initialized (${executionMode === 'browser' ? 'Forced Browser Mode' : 'Auto Mode'})`);
 
     const checkAutoTrading = async () => {
       console.log('\n═══════════════════════════════════════════════════');

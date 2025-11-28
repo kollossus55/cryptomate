@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -9,12 +8,13 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Sparkles, AlertTriangle, Shield, Zap, CheckCircle, Settings, TrendingUp, Target, AlertCircle, Clock } from "lucide-react"; // Added AlertCircle and Clock icons
+import { Sparkles, AlertTriangle, Shield, Zap, CheckCircle, Settings, TrendingUp, Target, AlertCircle, Clock, Server, Globe } from "lucide-react"; // Added AlertCircle and Clock icons
 import { Checkbox } from "@/components/ui/checkbox";
 
 export default function AutoTrading() {
   const [settings, setSettings] = useState({
     is_enabled: false,
+    execution_mode: 'auto',
     min_confidence: 70,
     max_position_size_percent: 10,
     max_daily_loss_percent: 5,
@@ -89,6 +89,7 @@ export default function AutoTrading() {
           { profit_percent: 10, sell_percent: 25 },
         ],
         assets_traded_today: savedSettings.assets_traded_today || [], // NEW: Initialize assets traded list
+        execution_mode: savedSettings.execution_mode || 'auto',
         // Ensure boolean/number values have defaults if coming from null/undefined in savedSettings
         use_trailing_stop: savedSettings.use_trailing_stop ?? false,
         trailing_stop_percent: savedSettings.trailing_stop_percent ?? 2,
@@ -268,30 +269,77 @@ export default function AutoTrading() {
 
         {/* Status Card */}
         <Card className="bg-gradient-to-br from-slate-900 to-slate-800 border-slate-700 mb-8">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                  settings.is_enabled ? 'bg-green-500/20' : 'bg-slate-700'
-                }`}>
-                  <Sparkles className={`w-6 h-6 ${settings.is_enabled ? 'text-green-400' : 'text-slate-400'}`} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-white">Auto-Trading Status</h3>
-                  <p className={`text-sm ${settings.is_enabled ? 'text-green-400' : 'text-slate-400'}`}>
-                    {settings.is_enabled ? 'Active' : 'Disabled'}
-                  </p>
-                </div>
-              </div>
-              <Switch
-                checked={settings.is_enabled}
-                onCheckedChange={(checked) => setSettings({...settings, is_enabled: checked})}
-                className="data-[state=checked]:bg-green-500"
-              />
+        <CardContent className="pt-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+              settings.is_enabled ? 'bg-green-500/20' : 'bg-slate-700'
+            }`}>
+              <Sparkles className={`w-6 h-6 ${settings.is_enabled ? 'text-green-400' : 'text-slate-400'}`} />
             </div>
+            <div>
+              <h3 className="text-xl font-bold text-white">Auto-Trading Status</h3>
+              <p className={`text-sm ${settings.is_enabled ? 'text-green-400' : 'text-slate-400'}`}>
+                {settings.is_enabled ? 'Active' : 'Disabled'}
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={settings.is_enabled}
+            onCheckedChange={(checked) => setSettings({...settings, is_enabled: checked})}
+            className="data-[state=checked]:bg-green-500"
+          />
+        </div>
 
-            {settings.is_enabled && (
-              <div className="grid grid-cols-3 gap-4">
+        <div className="mb-6 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+          <Label className="text-slate-300 mb-3 block flex items-center gap-2">
+            <Zap className="w-4 h-4 text-yellow-400" />
+            Execution Mode
+          </Label>
+          <div className="grid grid-cols-3 gap-3">
+            <button
+              onClick={() => setSettings({...settings, execution_mode: 'auto'})}
+              className={`p-3 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                settings.execution_mode === 'auto'
+                  ? 'bg-indigo-600/20 border-indigo-500 text-white'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              <Sparkles className={`w-5 h-5 ${settings.execution_mode === 'auto' ? 'text-indigo-400' : ''}`} />
+              <span className="text-sm font-medium">Auto (Recommended)</span>
+            </button>
+            <button
+              onClick={() => setSettings({...settings, execution_mode: 'browser'})}
+              className={`p-3 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                settings.execution_mode === 'browser'
+                  ? 'bg-blue-600/20 border-blue-500 text-white'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              <Globe className={`w-5 h-5 ${settings.execution_mode === 'browser' ? 'text-blue-400' : ''}`} />
+              <span className="text-sm font-medium">Browser Only</span>
+            </button>
+            <button
+              onClick={() => setSettings({...settings, execution_mode: 'server'})}
+              className={`p-3 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                settings.execution_mode === 'server'
+                  ? 'bg-purple-600/20 border-purple-500 text-white'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              <Server className={`w-5 h-5 ${settings.execution_mode === 'server' ? 'text-purple-400' : ''}`} />
+              <span className="text-sm font-medium">Server Only</span>
+            </button>
+          </div>
+          <p className="text-xs text-slate-400 mt-3">
+            {settings.execution_mode === 'auto' && "Automatically uses server-side trading if available, falls back to browser."}
+            {settings.execution_mode === 'browser' && "Forces trading to run in your browser tab. Must keep tab open."}
+            {settings.execution_mode === 'server' && "Forces server-side trading. Requires backend functions to be enabled."}
+          </p>
+        </div>
+
+        {settings.is_enabled && (
+          <div className="grid grid-cols-3 gap-4">
                 <div className="bg-slate-800 rounded-lg p-4">
                   <p className="text-slate-400 text-sm mb-1">Trades Today</p>
                   <p className="text-2xl font-bold text-white">{settings.trades_today}/{settings.max_trades_per_day}</p>
