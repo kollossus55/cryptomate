@@ -382,17 +382,17 @@ export default function AutoTrading() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
           {/* AI Settings */}
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="bg-slate-800 border-2 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.15)]">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
+              <CardTitle className="flex items-center gap-2 text-indigo-100">
                 <Sparkles className="w-5 h-5 text-indigo-400" />
                 AI Configuration
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <Label className="text-slate-300 mb-3 block">
-                  Minimum Confidence: {settings.min_confidence}%
+                <Label className="text-indigo-200 mb-3 block font-medium">
+                  Minimum Confidence: <span className="text-indigo-400 font-bold">{settings.min_confidence}%</span>
                 </Label>
                 <Slider
                   value={[settings.min_confidence]}
@@ -400,9 +400,9 @@ export default function AutoTrading() {
                   min={50}
                   max={95}
                   step={5}
-                  className="mb-2"
+                  className="mb-2 [&>.relative>.bg-primary]:bg-indigo-500 [&>.block]:border-indigo-500"
                 />
-                <p className="text-xs text-slate-400">Only execute trades with AI confidence above this level</p>
+                <p className="text-xs text-indigo-300/60">Only execute trades with AI confidence above this level</p>
               </div>
 
               <div>
@@ -462,17 +462,17 @@ export default function AutoTrading() {
           </Card>
 
           {/* Risk Management */}
-          <Card className="bg-slate-800 border-slate-700">
+          <Card className="bg-slate-800 border-2 border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.15)]">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
-                <Shield className="w-5 h-5 text-green-400" />
+              <CardTitle className="flex items-center gap-2 text-rose-100">
+                <Shield className="w-5 h-5 text-rose-400" />
                 Risk Management
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <Label className="text-slate-300 mb-3 block">
-                  Max Position Size: {settings.max_position_size_percent}%
+                <Label className="text-rose-200 mb-3 block font-medium">
+                  Max Position Size: <span className="text-rose-400 font-bold">{settings.max_position_size_percent}%</span>
                 </Label>
                 <Slider
                   value={[settings.max_position_size_percent]}
@@ -480,14 +480,14 @@ export default function AutoTrading() {
                   min={1}
                   max={50}
                   step={1}
-                  className="mb-2"
+                  className="mb-2 [&>.relative>.bg-primary]:bg-rose-500 [&>.block]:border-rose-500"
                 />
-                <p className="text-xs text-slate-400">Maximum % of portfolio per trade</p>
+                <p className="text-xs text-rose-300/60">Maximum % of portfolio per trade</p>
               </div>
 
               <div>
-                <Label className="text-slate-300 mb-3 block">
-                  Circuit Breaker: {settings.max_daily_loss_percent}%
+                <Label className="text-rose-200 mb-3 block font-medium">
+                  Circuit Breaker: <span className="text-rose-400 font-bold">{settings.max_daily_loss_percent}%</span>
                 </Label>
                 <Slider
                   value={[settings.max_daily_loss_percent]}
@@ -495,18 +495,18 @@ export default function AutoTrading() {
                   min={1}
                   max={20}
                   step={1}
-                  className="mb-2"
+                  className="mb-2 [&>.relative>.bg-primary]:bg-rose-500 [&>.block]:border-rose-500"
                 />
-                <p className="text-xs text-slate-400">Stop trading if daily loss exceeds this %</p>
+                <p className="text-xs text-rose-300/60">Stop trading if daily loss exceeds this %</p>
               </div>
 
               <div>
-                <Label className="text-slate-300 mb-2 block">Max Trades Per Day</Label>
+                <Label className="text-rose-200 mb-2 block font-medium">Max Trades Per Day</Label>
                 <Input
                   type="number"
                   value={settings.max_trades_per_day}
                   onChange={(e) => setSettings({...settings, max_trades_per_day: parseInt(e.target.value) || 0})}
-                  className="bg-slate-900 border-slate-600 text-white"
+                  className="bg-slate-900 border-rose-500/30 text-white focus:border-rose-500 focus:ring-rose-500"
                   min="1"
                   max="100"
                 />
@@ -514,22 +514,22 @@ export default function AutoTrading() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-slate-300 mb-2 block">Stop Loss %</Label>
+                  <Label className="text-rose-200 mb-2 block font-medium">Stop Loss %</Label>
                   <Input
                     type="number"
                     value={settings.stop_loss_percent}
                     onChange={(e) => setSettings({...settings, stop_loss_percent: parseFloat(e.target.value) || 0})}
-                    className="bg-slate-900 border-slate-600 text-white"
+                    className="bg-slate-900 border-rose-500/30 text-white focus:border-rose-500 focus:ring-rose-500"
                     step="0.5"
                   />
                 </div>
                 <div>
-                  <Label className="text-slate-300 mb-2 block">Take Profit %</Label>
+                  <Label className="text-rose-200 mb-2 block font-medium">Take Profit %</Label>
                   <Input
                     type="number"
                     value={settings.take_profit_percent}
                     onChange={(e) => setSettings({...settings, take_profit_percent: parseFloat(e.target.value) || 0})}
-                    className="bg-slate-900 border-slate-600 text-white"
+                    className="bg-slate-900 border-rose-500/30 text-white focus:border-rose-500 focus:ring-rose-500"
                     step="0.5"
                   />
                 </div>
@@ -539,39 +539,39 @@ export default function AutoTrading() {
         </div>
 
         {/* Advanced Risk Management */}
-        <Card className="bg-slate-800 border-slate-700 mt-6">
+        <Card className="bg-slate-800 border-2 border-emerald-500/50 mt-6 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-white">
-              <Target className="w-5 h-5 text-purple-400" />
+            <CardTitle className="flex items-center gap-2 text-emerald-100">
+              <Target className="w-5 h-5 text-emerald-400" />
               Advanced Risk Management
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             
             {/* Trailing Stop Loss */}
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-600">
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-emerald-500/30">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h4 className="text-white font-semibold flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-green-400" />
+                  <h4 className="text-emerald-100 font-semibold flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-400" />
                     Trailing Stop Loss
                   </h4>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-emerald-400/60 mt-1">
                     Stop loss moves up automatically as price increases
                   </p>
                 </div>
                 <Switch
                   checked={settings.use_trailing_stop}
                   onCheckedChange={(checked) => setSettings({...settings, use_trailing_stop: checked})}
-                  className="data-[state=checked]:bg-green-500"
+                  className="data-[state=checked]:bg-emerald-500"
                 />
               </div>
               
               {settings.use_trailing_stop && (
-                <div className="space-y-4 pt-4 border-t border-slate-700">
+                <div className="space-y-4 pt-4 border-t border-emerald-500/20">
                   <div>
-                    <Label className="text-slate-300 mb-2 block">
-                      Trailing Distance: {settings.trailing_stop_percent ?? 2}%
+                    <Label className="text-emerald-200 mb-2 block">
+                      Trailing Distance: <span className="text-emerald-400 font-bold">{settings.trailing_stop_percent ?? 2}%</span>
                     </Label>
                     <Slider
                       value={[settings.trailing_stop_percent ?? 2]}
@@ -579,14 +579,14 @@ export default function AutoTrading() {
                       min={0.5}
                       max={5}
                       step={0.5}
-                      className="mb-2"
+                      className="mb-2 [&>.relative>.bg-primary]:bg-emerald-500 [&>.block]:border-emerald-500"
                     />
-                    <p className="text-xs text-slate-400">How far below highest price to trail</p>
+                    <p className="text-xs text-emerald-400/60">How far below highest price to trail</p>
                   </div>
                   
                   <div>
-                    <Label className="text-slate-300 mb-2 block">
-                      Activation Threshold: {settings.trailing_stop_activation ?? 3}%
+                    <Label className="text-emerald-200 mb-2 block">
+                      Activation Threshold: <span className="text-emerald-400 font-bold">{settings.trailing_stop_activation ?? 3}%</span>
                     </Label>
                     <Slider
                       value={[settings.trailing_stop_activation ?? 3]}
@@ -594,9 +594,9 @@ export default function AutoTrading() {
                       min={1}
                       max={10}
                       step={0.5}
-                      className="mb-2"
+                      className="mb-2 [&>.relative>.bg-primary]:bg-emerald-500 [&>.block]:border-emerald-500"
                     />
-                    <p className="text-xs text-slate-400">Profit % needed to activate trailing</p>
+                    <p className="text-xs text-emerald-400/60">Profit % needed to activate trailing</p>
                   </div>
                 </div>
               )}
@@ -759,58 +759,58 @@ export default function AutoTrading() {
         </Card>
 
         {/* Smart Order Execution */}
-        <Card className="bg-slate-800 border-slate-700 mt-6">
+        <Card className="bg-slate-800 border-2 border-cyan-500/50 mt-6 shadow-[0_0_15px_rgba(6,182,212,0.15)]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-white">
-              <Zap className="w-5 h-5 text-yellow-400" />
+            <CardTitle className="flex items-center gap-2 text-cyan-100">
+              <Zap className="w-5 h-5 text-cyan-400" />
               Smart Order Execution
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             
             {/* Smart Order Routing */}
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-600">
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-cyan-500/30">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h4 className="text-white font-semibold flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-indigo-400" />
+                  <h4 className="text-cyan-100 font-semibold flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-cyan-400" />
                     Smart Order Routing
                   </h4>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-cyan-400/60 mt-1">
                     Automatically selects optimal execution strategy
                   </p>
                 </div>
                 <Switch
                   checked={settings.use_smart_routing}
                   onCheckedChange={(checked) => setSettings({...settings, use_smart_routing: checked})}
-                  className="data-[state=checked]:bg-indigo-500"
+                  className="data-[state=checked]:bg-cyan-500"
                 />
               </div>
               
               {settings.use_smart_routing && (
-                <div className="space-y-4 pt-4 border-t border-slate-700">
+                <div className="space-y-4 pt-4 border-t border-cyan-500/20">
                   <div>
-                    <Label className="text-slate-300 mb-2 block">
+                    <Label className="text-cyan-200 mb-2 block">
                       Execution Strategy
                     </Label>
                     <select
                       value={settings.execution_strategy || 'smart_limit'}
                       onChange={(e) => setSettings({...settings, execution_strategy: e.target.value})}
-                      className="w-full bg-slate-900 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm"
+                      className="w-full bg-slate-900 border border-cyan-500/30 text-white rounded-lg px-3 py-2 text-sm focus:border-cyan-500 outline-none"
                     >
                       <option value="market">Market (Immediate, Higher Slippage)</option>
                       <option value="limit">Limit (Better Price, May Not Fill)</option>
                       <option value="smart_limit">Smart Limit (Recommended)</option>
                       <option value="iceberg">Iceberg (Hide Order Size)</option>
                     </select>
-                    <p className="text-xs text-slate-500 mt-1">
+                    <p className="text-xs text-cyan-400/60 mt-1">
                       Smart limit dynamically adjusts based on market conditions
                     </p>
                   </div>
 
                   <div>
-                    <Label className="text-slate-300 mb-2 block">
-                      Limit Offset: {settings.limit_offset_percent ?? 0.1}%
+                    <Label className="text-cyan-200 mb-2 block">
+                      Limit Offset: <span className="text-cyan-400 font-bold">{settings.limit_offset_percent ?? 0.1}%</span>
                     </Label>
                     <Slider
                       value={[settings.limit_offset_percent ?? 0.1]}
@@ -818,14 +818,14 @@ export default function AutoTrading() {
                       min={0.05}
                       max={1.0}
                       step={0.05}
-                      className="mb-2"
+                      className="mb-2 [&>.relative>.bg-primary]:bg-cyan-500 [&>.block]:border-cyan-500"
                     />
-                    <p className="text-xs text-slate-400">Distance from market price for limit orders</p>
+                    <p className="text-xs text-cyan-400/60">Distance from market price for limit orders</p>
                   </div>
 
                   <div>
-                    <Label className="text-slate-300 mb-2 block">
-                      Order Timeout: {settings.order_timeout_seconds ?? 30}s
+                    <Label className="text-cyan-200 mb-2 block">
+                      Order Timeout: <span className="text-cyan-400 font-bold">{settings.order_timeout_seconds ?? 30}s</span>
                     </Label>
                     <Slider
                       value={[settings.order_timeout_seconds ?? 30]}
@@ -833,9 +833,9 @@ export default function AutoTrading() {
                       min={10}
                       max={120}
                       step={10}
-                      className="mb-2"
+                      className="mb-2 [&>.relative>.bg-primary]:bg-cyan-500 [&>.block]:border-cyan-500"
                     />
-                    <p className="text-xs text-slate-400">Convert to market order after timeout</p>
+                    <p className="text-xs text-cyan-400/60">Convert to market order after timeout</p>
                   </div>
                 </div>
               )}
