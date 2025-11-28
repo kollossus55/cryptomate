@@ -496,83 +496,123 @@ export default function AdvancedChart({ asset }) {
 
         {/* Price Chart */}
         <TabsContent value="price" className="mt-4">
-          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-4 border border-slate-700">
+          <div className="bg-[#131722] rounded-xl p-4 border border-slate-700">
             {priceData.length > 0 ? (
               <ResponsiveContainer width="100%" height={500}>
-                <ComposedChart data={priceData}>
+                <ComposedChart data={priceData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#818cf8" stopOpacity={0.8}/>
-                      <stop offset="50%" stopColor="#6366f1" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.1}/>
+                      <stop offset="5%" stopColor="#2962ff" stopOpacity={0.5}/>
+                      <stop offset="95%" stopColor="#2962ff" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
                   
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
+                  {/* TradingView dark grid */}
+                  <CartesianGrid vertical={false} stroke="#2a2e39" strokeDasharray="1 1" />
+                  
                   <XAxis 
                     dataKey="time" 
-                    stroke="#94a3b8" 
-                    tick={{ fill: '#94a3b8', fontSize: 11 }}
-                    tickMargin={8}
+                    stroke="#363c4e"
+                    tick={{ fill: '#b2b5be', fontSize: 11 }}
+                    tickMargin={10}
+                    axisLine={false}
+                    tickLine={false}
                   />
-                  <YAxis 
-                    stroke="#94a3b8" 
-                    tick={{ fill: '#94a3b8', fontSize: 11 }}
-                    domain={chartType === 'candles' ? ['auto', 'auto'] : ['dataMin - 10', 'dataMax + 10']}
-                    tickMargin={8}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend wrapperStyle={{ color: '#94a3b8', paddingTop: '10px' }} />
                   
+                  {/* Main Price Y-Axis */}
+                  <YAxis 
+                    yAxisId="price"
+                    orientation="right"
+                    stroke="#363c4e"
+                    tick={{ fill: '#b2b5be', fontSize: 11 }}
+                    domain={chartType === 'candles' ? ['auto', 'auto'] : ['dataMin', 'dataMax']}
+                    tickMargin={10}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(val) => val.toFixed(2)}
+                  />
+
+                  {/* Hidden Volume Y-Axis (scales volume to bottom 20%) */}
+                  <YAxis 
+                    yAxisId="volume"
+                    orientation="left"
+                    hide={true}
+                    domain={[0, 'dataMax * 5']} 
+                  />
+
+                  <Tooltip 
+                    content={<CustomTooltip />} 
+                    cursor={{ stroke: '#9ca3af', strokeWidth: 1, strokeDasharray: '4 4' }}
+                  />
+                  
+                  <Legend wrapperStyle={{ color: '#b2b5be', fontSize: '12px', paddingTop: '10px' }} />
+                  
+                  {/* Volume Bars Overlay */}
+                  <Bar
+                    dataKey="volume"
+                    yAxisId="volume"
+                    shape={<CustomVolumeBar />}
+                    name="Volume"
+                    isAnimationActive={false}
+                  />
+
                   {chartType === 'candles' ? (
                     <Bar
+                      yAxisId="price"
                       dataKey="high"
                       shape={<Candlestick />}
                       name="Price"
+                      isAnimationActive={false}
                     />
                   ) : (
                     <Area
+                      yAxisId="price"
                       type="monotone"
                       dataKey="price"
                       fill="url(#colorPrice)"
-                      stroke="#818cf8"
-                      strokeWidth={3}
+                      stroke="#2962ff"
+                      strokeWidth={2}
                       name="Price"
+                      isAnimationActive={false}
                     />
                   )}
                   
                   {indicators.sma20 && (
                     <Line
+                      yAxisId="price"
                       type="monotone"
                       dataKey="sma20"
-                      stroke="#3b82f6"
-                      strokeWidth={2.5}
+                      stroke="#2196f3"
+                      strokeWidth={1.5}
                       dot={false}
                       name="SMA 20"
-                      strokeDasharray="5 5"
+                      isAnimationActive={false}
                     />
                   )}
                   
                   {indicators.sma50 && (
                     <Line
+                      yAxisId="price"
                       type="monotone"
                       dataKey="sma50"
-                      stroke="#a855f7"
-                      strokeWidth={2.5}
+                      stroke="#ff9800"
+                      strokeWidth={1.5}
                       dot={false}
                       name="SMA 50"
-                      strokeDasharray="5 5"
+                      isAnimationActive={false}
                     />
                   )}
                   
                   {indicators.ema12 && (
                     <Line
+                      yAxisId="price"
                       type="monotone"
                       dataKey="ema12"
-                      stroke="#10b981"
-                      strokeWidth={2.5}
+                      stroke="#e040fb"
+                      strokeWidth={1.5}
                       dot={false}
                       name="EMA 12"
+                      isAnimationActive={false}
                     />
                   )}
                 </ComposedChart>
@@ -695,36 +735,7 @@ export default function AdvancedChart({ asset }) {
         </TabsContent>
       </Tabs>
 
-      {/* Volume Chart */}
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-4 border border-slate-700">
-        <h4 className="text-slate-300 font-semibold mb-2">Volume (Billions USD)</h4>
-        {priceData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={150}>
-            <BarChart data={priceData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
-              <XAxis 
-                dataKey="time" 
-                stroke="#94a3b8" 
-                tick={{ fill: '#94a3b8', fontSize: 11 }}
-              />
-              <YAxis 
-                stroke="#94a3b8" 
-                tick={{ fill: '#94a3b8', fontSize: 11 }}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar 
-                dataKey="volume" 
-                shape={<CustomVolumeBar />}
-                name="Volume" 
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="h-[150px] flex items-center justify-center text-slate-400">
-            No volume data available
-          </div>
-        )}
-      </div>
+      {/* Volume chart is now overlaid on the main chart */}
     </div>
   );
 }
