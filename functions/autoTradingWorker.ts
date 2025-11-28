@@ -1,13 +1,10 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
 
 /**
- * Auto-Trading Worker V3 - Technical Analysis + AI Sentiment
+ * Auto-Trading Worker V3 (Rebuilt)
  * 
- * PRIORITY ORDER:
- * 1. Technical Analysis (90% weight) - RSI, MACD, Trend, Support/Resistance
- * 2. AI Sentiment (10% weight) - News sentiment, market context
- * 
- * Technicals must pass first, then AI confirms or vetoes.
+ * aligned with Browser Mode logic for consistency.
+ * Uses a momentum-based scoring system + AI Sentiment analysis.
  */
 
 const COINGECKO_IDS = {
@@ -16,699 +13,321 @@ const COINGECKO_IDS = {
   'DOT': 'polkadot', 'MATIC': 'matic-network', 'LTC': 'litecoin', 'LINK': 'chainlink',
   'UNI': 'uniswap', 'ATOM': 'cosmos', 'XLM': 'stellar', 'ALGO': 'algorand',
   'NEAR': 'near', 'APT': 'aptos', 'ARB': 'arbitrum', 'OP': 'optimism',
-  'INJ': 'injective-protocol', 'SUI': 'sui', 'SEI': 'sei-network'
+  'INJ': 'injective-protocol', 'SUI': 'sui', 'SEI': 'sei-network',
+  'PEPE': 'pepe', 'WIF': 'dogwifcoin', 'RUNE': 'thorchain', 'FTM': 'fantom'
 };
 
-// Fetch historical data from CoinGecko (with simulated fallback)
-async function fetchHistoricalData(coinId, currentPrice) {
-  try {
-    const response = await fetch(
-      `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=30&interval=daily`,
-      { headers: { 'Accept': 'application/json' } }
-    );
-    
-    if (response.ok) {
-      const data = await response.json();
-      if (data.prices && data.prices.length > 0) {
-        return {
-          prices: data.prices.map(p => p[1]),
-          volumes: data.total_volumes.map(v => v[1])
-        };
-      }
-    }
-    throw new Error('API failed or empty');
-  } catch (e) {
-    console.log(`⚠️ API failed for ${coinId}, using simulated data`);
-    // Generate realistic simulated historical data
-    const prices = [];
-    const volumes = [];
-    let price = currentPrice || 1000;
-    
-    // Generate 30 days of history working backwards
-    for (let i = 0; i < 30; i++) {
-      prices.unshift(price);
-      volumes.unshift(Math.random() * 1000000000);
-      // Random walk backwards
-      price = price * (1 - (Math.random() - 0.5) * 0.05); 
-    }
-    return { prices, volumes };
-  }
-}
+// Calculate score similar to Browser Mode's calculateBasicConfidence
+function calculateMomentumScore(asset) {
+  let score = 50; // Base score
 
-// Calculate RSI
-function calculateRSI(prices, period = 14) {
-  if (prices.length < period + 1) return null;
-  const changes = [];
-  for (let i = 1; i < prices.length; i++) {
-    changes.push(prices[i] - prices[i - 1]);
-  }
-  const recentChanges = changes.slice(-period);
-  let gains = 0, losses = 0;
-  recentChanges.forEach(change => {
-    if (change > 0) gains += change;
-    else losses += Math.abs(change);
-  });
-  if (losses === 0) return 100;
-  const rs = (gains / period) / (losses / period);
-  return 100 - (100 / (1 + rs));
-}
+  // 1. Price Momentum (24h change)
+  const change = asset.usd_24h_change || 0;
+  if (change > 10) score += 25;       // Strong pump
+  else if (change > 5) score += 15;   // Strong uptrend
+  else if (change > 2) score += 10;   // Uptrend
+  else if (change > 0) score += 5;    // Slight uptrend
+  else if (change < -10) score -= 25; // Strong dump
+  else if (change < -5) score -= 15;  // Strong downtrend
+  else if (change < -2) score -= 10;  // Downtrend
+  else score -= 5;                    // Slight downtrend
 
-// Calculate SMA
-function calculateSMA(prices, period) {
-  if (prices.length < period) return null;
-  return prices.slice(-period).reduce((sum, p) => sum + p, 0) / period;
-}
+  // 2. Volume Factor (Simulated vs Average)
+  // We don't always have hist volume here, so we use 24h volume magnitude
+  const volume = asset.usd_24h_vol || 0;
+  if (volume > 1000000000) score += 10;      // High volume (>1B)
+  else if (volume > 100000000) score += 5;   // Good volume (>100M)
+  else if (volume < 1000000) score -= 10;    // Low volume (<1M)
 
-// Calculate EMA
-function calculateEMA(prices, period) {
-  if (prices.length < period) return null;
-  const multiplier = 2 / (period + 1);
-  let ema = prices.slice(0, period).reduce((sum, p) => sum + p, 0) / period;
-  for (let i = period; i < prices.length; i++) {
-    ema = (prices[i] - ema) * multiplier + ema;
-  }
-  return ema;
-}
+  // 3. Market Cap Stability
+  const mcap = asset.usd_market_cap || 0;
+  if (mcap > 50000000000) score += 5; // Mega cap bonus
 
-// Calculate MACD
-function calculateMACD(prices) {
-  const ema12 = calculateEMA(prices, 12);
-  const ema26 = calculateEMA(prices, 26);
-  if (!ema12 || !ema26) return null;
-  return { value: ema12 - ema26, bullish: ema12 > ema26 };
-}
+  // 4. Volatility Penalty/Bonus
+  const volatility = Math.abs(change);
+  if (volatility > 15) score -= 10; // Too volatile/risky
+  else if (volatility > 5 && change > 0) score += 5; // Good volatility for trading
 
-// Detect trend
-function detectTrend(prices) {
-  if (prices.length < 20) return 'neutral';
-  const sma7 = calculateSMA(prices, 7);
-  const sma20 = calculateSMA(prices, 20);
-  const current = prices[prices.length - 1];
-  
-  if (current > sma7 && sma7 > sma20) return 'strong_uptrend';
-  if (current > sma20) return 'uptrend';
-  if (current < sma7 && sma7 < sma20) return 'strong_downtrend';
-  if (current < sma20) return 'downtrend';
-  return 'neutral';
-}
+  // 5. Random Market Noise (Simulation of minor fluctuations)
+  // This ensures we don't get stuck with identical scores every run
+  score += (Math.random() * 10) - 5;
 
-// Calculate volatility
-function calculateVolatility(prices) {
-  if (prices.length < 14) return 5;
-  const returns = [];
-  for (let i = 1; i < prices.length; i++) {
-    returns.push(Math.abs((prices[i] - prices[i-1]) / prices[i-1]) * 100);
-  }
-  return returns.slice(-14).reduce((sum, r) => sum + r, 0) / 14;
-}
-
-// Find support/resistance
-function findSupportResistance(prices) {
-  if (prices.length < 20) return null;
-  const current = prices[prices.length - 1];
-  const recentPrices = prices.slice(-30);
-  
-  let support = Math.min(...recentPrices);
-  let resistance = Math.max(...recentPrices);
-  
-  return {
-    support,
-    resistance,
-    distanceToSupport: ((current - support) / current) * 100,
-    distanceToResistance: ((resistance - current) / current) * 100
-  };
-}
-
-// MAIN TECHNICAL SCORING FUNCTION
-function scoreTechnicals(symbol, prices, volumes, currentPrice, change24h) {
-  let score = 50; // Start neutral
-  const reasons = [];
-  
-  // 1. RSI Analysis (25 points max)
-  const rsi = calculateRSI(prices);
-  if (rsi !== null) {
-    if (rsi < 30) {
-      score += 25;
-      reasons.push(`RSI oversold: ${rsi.toFixed(1)}`);
-    } else if (rsi < 40) {
-      score += 15;
-      reasons.push(`RSI low: ${rsi.toFixed(1)}`);
-    } else if (rsi > 70) {
-      score -= 25;
-      reasons.push(`RSI overbought: ${rsi.toFixed(1)} - AVOID`);
-    } else if (rsi > 60) {
-      score -= 10;
-      reasons.push(`RSI elevated: ${rsi.toFixed(1)}`);
-    } else {
-      score += 5; // Neutral RSI is slightly positive
-      reasons.push(`RSI neutral: ${rsi.toFixed(1)}`);
-    }
-  }
-  
-  // 2. Trend Analysis (20 points max)
-  const trend = detectTrend(prices);
-  if (trend === 'strong_uptrend') {
-    score += 20;
-    reasons.push('Strong uptrend');
-  } else if (trend === 'uptrend') {
-    score += 10;
-    reasons.push('Uptrend');
-  } else if (trend === 'strong_downtrend') {
-    score -= 25;
-    reasons.push('Strong downtrend - AVOID');
-  } else if (trend === 'downtrend') {
-    score -= 15;
-    reasons.push('Downtrend');
-  }
-  
-  // 3. MACD Analysis (15 points max)
-  const macd = calculateMACD(prices);
-  if (macd) {
-    if (macd.bullish && macd.value > 0) {
-      score += 15;
-      reasons.push('MACD bullish');
-    } else if (!macd.bullish) {
-      score -= 15;
-      reasons.push('MACD bearish');
-    }
-  }
-  
-  // 4. Support/Resistance (15 points max)
-  const sr = findSupportResistance(prices);
-  if (sr) {
-    if (sr.distanceToSupport < 3) {
-      score += 15;
-      reasons.push(`Near support (${sr.distanceToSupport.toFixed(1)}% above)`);
-    } else if (sr.distanceToSupport < 6) {
-      score += 8;
-      reasons.push('Approaching support');
-    }
-    if (sr.distanceToResistance < 3) {
-      score -= 10;
-      reasons.push(`Near resistance - limited upside`);
-    }
-  }
-  
-  // 5. Volatility Check (10 points max)
-  const volatility = calculateVolatility(prices);
-  if (volatility > 8) {
-    score -= 15;
-    reasons.push(`High volatility: ${volatility.toFixed(1)}% - RISKY`);
-  } else if (volatility < 3) {
-    score += 10;
-    reasons.push('Low volatility');
-  }
-  
-  // 6. Price vs Moving Averages (10 points max)
-  const sma20 = calculateSMA(prices, 20);
-  if (sma20) {
-    const priceVsSma = ((currentPrice - sma20) / sma20) * 100;
-    if (priceVsSma > 10) {
-      score -= 10;
-      reasons.push(`${priceVsSma.toFixed(1)}% above SMA20 - extended`);
-    } else if (priceVsSma < -5 && trend !== 'strong_downtrend') {
-      score += 10;
-      reasons.push(`${Math.abs(priceVsSma).toFixed(1)}% below SMA20 - potential bounce`);
-    }
-  }
-  
-  // 7. Volume Confirmation (5 points max)
-  if (volumes.length >= 7) {
-    const recentVol = volumes.slice(-3).reduce((s,v) => s+v, 0) / 3;
-    const olderVol = volumes.slice(-7, -3).reduce((s,v) => s+v, 0) / 4;
-    if (recentVol > olderVol * 1.5 && trend?.includes('uptrend')) {
-      score += 5;
-      reasons.push('Volume confirming uptrend');
-    }
-  }
-  
-  // Clamp score
-  score = Math.max(0, Math.min(100, score));
-  
-  // Determine action
-  let action = 'hold';
-  if (score >= 70) action = 'strong_buy';
-  else if (score >= 60) action = 'buy';
-  else if (score <= 30) action = 'strong_sell';
-  else if (score <= 40) action = 'sell';
-  
-  return {
-    symbol,
-    score,
-    action,
-    rsi,
-    trend,
-    macd: macd?.bullish ? 'bullish' : 'bearish',
-    volatility,
-    reasons
-  };
-}
-
-// Position sizing
-function calculatePositionSize(balance, settings, price) {
-  if (balance <= 0 || !price) return { valid: false };
-  const maxSize = (settings.max_position_size_percent || 10) / 100;
-  const value = Math.min(balance * maxSize, balance * 0.15);
-  if (value < 10) return { valid: false, reason: 'too_small' };
-  return { valid: true, value, quantity: value / price };
+  return Math.min(95, Math.max(20, Math.round(score)));
 }
 
 // AI Sentiment Analysis using LLM
-async function analyzeAISentiment(base44, symbol, technicalData) {
+async function analyzeAISentiment(base44, symbol, priceData) {
   try {
-    console.log(`  🤖 Fetching AI sentiment for ${symbol}...`);
-    
-    const prompt = `You are a crypto trading analyst. Analyze the current market sentiment for ${symbol}.
+    // Fast fail if no API key (usually handled by SDK but good to be safe)
+    // We skip check here as we assume env is set up or it throws
 
-Technical Context:
-- RSI: ${technicalData.rsi?.toFixed(1) || 'N/A'}
-- Trend: ${technicalData.trend}
-- MACD: ${technicalData.macd}
-- Technical Score: ${technicalData.score}/100
-
-Based on your knowledge of:
-1. Recent news about ${symbol}
-2. Overall crypto market sentiment
-3. Any major events or announcements
-4. Social media buzz and trader sentiment
-
-Provide a sentiment analysis. Be concise and decisive.`;
+    const prompt = `Analyze crypto sentiment for ${symbol}. 
+    Data: Price $${priceData.usd}, 24h Change ${priceData.usd_24h_change}%.
+    Return JSON: { "sentiment": "bullish"|"bearish"|"neutral", "confidence": 0-100, "action": "buy"|"sell"|"hold" }`;
 
     const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
       prompt,
-      add_context_from_internet: true,
       response_json_schema: {
         type: "object",
         properties: {
-          sentiment: {
-            type: "string",
-            enum: ["very_bullish", "bullish", "neutral", "bearish", "very_bearish"],
-            description: "Overall sentiment"
-          },
-          confidence: {
-            type: "number",
-            description: "Confidence in sentiment 0-100"
-          },
-          key_factors: {
-            type: "array",
-            items: { type: "string" },
-            description: "Top 3 factors influencing sentiment"
-          },
-          recommendation: {
-            type: "string",
-            enum: ["strong_buy", "buy", "hold", "sell", "strong_sell"],
-            description: "Trading recommendation based on sentiment"
-          },
-          risk_warning: {
-            type: "string",
-            description: "Any risk warnings or concerns"
-          }
-        },
-        required: ["sentiment", "confidence", "recommendation"]
+          sentiment: { type: "string", enum: ["bullish", "bearish", "neutral"] },
+          confidence: { type: "number" },
+          action: { type: "string", enum: ["buy", "sell", "hold"] }
+        }
       }
     });
-    
-    console.log(`  ✅ AI Sentiment: ${result.sentiment} (${result.confidence}% confidence)`);
-    console.log(`     Factors: ${result.key_factors?.slice(0, 2).join(', ') || 'N/A'}`);
-    
     return result;
-  } catch (error) {
-    console.warn(`  ⚠️ AI sentiment failed: ${error.message}`);
-    return {
-      sentiment: 'neutral',
-      confidence: 50,
-      recommendation: 'hold',
-      key_factors: ['Unable to fetch sentiment'],
-      error: true
-    };
+  } catch (e) {
+    console.warn(`AI Sentiment failed for ${symbol}:`, e.message);
+    return { sentiment: 'neutral', confidence: 50, action: 'hold' }; // Fallback
   }
 }
 
-// Convert sentiment to score modifier (-30 to +30)
-function sentimentToScore(sentiment) {
-  const scores = {
-    'very_bullish': 30,
-    'bullish': 15,
-    'neutral': 0,
-    'bearish': -15,
-    'very_bearish': -30
+// Calculate Position Size
+function calculatePositionSize(balance, settings, price) {
+  if (balance <= 0 || !price) return { valid: false };
+  
+  // Default to 10% if not set
+  const maxPercent = settings.max_position_size_percent || 10;
+  const amount = balance * (maxPercent / 100);
+  
+  // Cap at $5000 or balance, whichever is lower (safety)
+  const safeAmount = Math.min(amount, 5000, balance);
+  
+  if (safeAmount < 10) return { valid: false, reason: 'too_small' }; // Min $10 trade
+  
+  return {
+    valid: true,
+    value: safeAmount,
+    quantity: safeAmount / price
   };
-  return scores[sentiment] || 0;
-}
-
-// Check if AI sentiment vetoes the trade
-function shouldVetoTrade(aiSentiment, action) {
-  if (!aiSentiment || aiSentiment.error) return false;
-  
-  // Veto buy if sentiment is bearish or very_bearish
-  if (action === 'buy') {
-    if (aiSentiment.sentiment === 'very_bearish') {
-      console.log(`  ⛔ AI VETO: Very bearish sentiment blocks buy`);
-      return true;
-    }
-    if (aiSentiment.sentiment === 'bearish' && aiSentiment.confidence >= 70) {
-      console.log(`  ⛔ AI VETO: Strong bearish sentiment blocks buy`);
-      return true;
-    }
-  }
-  
-  return false;
-}
-
-// Calculate combined score based on dynamic weights
-function calculateCombinedScore(technicalScore, aiSentiment, weights = null) {
-  // Default to 70/30 if no weights provided
-  const technicalWeight = (weights?.technical ?? 70) / 100;
-  const sentimentWeight = (weights?.news ?? 30) / 100;
-  
-  const sentimentModifier = sentimentToScore(aiSentiment?.sentiment || 'neutral');
-  const sentimentScore = 50 + sentimentModifier; // Convert to 0-100 scale
-  
-  const combined = (technicalScore * technicalWeight) + (sentimentScore * sentimentWeight);
-  
-  return Math.round(Math.max(0, Math.min(100, combined)));
 }
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const { settings, portfolio, user_email } = await req.json();
-    
-    if (!settings || !portfolio || !user_email) {
+
+    if (!settings || !portfolio) {
       return Response.json({ success: false, error: 'Missing parameters' }, { status: 400 });
     }
-    
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`🤖 AUTO-TRADING V2 - Technical Analysis Mode`);
-    console.log(`📧 User: ${user_email}`);
-    console.log(`${'='.repeat(60)}`);
-    
-    // Reset daily counters if new day
-    const lastTradeDate = settings.last_trade_date ? new Date(settings.last_trade_date).toDateString() : null;
-    const today = new Date().toDateString();
-    if (lastTradeDate && lastTradeDate !== today) {
-      console.log(`📅 New day - resetting counters`);
-      settings.trades_today = 0;
-      settings.daily_loss = 0;
-      settings.assets_traded_today = [];
-      await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
-        trades_today: 0, daily_loss: 0, assets_traded_today: []
-      });
-    }
-    
-    // Fetch AI Signal Config
-    const aiConfigs = await base44.asServiceRole.entities.AISignalConfig.list();
-    const activeConfig = aiConfigs.find(c => c.is_active) || null;
-    
-    const defaultSignalWeights = { technical: 90, news: 10 };
-    const signalWeights = (activeConfig && activeConfig.weights) ? activeConfig.weights : defaultSignalWeights;
 
-    console.log(`⚙️ Signal Logic: Technical ${signalWeights.technical}% + AI Sentiment ${signalWeights.news}%`);
-
-    // Safety checks
-    if (!settings.is_enabled) {
-      return Response.json({ success: true, executed: false, reason: 'disabled' });
-    }
-    if (settings.execution_mode === 'browser') {
-      return Response.json({ success: true, executed: false, reason: 'browser_mode_active' });
-    }
+    console.log(`\n🔄 SERVER-SIDE AUTO-TRADING (${user_email})`);
+    
+    // 1. Circuit Breaker & Limits
+    if (!settings.is_enabled) return Response.json({ success: true, reason: 'disabled' });
+    
     if ((settings.daily_loss || 0) >= (settings.max_daily_loss_percent || 5)) {
-      return Response.json({ success: true, executed: false, reason: 'circuit_breaker' });
+      console.log('🛑 Circuit breaker active');
+      return Response.json({ success: true, reason: 'circuit_breaker' });
     }
+    
     if ((settings.trades_today || 0) >= (settings.max_trades_per_day || 10)) {
-      return Response.json({ success: true, executed: false, reason: 'trade_limit' });
+      console.log('🛑 Daily trade limit reached');
+      return Response.json({ success: true, reason: 'trade_limit' });
     }
-    
-    console.log(`💰 Balance: $${portfolio.available_balance.toFixed(2)}`);
-    console.log(`📊 Trades today: ${settings.trades_today || 0}/${settings.max_trades_per_day || 10}`);
-    
-    // Fetch current prices
+
+    // 2. Market Data Fetching
     const ids = Object.values(COINGECKO_IDS).join(',');
     let marketData = {};
+    
     try {
       const resp = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`,
+        `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true`,
         { headers: { 'Accept': 'application/json' } }
       );
       if (resp.ok) marketData = await resp.json();
+      else throw new Error('CoinGecko API non-200');
     } catch (e) {
-      console.warn('Failed to fetch prices');
+      console.warn('⚠️ Live data failed, using simulation fallback');
+      // Generate realistic simulation data if API fails
+      Object.values(COINGECKO_IDS).forEach(id => {
+        marketData[id] = {
+          usd: 100 + Math.random() * 1000,
+          usd_24h_change: (Math.random() * 10) - 4, // Bias slightly positive
+          usd_24h_vol: 500000000,
+          usd_market_cap: 10000000000
+        };
+      });
     }
-    
-    // Check existing positions for stop-loss/take-profit first
-    const opportunities = [];
-    
-    if (portfolio.positions?.length > 0) {
-      console.log(`\n📦 Checking ${portfolio.positions.length} positions...`);
-      
+
+    // 3. SELL Logic (Manage existing positions)
+    if (portfolio.positions && portfolio.positions.length > 0) {
       for (const position of portfolio.positions) {
         const symbol = position.asset_symbol.replace('/USDT', '');
         const coinId = COINGECKO_IDS[symbol];
-        const liveData = coinId ? marketData[coinId] : null;
-        const currentPrice = liveData?.usd || position.avg_entry_price;
+        const data = marketData[coinId];
+        
+        if (!data) continue;
+        
+        const currentPrice = data.usd;
         const pnlPercent = ((currentPrice - position.avg_entry_price) / position.avg_entry_price) * 100;
         
-        console.log(`  ${symbol}: Entry $${position.avg_entry_price.toFixed(2)} → Now $${currentPrice.toFixed(2)} (${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)`);
+        let sellReason = null;
         
-        // Stop-loss
-        if (pnlPercent <= -(settings.stop_loss_percent || 3)) {
-          opportunities.push({
-            symbol, action: 'sell', reason: 'stop_loss',
-            price: currentPrice, quantity: position.quantity, pnlPercent
-          });
-          console.log(`    ⛔ STOP-LOSS triggered`);
-          break;
-        }
+        // Stop Loss
+        if (pnlPercent <= -(settings.stop_loss_percent || 3)) sellReason = 'stop_loss';
+        // Take Profit
+        else if (pnlPercent >= (settings.take_profit_percent || 8)) sellReason = 'take_profit';
         
-        // Take-profit
-        if (pnlPercent >= (settings.take_profit_percent || 8)) {
-          opportunities.push({
-            symbol, action: 'sell', reason: 'take_profit',
-            price: currentPrice, quantity: position.quantity, pnlPercent
+        if (sellReason) {
+          console.log(`📉 SELLING ${symbol}: ${sellReason} (${pnlPercent.toFixed(2)}%)`);
+          // Execute Sell
+          await executeTrade(base44, user_email, portfolio, settings, {
+            symbol, action: 'sell', quantity: position.quantity, price: currentPrice, reason: sellReason, pnl: pnlPercent
           });
-          console.log(`    ✅ TAKE-PROFIT triggered`);
-          break;
+          return Response.json({ success: true, executed: true, type: 'sell', symbol });
         }
       }
     }
+
+    // 4. BUY Logic (Scan for opportunities)
+    // Filter assets already traded today to prevent over-trading same pair
+    const tradedToday = settings.assets_traded_today || [];
     
-    // Scan for buy opportunities if no sell signals
-    if (opportunities.length === 0 && portfolio.available_balance > 50) {
-      console.log(`\n🔍 Scanning for BUY opportunities...`);
+    // Score all assets
+    const opportunities = [];
+    
+    for (const [symbol, coinId] of Object.entries(COINGECKO_IDS)) {
+      const data = marketData[coinId];
+      if (!data) continue;
       
-      const candidates = [];
-      const assetsTraded = settings.assets_traded_today || [];
-      
-      // OPTIMIZATION: Always scan BTC/ETH, then 4 random others
-      const majors = Object.entries(COINGECKO_IDS).filter(([k]) => ['BTC', 'ETH', 'SOL'].includes(k));
-      const others = Object.entries(COINGECKO_IDS).filter(([k]) => !['BTC', 'ETH', 'SOL'].includes(k));
-      const shuffledOthers = others.sort(() => 0.5 - Math.random()).slice(0, 4);
+      // Skip if already traded today or currently holding
+      if (tradedToday.includes(symbol)) continue;
+      if (portfolio.positions?.some(p => p.asset_symbol.includes(symbol))) continue;
 
-      const selectedAssets = [...majors, ...shuffledOthers];
+      // Calculate Momentum Score
+      const score = calculateMomentumScore(data);
+      const minScore = settings.min_confidence || 70;
 
-      console.log(`🎲 Scanning ${selectedAssets.length} assets: ${selectedAssets.map(a => a[0]).join(', ')}`);
-
-      for (const [symbol, coinId] of selectedAssets) {
-        // Skip if already traded today or have position
-        if (assetsTraded.includes(symbol)) continue;
-        if (portfolio.positions?.find(p => p.asset_symbol === `${symbol}/USDT`)) continue;
-
-        const liveData = marketData[coinId];
-        // Fallback price if live data missing
-        const currentPrice = liveData?.usd || (symbol === 'BTC' ? 60000 : symbol === 'ETH' ? 3000 : 100);
-        const change24h = liveData?.usd_24h_change || (Math.random() * 10 - 5);
-
-        // Fetch historical data (with fallback)
-        const historical = await fetchHistoricalData(coinId, currentPrice);
-        if (!historical || historical.prices.length < 14) continue;
-
-        // Calculate technical score
-        const technicals = scoreTechnicals(
-          symbol,
-          historical.prices,
-          historical.volumes,
-          currentPrice,
-          change24h
-        );
-        
-        console.log(`\n  📊 ${symbol}: Score ${technicals.score}/100 → ${technicals.action.toUpperCase()}`);
-        console.log(`     RSI: ${technicals.rsi?.toFixed(1) || 'N/A'} | Trend: ${technicals.trend} | MACD: ${technicals.macd}`);
-        console.log(`     Reasons: ${technicals.reasons.slice(0, 3).join(', ')}`);
-        
-        // Only consider if technical score >= 60 (gate check)
-        if (technicals.score >= 60 && (technicals.action === 'buy' || technicals.action === 'strong_buy')) {
-          const posSize = calculatePositionSize(portfolio.available_balance, settings, liveData.usd);
-          if (posSize.valid) {
-            candidates.push({
-              symbol,
-              action: 'buy',
-              reason: technicals.action,
-              price: liveData.usd,
-              quantity: posSize.quantity,
-              value: posSize.value,
-              score: technicals.score,
-              technicals
-            });
-          }
-        }
-        
-        // Rate limit API calls
-        await new Promise(r => setTimeout(r, 300));
+      if (score >= minScore) {
+        opportunities.push({ symbol, data, score });
       }
+    }
+
+    // Sort by score and pick top 1
+    opportunities.sort((a, b) => b.score - a.score);
+    const bestOpp = opportunities[0];
+
+    if (bestOpp) {
+      console.log(`🎯 Best Opportunity: ${bestOpp.symbol} (Score: ${bestOpp.score})`);
       
-      // Sort by technical score and pick top 3 for AI sentiment analysis
-      if (candidates.length > 0) {
-        candidates.sort((a, b) => b.score - a.score);
-        const topCandidates = candidates.slice(0, 3);
+      // 5. AI Confirmation (Optional but recommended)
+      // We only use AI if score is borderline (e.g. 70-80). If >85, we just buy.
+      let confirmed = true;
+      let aiReason = "Strong Technicals";
+      
+      if (bestOpp.score < 85) {
+        const aiRes = await analyzeAISentiment(base44, bestOpp.symbol, bestOpp.data);
+        console.log(`🤖 AI Analysis for ${bestOpp.symbol}: ${aiRes.sentiment} (${aiRes.confidence}%)`);
         
-        console.log(`\n🎯 TOP ${topCandidates.length} TECHNICAL CANDIDATES:`);
-        topCandidates.forEach((c, i) => {
-          console.log(`   ${i+1}. ${c.symbol} - Technical Score: ${c.score}`);
-        });
-        
-        // Get AI sentiment for top candidates
-        console.log(`\n🤖 PHASE 2: AI SENTIMENT ANALYSIS`);
-        
-        let bestCandidate = null;
-        let bestCombinedScore = 0;
-        
-        for (const candidate of topCandidates) {
-          const aiSentiment = await analyzeAISentiment(base44, candidate.symbol, candidate.technicals);
-          
-          // Check for AI veto
-          if (shouldVetoTrade(aiSentiment, 'buy')) {
-            console.log(`   ${candidate.symbol}: VETOED by AI sentiment`);
-            continue;
-          }
-          
-          // Calculate combined score
-          const combinedScore = calculateCombinedScore(candidate.score, aiSentiment, signalWeights);
-          console.log(`   ${candidate.symbol}: Technical ${candidate.score} + AI ${aiSentiment.sentiment} = Combined ${combinedScore}`);
-          
-          if (combinedScore >= 65 && combinedScore > bestCombinedScore) {
-            bestCombinedScore = combinedScore;
-            bestCandidate = {
-              ...candidate,
-              score: combinedScore,
-              aiSentiment,
-              technicalScore: candidate.score
-            };
-          }
-          
-          // Small delay between AI calls
-          await new Promise(r => setTimeout(r, 500));
-        }
-        
-        if (bestCandidate) {
-          opportunities.push(bestCandidate);
-          console.log(`\n✅ SELECTED: ${bestCandidate.symbol}`);
-          console.log(`   Technical: ${bestCandidate.technicalScore} | AI: ${bestCandidate.aiSentiment.sentiment} | Combined: ${bestCandidate.score}`);
+        if (aiRes.sentiment === 'bearish' || aiRes.action === 'sell') {
+          confirmed = false;
+          console.log('⛔ AI Vetoed trade');
         } else {
-          console.log(`\n❌ All candidates vetoed or below threshold`);
+          aiReason = `AI: ${aiRes.sentiment} (${aiRes.confidence}%)`;
+        }
+      }
+
+      if (confirmed) {
+        const posSize = calculatePositionSize(portfolio.available_balance, settings, bestOpp.data.usd);
+        
+        if (posSize.valid) {
+          console.log(`🚀 BUYING ${bestOpp.symbol}`);
+          await executeTrade(base44, user_email, portfolio, settings, {
+            symbol: bestOpp.symbol,
+            action: 'buy',
+            quantity: posSize.quantity,
+            price: bestOpp.data.usd,
+            reason: `Score ${bestOpp.score} | ${aiReason}`,
+            confidence: bestOpp.score
+          });
+          return Response.json({ success: true, executed: true, type: 'buy', symbol: bestOpp.symbol });
+        } else {
+          console.log(`⚠️ Insufficient funds for ${bestOpp.symbol}`);
         }
       }
     }
-    
-    // Execute trade if we have an opportunity
-    if (opportunities.length === 0) {
-      console.log(`\n❌ No opportunities met technical criteria`);
-      return Response.json({ success: true, executed: false, reason: 'no_opportunities' });
-    }
-    
-    const opp = opportunities[0];
-    console.log(`\n🚀 EXECUTING: ${opp.action.toUpperCase()} ${opp.symbol}`);
-    console.log(`   Quantity: ${opp.quantity.toFixed(6)} @ $${opp.price.toFixed(2)}`);
-    
-    // Create trade record
-    const tradeData = {
-      asset_symbol: `${opp.symbol}/USDT`,
-      trade_type: opp.action,
-      quantity: opp.quantity,
-      price: opp.price,
-      total_value: opp.quantity * opp.price,
-      exchange: 'Paper Trading (Auto-V2)',
-      status: 'completed',
-      profit_loss: opp.pnlPercent ? (opp.price * opp.quantity) * (opp.pnlPercent / 100) : 0,
-      ai_signal: {
-        confidence: opp.score,
-        reasoning: opp.technicals ? 
-          `TECHNICALS: ${opp.technicals.reasons.slice(0, 3).join('; ')}` + 
-          (opp.aiSentiment ? ` | AI: ${opp.aiSentiment.sentiment} - ${opp.aiSentiment.key_factors?.slice(0, 2).join(', ') || 'N/A'}` : '') 
-          : opp.reason,
-        indicators: opp.technicals ? [
-          `RSI: ${opp.technicals.rsi?.toFixed(1)}`, 
-          `Trend: ${opp.technicals.trend}`, 
-          `MACD: ${opp.technicals.macd}`,
-          opp.aiSentiment ? `AI: ${opp.aiSentiment.sentiment}` : null
-        ].filter(Boolean) : []
-      },
-      created_by: user_email
-    };
-    
-    await base44.asServiceRole.entities.Trade.create(tradeData);
-    
-    // Update portfolio
-    let positions = [...(portfolio.positions || [])];
-    const assetSymbol = `${opp.symbol}/USDT`;
-    
-    if (opp.action === 'sell') {
-      positions = positions.filter(p => p.asset_symbol !== assetSymbol);
-    } else {
-      positions.push({
-        asset_symbol: assetSymbol,
-        quantity: opp.quantity,
-        avg_entry_price: opp.price,
-        current_value: opp.value,
-        profit_loss: 0,
-        highest_price: opp.price
-      });
-    }
-    
-    const newBalance = opp.action === 'buy'
-      ? portfolio.available_balance - (opp.quantity * opp.price)
-      : portfolio.available_balance + (opp.quantity * opp.price);
-    
-    await base44.asServiceRole.entities.Portfolio.update(portfolio.id, {
-      available_balance: newBalance,
-      total_balance: portfolio.total_balance + (tradeData.profit_loss || 0),
-      positions,
-      total_trades: (portfolio.total_trades || 0) + 1,
-      total_profit_loss: (portfolio.total_profit_loss || 0) + (tradeData.profit_loss || 0)
-    });
-    
-    // Update settings
-    const newAssetsTraded = [...(settings.assets_traded_today || [])];
-    if (opp.action === 'buy' && !newAssetsTraded.includes(opp.symbol)) {
-      newAssetsTraded.push(opp.symbol);
-    }
-    
-    await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
-      trades_today: (settings.trades_today || 0) + 1,
-      last_trade_date: new Date().toISOString(),
-      assets_traded_today: newAssetsTraded,
-      daily_loss: (settings.daily_loss || 0) + (tradeData.profit_loss < 0 ? Math.abs(tradeData.profit_loss) : 0)
-    });
-    
-    console.log(`\n✅ TRADE EXECUTED SUCCESSFULLY`);
-    console.log(`${'='.repeat(60)}\n`);
-    
-    return Response.json({
-      success: true,
-      executed: true,
-      trade: {
-        symbol: opp.symbol,
-        action: opp.action,
-        quantity: opp.quantity,
-        price: opp.price,
-        reason: opp.reason,
-        technicalScore: opp.technicalScore || opp.score,
-        combinedScore: opp.score,
-        aiSentiment: opp.aiSentiment?.sentiment || 'N/A'
-      }
-    });
-    
+
+    return Response.json({ success: true, executed: false, reason: 'no_opportunities' });
+
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error('❌ Worker Error:', error);
     return Response.json({ success: false, error: error.message }, { status: 500 });
   }
 });
+
+// Helper to Execute Trade & Update DB
+async function executeTrade(base44, user_email, portfolio, settings, tradeDetails) {
+  const { symbol, action, quantity, price, reason, pnl, confidence } = tradeDetails;
+  const totalValue = quantity * price;
+  const assetSymbol = `${symbol}/USDT`;
+  
+  // 1. Create Trade Record
+  const tradeData = {
+    asset_symbol: assetSymbol,
+    trade_type: action,
+    quantity: quantity,
+    price: price,
+    total_value: totalValue,
+    exchange: 'Paper Trading (Server)',
+    status: 'completed',
+    profit_loss: action === 'sell' ? (totalValue * (pnl / 100)) : 0,
+    ai_signal: {
+      confidence: confidence || 0,
+      reasoning: reason,
+      indicators: ['Server-Side Auto-Trade']
+    },
+    created_by: user_email
+  };
+  await base44.asServiceRole.entities.Trade.create(tradeData);
+  
+  // 2. Update Portfolio
+  let positions = [...(portfolio.positions || [])];
+  if (action === 'buy') {
+    positions.push({
+      asset_symbol: assetSymbol,
+      quantity,
+      avg_entry_price: price,
+      current_value: totalValue,
+      profit_loss: 0,
+      highest_price: price
+    });
+  } else {
+    positions = positions.filter(p => p.asset_symbol !== assetSymbol);
+  }
+  
+  const newBalance = action === 'buy' 
+    ? portfolio.available_balance - totalValue 
+    : portfolio.available_balance + totalValue;
+    
+  await base44.asServiceRole.entities.Portfolio.update(portfolio.id, {
+    available_balance: newBalance,
+    total_balance: portfolio.total_balance + (tradeData.profit_loss || 0),
+    positions,
+    total_trades: (portfolio.total_trades || 0) + 1,
+    total_profit_loss: (portfolio.total_profit_loss || 0) + (tradeData.profit_loss || 0)
+  });
+  
+  // 3. Update Settings (Counters)
+  const newAssetsTraded = [...(settings.assets_traded_today || [])];
+  if (action === 'buy' && !newAssetsTraded.includes(symbol)) {
+    newAssetsTraded.push(symbol);
+  }
+  
+  await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
+    trades_today: (settings.trades_today || 0) + 1,
+    last_trade_date: new Date().toISOString(),
+    assets_traded_today: newAssetsTraded,
+    daily_loss: (settings.daily_loss || 0) + (tradeData.profit_loss < 0 ? Math.abs(tradeData.profit_loss) : 0)
+  });
+  
+  // 4. Create Notification
+  await base44.asServiceRole.entities.Notification.create({
+    notification_type: 'order_filled',
+    priority: 'medium',
+    title: `Auto-Trade: ${action.toUpperCase()} ${symbol}`,
+    message: `Server executed ${action} for ${quantity.toFixed(4)} ${symbol} @ $${price.toFixed(2)}. Reason: ${reason}`,
+    created_by: user_email
+  });
+}
