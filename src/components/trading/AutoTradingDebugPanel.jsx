@@ -12,7 +12,8 @@ export default function AutoTradingDebugPanel({
   portfolio, 
   assets, 
   assetConfidence,
-  isEnabled 
+  isEnabled,
+  onManualCheck
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [logs, setLogs] = useState([]);
@@ -59,32 +60,45 @@ export default function AutoTradingDebugPanel({
   const handleRunAutoTrade = async () => {
     setIsRunning(true);
     const timestamp = new Date().toLocaleTimeString();
+    const isBrowserMode = autoTradingSettings?.execution_mode === 'browser';
+    
     setLogs(prev => [{
       id: Date.now(),
       timestamp,
-      message: '🚀 Triggering manual auto-trade cycle...',
+      message: isBrowserMode ? '🚀 Running browser-side analysis...' : '🚀 Triggering server-side cycle...',
       type: 'info'
     }, ...prev].slice(0, 50));
 
     try {
-      const { base44 } = await import('@/api/base44Client');
-      
-      // Invoke the scheduler directly
-      const result = await base44.functions.invoke('tradingScheduler');
-      
-      // Refresh data to show results
-      await queryClient.invalidateQueries({ queryKey: ['portfolio'] });
-      await queryClient.invalidateQueries({ queryKey: ['auto-trading-settings'] });
-      await queryClient.refetchQueries({ queryKey: ['portfolio'] });
-      
-      const successTimestamp = new Date().toLocaleTimeString();
-      setLogs(prev => [{
-        id: Date.now() + 1,
-        timestamp: successTimestamp,
-        message: `✅ Cycle complete: ${result.data?.summary?.trades_executed || 0} trades executed`,
-        type: 'success'
-      }, ...prev].slice(0, 50));
-      
+      if (isBrowserMode && onManualCheck) {
+        // Run browser check
+        await onManualCheck();
+        const successTimestamp = new Date().toLocaleTimeString();
+        setLogs(prev => [{
+          id: Date.now() + 1,
+          timestamp: successTimestamp,
+          message: `✅ Browser analysis complete`,
+          type: 'success'
+        }, ...prev].slice(0, 50));
+      } else {
+        // Run server check
+        const { base44 } = await import('@/api/base44Client');
+        const result = await base44.functions.invoke('tradingScheduler');
+        
+        // Refresh data
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['portfolio'] }),
+          queryClient.invalidateQueries({ queryKey: ['auto-trading-settings'] })
+        ]);
+        
+        const successTimestamp = new Date().toLocaleTimeString();
+        setLogs(prev => [{
+          id: Date.now() + 1,
+          timestamp: successTimestamp,
+          message: `✅ Server cycle complete: ${result.data?.summary?.trades_executed || 0} trades`,
+          type: 'success'
+        }, ...prev].slice(0, 50));
+      }
     } catch (error) {
       console.error('Failed to run auto-trade:', error);
       const errorTimestamp = new Date().toLocaleTimeString();
