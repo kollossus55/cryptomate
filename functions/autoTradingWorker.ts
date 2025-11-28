@@ -429,6 +429,9 @@ Deno.serve(async (req) => {
     if (!settings.is_enabled) {
       return Response.json({ success: true, executed: false, reason: 'disabled' });
     }
+    if (settings.execution_mode === 'browser') {
+      return Response.json({ success: true, executed: false, reason: 'browser_mode_active' });
+    }
     if ((settings.daily_loss || 0) >= (settings.max_daily_loss_percent || 5)) {
       return Response.json({ success: true, executed: false, reason: 'circuit_breaker' });
     }

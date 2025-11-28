@@ -22,9 +22,10 @@ Deno.serve(async (req) => {
     
     // Get all users with auto-trading enabled (using service role)
     const autoTradingSettings = await base44.asServiceRole.entities.AutoTradingSettings.list();
-    const enabledSettings = autoTradingSettings.filter(s => s.is_enabled);
+    // Filter out users who have explicitly selected 'browser' execution mode
+    const enabledSettings = autoTradingSettings.filter(s => s.is_enabled && s.execution_mode !== 'browser');
     
-    console.log(`📊 Found ${enabledSettings.length} users with auto-trading enabled`);
+    console.log(`📊 Found ${enabledSettings.length} users with server-side auto-trading enabled`);
     
     let processed = 0;
     let executed = 0;
