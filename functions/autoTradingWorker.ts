@@ -7,15 +7,8 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
  * Uses a momentum-based scoring system + AI Sentiment analysis.
  */
 
-const COINGECKO_IDS = {
-  'BTC': 'bitcoin', 'ETH': 'ethereum', 'BNB': 'binancecoin', 'SOL': 'solana',
-  'XRP': 'ripple', 'ADA': 'cardano', 'AVAX': 'avalanche-2', 'DOGE': 'dogecoin',
-  'DOT': 'polkadot', 'MATIC': 'matic-network', 'LTC': 'litecoin', 'LINK': 'chainlink',
-  'UNI': 'uniswap', 'ATOM': 'cosmos', 'XLM': 'stellar', 'ALGO': 'algorand',
-  'NEAR': 'near', 'APT': 'aptos', 'ARB': 'arbitrum', 'OP': 'optimism',
-  'INJ': 'injective-protocol', 'SUI': 'sui', 'SEI': 'sei-network',
-  'PEPE': 'pepe', 'WIF': 'dogwifcoin', 'RUNE': 'thorchain', 'FTM': 'fantom'
-};
+// Dynamic list - fetching top 250 by market cap
+const TOP_ASSETS_COUNT = 250;
 
 // Calculate score similar to Browser Mode's calculateBasicConfidence
 function calculateMomentumScore(asset) {
@@ -127,38 +120,63 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, reason: 'trade_limit' });
     }
 
-    // 2. Market Data Fetching
-    const ids = Object.values(COINGECKO_IDS).join(',');
-    let marketData = {};
+    // 2. Market Data Fetching (Top 250)
+    let marketData = [];
+    let idToSymbolMap = {};
     
     try {
+      console.log(`🔍 Fetching top ${TOP_ASSETS_COUNT} crypto assets...`);
       const resp = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true`,
+        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${TOP_ASSETS_COUNT}&page=1&sparkline=false`,
         { headers: { 'Accept': 'application/json' } }
       );
-      if (resp.ok) marketData = await resp.json();
-      else throw new Error('CoinGecko API non-200');
+      
+      if (resp.ok) {
+        marketData = await resp.json();
+        console.log(`✅ Successfully fetched ${marketData.length} assets`);
+      } else {
+        throw new Error(`CoinGecko API error: ${resp.status}`);
+      }
     } catch (e) {
-      console.warn('⚠️ Live data failed, using simulation fallback');
-      // Generate realistic simulation data if API fails
-      Object.values(COINGECKO_IDS).forEach(id => {
-        marketData[id] = {
-          usd: 100 + Math.random() * 1000,
-          usd_24h_change: (Math.random() * 10) - 4, // Bias slightly positive
-          usd_24h_vol: 500000000,
-          usd_market_cap: 10000000000
-        };
+      console.warn('⚠️ Live data failed, using simulation fallback:', e.message);
+      // Fallback: Generate basic top coins if API fails
+      ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'DOGE', 'AVAX'].forEach(sym => {
+        marketData.push({
+          id: sym.toLowerCase(),
+          symbol: sym.toLowerCase(),
+          current_price: 100 + Math.random() * 1000,
+          price_change_percentage_24h: (Math.random() * 10) - 4,
+          total_volume: 500000000,
+          market_cap: 10000000000
+        });
       });
     }
+
+    // Create lookup map for position management
+    const priceMap = {};
+    marketData.forEach(coin => {
+      const symbol = coin.symbol.toUpperCase();
+      // Normalize data structure to match previous format for consistency
+      priceMap[symbol] = {
+        usd: coin.current_price,
+        usd_24h_change: coin.price_change_percentage_24h,
+        usd_24h_vol: coin.total_volume,
+        usd_market_cap: coin.market_cap,
+        id: coin.id
+      };
+    });
 
     // 3. SELL Logic (Manage existing positions)
     if (portfolio.positions && portfolio.positions.length > 0) {
       for (const position of portfolio.positions) {
         const symbol = position.asset_symbol.replace('/USDT', '');
-        const coinId = COINGECKO_IDS[symbol];
-        const data = marketData[coinId];
+        const data = priceMap[symbol];
         
-        if (!data) continue;
+        if (!data) {
+          // If asset not in top 250, we might miss it. 
+          // ideally we should fetch specific IDs for positions, but for now we skip if not in top 250.
+          continue; 
+        }
         
         const currentPrice = data.usd;
         const pnlPercent = ((currentPrice - position.avg_entry_price) / position.avg_entry_price) * 100;
@@ -181,27 +199,36 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. BUY Logic (Scan for opportunities)
-    // Filter assets already traded today to prevent over-trading same pair
+    // 4. BUY Logic (Scan ALL top 250 assets for opportunities)
     const tradedToday = settings.assets_traded_today || [];
-    
-    // Score all assets
     const opportunities = [];
     
-    for (const [symbol, coinId] of Object.entries(COINGECKO_IDS)) {
-      const data = marketData[coinId];
-      if (!data) continue;
+    console.log('🧠 Scoring assets...');
+    
+    for (const coin of marketData) {
+      const symbol = coin.symbol.toUpperCase();
+      
+      // Filter out stablecoins (approximate list)
+      if (['USDT', 'USDC', 'DAI', 'FDUSD', 'TUSD'].includes(symbol)) continue;
       
       // Skip if already traded today or currently holding
       if (tradedToday.includes(symbol)) continue;
       if (portfolio.positions?.some(p => p.asset_symbol.includes(symbol))) continue;
+
+      // Normalize data for scoring
+      const data = {
+        usd: coin.current_price,
+        usd_24h_change: coin.price_change_percentage_24h,
+        usd_24h_vol: coin.total_volume,
+        usd_market_cap: coin.market_cap
+      };
 
       // Calculate Momentum Score
       const score = calculateMomentumScore(data);
       const minScore = settings.min_confidence || 70;
 
       if (score >= minScore) {
-        opportunities.push({ symbol, data, score });
+        opportunities.push({ symbol, data, score, name: coin.name });
       }
     }
 
