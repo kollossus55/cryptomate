@@ -476,7 +476,15 @@ Deno.serve(async (req) => {
       const candidates = [];
       const assetsTraded = settings.assets_traded_today || [];
       
-      for (const [symbol, coinId] of Object.entries(COINGECKO_IDS)) {
+      // OPTIMIZATION: Randomly select only 5-7 assets to scan per run to prevent timeouts
+      // This ensures the function finishes quickly while covering the market over multiple runs
+      const allAssets = Object.entries(COINGECKO_IDS);
+      const shuffledAssets = allAssets.sort(() => 0.5 - Math.random());
+      const selectedAssets = shuffledAssets.slice(0, 6); // Scan 6 assets max per run
+      
+      console.log(`🎲 Selected ${selectedAssets.length} random assets to scan this run: ${selectedAssets.map(a => a[0]).join(', ')}`);
+
+      for (const [symbol, coinId] of selectedAssets) {
         // Skip if already traded today or have position
         if (assetsTraded.includes(symbol)) continue;
         if (portfolio.positions?.find(p => p.asset_symbol === `${symbol}/USDT`)) continue;

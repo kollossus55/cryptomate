@@ -45,6 +45,8 @@ Deno.serve(async (req) => {
         const portfolio = portfolios[0];
         
         // Invoke auto-trading worker for this user
+        // We await here to ensure sequential processing and avoid rate limits
+        console.log(`⏳ Invoking worker for ${settings.created_by}...`);
         const result = await base44.asServiceRole.functions.invoke('autoTradingWorker', {
           settings,
           portfolio,
@@ -53,9 +55,16 @@ Deno.serve(async (req) => {
         
         processed++;
         
-        if (result.data?.executed) {
-          executed++;
-          console.log(`✅ Trade executed for ${settings.created_by}: ${result.data.opportunity?.asset?.symbol}`);
+        if (result.data?.success) {
+          if (result.data.executed) {
+            executed++;
+            console.log(`✅ Trade executed for ${settings.created_by}: ${result.data.trade?.symbol} (${result.data.trade?.action})`);
+          } else {
+            console.log(`ℹ️ No trade for ${settings.created_by}: ${result.data.reason}`);
+          }
+        } else {
+          console.error(`⚠️ Worker failed for ${settings.created_by}:`, result.data?.error || 'Unknown error');
+          errors++;
         }
         
       } catch (error) {
