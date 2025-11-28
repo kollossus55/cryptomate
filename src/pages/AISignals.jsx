@@ -237,7 +237,7 @@ export default function AISignals() {
                 Technical + AI Signals
               </h1>
               <p className="text-slate-400">
-                Technical Analysis (70%) • AI Sentiment (30%) • Real-time scoring
+                Technical Analysis (90%) • AI Sentiment (10%) • Real-time scoring
               </p>
             </div>
           </div>
@@ -377,13 +377,13 @@ export default function AISignals() {
                           </div>
                           <div className="grid grid-cols-4 gap-4 mt-4">
                             <div className="bg-slate-800 rounded p-3">
-                              <div className="text-xs text-slate-400 mb-1">Technical (70%)</div>
+                              <div className="text-xs text-slate-400 mb-1">Technical (90%)</div>
                               <div className="text-lg font-bold text-white">
                                 {signalResults.composite_score.breakdown.technical}
                               </div>
                             </div>
                             <div className="bg-slate-800 rounded p-3">
-                              <div className="text-xs text-slate-400 mb-1">AI Sentiment (30%)</div>
+                              <div className="text-xs text-slate-400 mb-1">AI Sentiment (10%)</div>
                               <div className="text-lg font-bold text-white">
                                 {signalResults.composite_score.breakdown.sentiment || 'N/A'}
                               </div>

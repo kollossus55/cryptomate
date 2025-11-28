@@ -4,8 +4,8 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
  * Auto-Trading Worker V3 - Technical Analysis + AI Sentiment
  * 
  * PRIORITY ORDER:
- * 1. Technical Analysis (70% weight) - RSI, MACD, Trend, Support/Resistance
- * 2. AI Sentiment (30% weight) - News sentiment, market context
+ * 1. Technical Analysis (90% weight) - RSI, MACD, Trend, Support/Resistance
+ * 2. AI Sentiment (10% weight) - News sentiment, market context
  * 
  * Technicals must pass first, then AI confirms or vetoes.
  */
