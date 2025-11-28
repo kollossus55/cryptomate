@@ -308,7 +308,7 @@ export default function AdvancedChart({ asset }) {
   // Custom bar for volume with color based on price movement
   const CustomVolumeBar = (props) => {
     const { fill, x, y, width, height, payload } = props;
-    const barColor = payload.isPositive ? '#10b981' : '#ef4444'; // Green if up, red if down
+    const barColor = payload.isPositive ? '#26a69a' : '#ef5350';
     
     return (
       <rect
