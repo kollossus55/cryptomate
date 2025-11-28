@@ -2,163 +2,192 @@
  * Altcoin Scanner - Finds the best trading opportunities among hundreds of altcoins
  */
 
-// Comprehensive list of 100+ altcoins with CoinGecko IDs
-export const ALTCOIN_LIST = [
-  // DeFi Tokens
-  { symbol: "UNI", name: "Uniswap", coinGeckoId: "uniswap", category: "DeFi", marketCap: 5000000000 },
-  { symbol: "AAVE", name: "Aave", coinGeckoId: "aave", category: "DeFi", marketCap: 2000000000 },
-  { symbol: "MKR", name: "Maker", coinGeckoId: "maker", category: "DeFi", marketCap: 1500000000 },
-  { symbol: "SNX", name: "Synthetix", coinGeckoId: "synthetix-network-token", category: "DeFi", marketCap: 800000000 },
-  { symbol: "CRV", name: "Curve DAO", coinGeckoId: "curve-dao-token", category: "DeFi", marketCap: 700000000 },
-  { symbol: "COMP", name: "Compound", coinGeckoId: "compound-governance-token", category: "DeFi", marketCap: 600000000 },
-  { symbol: "SUSHI", name: "SushiSwap", coinGeckoId: "sushi", category: "DeFi", marketCap: 500000000 },
-  { symbol: "1INCH", name: "1inch", coinGeckoId: "1inch", category: "DeFi", marketCap: 400000000 },
-  
-  // Layer 1 Blockchains
-  { symbol: "ATOM", name: "Cosmos", coinGeckoId: "cosmos", category: "Layer 1", marketCap: 4000000000 },
-  { symbol: "NEAR", name: "NEAR Protocol", coinGeckoId: "near", category: "Layer 1", marketCap: 3000000000 },
-  { symbol: "APT", name: "Aptos", coinGeckoId: "aptos", category: "Layer 1", marketCap: 4500000000 },
-  { symbol: "SUI", name: "Sui", coinGeckoId: "sui", category: "Layer 1", marketCap: 3500000000 },
-  { symbol: "FTM", name: "Fantom", coinGeckoId: "fantom", category: "Layer 1", marketCap: 1200000000 },
-  { symbol: "ALGO", name: "Algorand", coinGeckoId: "algorand", category: "Layer 1", marketCap: 1500000000 },
-  { symbol: "ONE", name: "Harmony", coinGeckoId: "harmony", category: "Layer 1", marketCap: 300000000 },
-  { symbol: "HBAR", name: "Hedera", coinGeckoId: "hedera-hashgraph", category: "Layer 1", marketCap: 2000000000 },
-  
-  // Layer 2 Solutions
+// Simple in-memory cache to prevent API rate limiting
+let CACHED_COINS = [];
+let LAST_FETCH = 0;
+const CACHE_DURATION = 60000; // 1 minute cache
+
+// Fallback list if API fails (Top 20 + some popular ones)
+const FALLBACK_LIST = [
+  { symbol: "BTC", name: "Bitcoin", coinGeckoId: "bitcoin", category: "Layer 1", marketCap: 1000000000000 },
+  { symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum", category: "Layer 1", marketCap: 300000000000 },
+  { symbol: "SOL", name: "Solana", coinGeckoId: "solana", category: "Layer 1", marketCap: 70000000000 },
+  { symbol: "BNB", name: "BNB", coinGeckoId: "binancecoin", category: "Layer 1", marketCap: 80000000000 },
+  { symbol: "XRP", name: "XRP", coinGeckoId: "ripple", category: "Layer 1", marketCap: 30000000000 },
+  { symbol: "ADA", name: "Cardano", coinGeckoId: "cardano", category: "Layer 1", marketCap: 15000000000 },
+  { symbol: "DOGE", name: "Dogecoin", coinGeckoId: "dogecoin", category: "Meme", marketCap: 20000000000 },
+  { symbol: "AVAX", name: "Avalanche", coinGeckoId: "avalanche-2", category: "Layer 1", marketCap: 12000000000 },
+  { symbol: "DOT", name: "Polkadot", coinGeckoId: "polkadot", category: "Layer 1", marketCap: 10000000000 },
+  { symbol: "LINK", name: "Chainlink", coinGeckoId: "chainlink", category: "Infrastructure", marketCap: 10000000000 },
   { symbol: "MATIC", name: "Polygon", coinGeckoId: "matic-network", category: "Layer 2", marketCap: 8000000000 },
-  { symbol: "ARB", name: "Arbitrum", coinGeckoId: "arbitrum", category: "Layer 2", marketCap: 3000000000 },
-  { symbol: "OP", name: "Optimism", coinGeckoId: "optimism", category: "Layer 2", marketCap: 2500000000 },
-  { symbol: "IMX", name: "Immutable X", coinGeckoId: "immutable-x", category: "Layer 2", marketCap: 1000000000 },
-  
-  // Gaming & Metaverse
-  { symbol: "SAND", name: "The Sandbox", coinGeckoId: "the-sandbox", category: "Gaming", marketCap: 1000000000 },
-  { symbol: "MANA", name: "Decentraland", coinGeckoId: "decentraland", category: "Gaming", marketCap: 900000000 },
-  { symbol: "AXS", name: "Axie Infinity", coinGeckoId: "axie-infinity", category: "Gaming", marketCap: 1500000000 },
-  { symbol: "GALA", name: "Gala", coinGeckoId: "gala", category: "Gaming", marketCap: 600000000 },
-  { symbol: "ENJ", name: "Enjin", coinGeckoId: "enjincoin", category: "Gaming", marketCap: 500000000 },
-  { symbol: "IMX", name: "Immutable", coinGeckoId: "immutable-x", category: "Gaming", marketCap: 1000000000 },
-  
-  // AI & Data
-  { symbol: "FET", name: "Fetch.ai", coinGeckoId: "fetch-ai", category: "AI", marketCap: 800000000 },
-  { symbol: "OCEAN", name: "Ocean Protocol", coinGeckoId: "ocean-protocol", category: "AI", marketCap: 400000000 },
-  { symbol: "GRT", name: "The Graph", coinGeckoId: "the-graph", category: "Data", marketCap: 2000000000 },
-  { symbol: "RNDR", name: "Render", coinGeckoId: "render-token", category: "AI", marketCap: 1500000000 },
-  
-  // Meme Coins
-  { symbol: "SHIB", name: "Shiba Inu", coinGeckoId: "shiba-inu", category: "Meme", marketCap: 5000000000 },
-  { symbol: "PEPE", name: "Pepe", coinGeckoId: "pepe", category: "Meme", marketCap: 1000000000 },
-  { symbol: "FLOKI", name: "Floki", coinGeckoId: "floki", category: "Meme", marketCap: 500000000 },
-  { symbol: "BONK", name: "Bonk", coinGeckoId: "bonk", category: "Meme", marketCap: 800000000 },
-  
-  // Infrastructure
-  { symbol: "LINK", name: "Chainlink", coinGeckoId: "chainlink", category: "Infrastructure", marketCap: 8000000000 },
-  { symbol: "VET", name: "VeChain", coinGeckoId: "vechain", category: "Infrastructure", marketCap: 2000000000 },
-  { symbol: "FIL", name: "Filecoin", coinGeckoId: "filecoin", category: "Infrastructure", marketCap: 3000000000 },
-  { symbol: "AR", name: "Arweave", coinGeckoId: "arweave", category: "Infrastructure", marketCap: 1000000000 },
-  
-  // Privacy Coins
-  { symbol: "XMR", name: "Monero", coinGeckoId: "monero", category: "Privacy", marketCap: 3000000000 },
-  { symbol: "ZEC", name: "Zcash", coinGeckoId: "zcash", category: "Privacy", marketCap: 600000000 },
-  
-  // Stablecoins & Wrapped Assets
-  { symbol: "DAI", name: "Dai", coinGeckoId: "dai", category: "Stablecoin", marketCap: 5000000000 },
-  { symbol: "WBTC", name: "Wrapped Bitcoin", coinGeckoId: "wrapped-bitcoin", category: "Wrapped", marketCap: 10000000000 },
-  
-  // Emerging Altcoins
-  { symbol: "INJ", name: "Injective", coinGeckoId: "injective-protocol", category: "DeFi", marketCap: 2000000000 },
-  { symbol: "SEI", name: "Sei", coinGeckoId: "sei-network", category: "Layer 1", marketCap: 1500000000 },
-  { symbol: "TIA", name: "Celestia", coinGeckoId: "celestia", category: "Layer 1", marketCap: 2500000000 },
-  { symbol: "BLUR", name: "Blur", coinGeckoId: "blur", category: "NFT", marketCap: 800000000 },
-  { symbol: "PENDLE", name: "Pendle", coinGeckoId: "pendle", category: "DeFi", marketCap: 600000000 },
-  { symbol: "WLD", name: "Worldcoin", coinGeckoId: "worldcoin-wld", category: "AI", marketCap: 1000000000 },
-  { symbol: "JUP", name: "Jupiter", coinGeckoId: "jupiter-exchange-solana", category: "DeFi", marketCap: 1200000000 },
-  { symbol: "PYTH", name: "Pyth Network", coinGeckoId: "pyth-network", category: "Infrastructure", marketCap: 900000000 },
-  
-  // More DeFi
-  { symbol: "GMX", name: "GMX", coinGeckoId: "gmx", category: "DeFi", marketCap: 600000000 },
-  { symbol: "LDO", name: "Lido DAO", coinGeckoId: "lido-dao", category: "DeFi", marketCap: 2000000000 },
-  { symbol: "RPL", name: "Rocket Pool", coinGeckoId: "rocket-pool", category: "DeFi", marketCap: 500000000 },
-  { symbol: "DYDX", name: "dYdX", coinGeckoId: "dydx", category: "DeFi", marketCap: 800000000 },
-  
-  // Social & Web3
-  { symbol: "MASK", name: "Mask Network", coinGeckoId: "mask-network", category: "Social", marketCap: 300000000 },
-  { symbol: "LPT", name: "Livepeer", coinGeckoId: "livepeer", category: "Infrastructure", marketCap: 400000000 },
-  
-  // More Gaming
-  { symbol: "BEAM", name: "Beam", coinGeckoId: "beam-2", category: "Gaming", marketCap: 700000000 },
-  { symbol: "PRIME", name: "Echelon Prime", coinGeckoId: "echelon-prime", category: "Gaming", marketCap: 500000000 },
-  { symbol: "MAGIC", name: "Magic", coinGeckoId: "magic", category: "Gaming", marketCap: 300000000 },
-  
-  // Interoperability
-  { symbol: "DOT", name: "Polkadot", coinGeckoId: "polkadot", category: "Interoperability", marketCap: 9000000000 },
-  { symbol: "ATOM", name: "Cosmos", coinGeckoId: "cosmos", category: "Interoperability", marketCap: 4000000000 },
-  
-  // More Layer 2
-  { symbol: "METIS", name: "Metis", coinGeckoId: "metis-token", category: "Layer 2", marketCap: 600000000 },
-  { symbol: "BOBA", name: "Boba Network", coinGeckoId: "boba-network", category: "Layer 2", marketCap: 200000000 },
+  { symbol: "UNI", name: "Uniswap", coinGeckoId: "uniswap", category: "DeFi", marketCap: 6000000000 },
+  { symbol: "ATOM", name: "Cosmos", coinGeckoId: "cosmos", category: "Layer 1", marketCap: 4000000000 },
+  { symbol: "LTC", name: "Litecoin", coinGeckoId: "litecoin", category: "Layer 1", marketCap: 6000000000 },
+  { symbol: "NEAR", name: "NEAR Protocol", coinGeckoId: "near", category: "Layer 1", marketCap: 5000000000 },
+  { symbol: "PEPE", name: "Pepe", coinGeckoId: "pepe", category: "Meme", marketCap: 3000000000 },
+  { symbol: "APT", name: "Aptos", coinGeckoId: "aptos", category: "Layer 1", marketCap: 3000000000 },
+  { symbol: "ARB", name: "Arbitrum", coinGeckoId: "arbitrum", category: "Layer 2", marketCap: 2000000000 },
+  { symbol: "RNDR", name: "Render", coinGeckoId: "render-token", category: "AI", marketCap: 3000000000 },
+  { symbol: "INJ", name: "Injective", coinGeckoId: "injective-protocol", category: "DeFi", marketCap: 2500000000 }
 ];
 
+// Keep for backward compatibility with existing imports, but it will be populated dynamically
+export let ALTCOIN_LIST = [...FALLBACK_LIST];
+
 /**
- * Scans altcoins and returns the top opportunities based on multiple factors
+ * Helper to categorize coins based on tags or symbol
+ */
+const categorizeCoin = (coin) => {
+  const symbol = coin.symbol.toUpperCase();
+  const name = coin.name.toLowerCase();
+  
+  if (['BTC', 'ETH', 'SOL', 'ADA', 'AVAX', 'DOT', 'ATOM', 'NEAR', 'FTM', 'SUI', 'SEI', 'ALGO'].includes(symbol)) return 'Layer 1';
+  if (['MATIC', 'ARB', 'OP', 'IMX', 'MNT', 'STRK'].includes(symbol)) return 'Layer 2';
+  if (['UNI', 'AAVE', 'MKR', 'SNX', 'CRV', 'COMP', 'LDO', 'RPL', 'PENDLE', 'JUP'].includes(symbol)) return 'DeFi';
+  if (['DOGE', 'SHIB', 'PEPE', 'BONK', 'FLOKI', 'WIF', 'MEME'].includes(symbol)) return 'Meme';
+  if (['FET', 'RNDR', 'GRT', 'OCEAN', 'WLD', 'AGIX'].includes(symbol)) return 'AI';
+  if (['SAND', 'MANA', 'AXS', 'GALA', 'ILV', 'BEAM', 'PRIME'].includes(symbol)) return 'Gaming';
+  if (['LINK', 'FIL', 'AR', 'VET', 'PYTH', 'TIA'].includes(symbol)) return 'Infrastructure';
+  if (['USDT', 'USDC', 'DAI', 'FDUSD'].includes(symbol)) return 'Stablecoin';
+  
+  if (name.includes('inu') || name.includes('dog') || name.includes('cat')) return 'Meme';
+  if (name.includes('swap') || name.includes('finance') || name.includes('dao')) return 'DeFi';
+  
+  return 'Altcoin'; // Default
+};
+
+/**
+ * Scans top 250 altcoins and returns the best opportunities
+ * Uses live CoinGecko API data
  */
 export const scanAltcoins = async (count = 10) => {
-  console.log(`🔍 Scanning ${ALTCOIN_LIST.length} altcoins for best opportunities...`);
+  const TOP_COUNT = 250;
+  console.log(`🔍 Scanning top ${TOP_COUNT} assets from CoinGecko...`);
+  
+  let marketData = [];
+  
+  try {
+    // Check cache first
+    if (CACHED_COINS.length > 0 && Date.now() - LAST_FETCH < CACHE_DURATION) {
+      console.log('⚡ Using cached coin data');
+      marketData = CACHED_COINS;
+    } else {
+      // Fetch live data
+      const response = await fetch(
+        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${TOP_COUNT}&page=1&sparkline=false`
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Filter out stablecoins
+        marketData = data.filter(coin => {
+          const sym = coin.symbol.toUpperCase();
+          return !['USDT', 'USDC', 'DAI', 'FDUSD', 'TUSD', 'USDD', 'USDP'].includes(sym);
+        });
+        
+        // Update cache and exported list
+        CACHED_COINS = marketData;
+        LAST_FETCH = Date.now();
+        
+        // Update ALTCOIN_LIST for compatibility with other functions
+        ALTCOIN_LIST = marketData.map(coin => ({
+          symbol: coin.symbol.toUpperCase(),
+          name: coin.name,
+          coinGeckoId: coin.id,
+          category: categorizeCoin(coin),
+          marketCap: coin.market_cap
+        }));
+        
+        console.log(`✅ Successfully fetched ${marketData.length} assets`);
+      } else {
+        throw new Error(`API returned ${response.status}`);
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ Live scan failed, using fallback data:', error.message);
+    // Use fallback data with simulated price changes
+    marketData = FALLBACK_LIST.map(coin => ({
+      id: coin.coinGeckoId,
+      symbol: coin.symbol.toLowerCase(),
+      name: coin.name,
+      current_price: coin.marketCap / 100000000, // Rough simulation
+      price_change_percentage_24h: (Math.random() * 10) - 4,
+      total_volume: coin.marketCap * 0.05,
+      market_cap: coin.marketCap
+    }));
+  }
   
   const opportunities = [];
   
-  // Simulate scanning with realistic data patterns
-  for (const altcoin of ALTCOIN_LIST.slice(0, 50)) { // Scan first 50 for performance
-    // Generate realistic volatility and momentum
-    const volatility = 5 + Math.random() * 15; // 5-20% volatility
-    const momentum = (Math.random() - 0.5) * 20; // -10% to +10% momentum
-    const volume_surge = Math.random() > 0.7 ? 1.5 + Math.random() * 2 : 1; // 30% chance of volume surge
+  // Process each coin
+  for (const coin of marketData) {
+    // Skip if missing crucial data
+    if (coin.price_change_percentage_24h === null || coin.price_change_percentage_24h === undefined) continue;
     
-    // Calculate opportunity score (0-100)
+    // Extract metrics
+    const change = coin.price_change_percentage_24h;
+    const volatility = Math.abs(change);
+    const volume = coin.total_volume || 0;
+    const mcap = coin.market_cap || 0;
+    const category = categorizeCoin(coin);
+    
+    // Calculate Score (0-100)
     let score = 50;
     
-    // Positive momentum increases score
-    if (momentum > 5) score += 20;
-    else if (momentum > 2) score += 10;
-    else if (momentum < -5) score -= 15;
-    else if (momentum < -2) score -= 5;
+    // 1. Momentum Scoring
+    if (change > 10) score += 25;      // Strong pump
+    else if (change > 5) score += 15;  // Strong uptrend
+    else if (change > 2) score += 10;  // Uptrend
+    else if (change > 0) score += 5;   // Slight uptrend
+    else if (change < -10) score -= 25; // Strong dump
+    else if (change < -5) score -= 15;  // Strong downtrend
+    else if (change < -2) score -= 10;  // Downtrend
     
-    // Volume surge is a strong signal
-    if (volume_surge > 2) score += 15;
-    else if (volume_surge > 1.5) score += 10;
+    // 2. Volume Factor (Relative to market cap is better, but raw volume works for major coins)
+    if (volume > 1000000000) score += 10;
+    else if (volume > 100000000) score += 5;
+    else if (volume < 1000000) score -= 10;
     
-    // Lower volatility is safer
-    if (volatility < 8) score += 5;
-    else if (volatility > 15) score -= 10;
+    // 3. Stability Bonus
+    if (mcap > 10000000000) score += 5;
     
-    // Market cap stability
-    if (altcoin.marketCap > 1000000000) score += 5;
-    else if (altcoin.marketCap < 300000000) score -= 5;
+    // 4. Category Trends (Simulated preference)
+    if (category === 'AI' || category === 'Meme' || category === 'Layer 2') score += 5;
     
-    // Category bonuses (current market trends)
-    if (altcoin.category === 'AI' || altcoin.category === 'Layer 1') score += 10;
-    if (altcoin.category === 'Meme') score += Math.random() > 0.5 ? 15 : -10; // Volatile
+    // 5. Volatility Penalty (unless high risk allowed)
+    if (volatility > 15) score -= 5;
+    
+    // Add some randomness to simulate market noise/changing conditions
+    score += (Math.random() * 10) - 5;
     
     // Clamp score
-    score = Math.max(30, Math.min(95, score));
+    score = Math.max(20, Math.min(95, Math.round(score)));
     
-    opportunities.push({
-      ...altcoin,
-      score,
-      momentum: parseFloat(momentum.toFixed(2)),
-      volatility: parseFloat(volatility.toFixed(1)),
-      volume_surge: parseFloat(volume_surge.toFixed(2)),
-      signal: score >= 75 ? 'strong_buy' : score >= 65 ? 'buy' : score >= 55 ? 'hold' : score >= 45 ? 'sell' : 'strong_sell',
-      simulated_price: generatePrice(altcoin),
-      confidence: Math.round(score * 0.9), // Confidence slightly lower than score
-    });
+    // Only include interesting opportunities
+    if (score > 60 || score < 40) {
+      opportunities.push({
+        symbol: coin.symbol.toUpperCase(),
+        name: coin.name,
+        coinGeckoId: coin.id,
+        category: category,
+        marketCap: mcap,
+        score,
+        momentum: parseFloat(change.toFixed(2)),
+        volatility: parseFloat(volatility.toFixed(1)),
+        volume_surge: volume > 500000000 ? 2.0 : 1.0, // Simplified
+        signal: score >= 75 ? 'strong_buy' : score >= 65 ? 'buy' : score >= 55 ? 'hold' : score >= 45 ? 'sell' : 'strong_sell',
+        simulated_price: coin.current_price,
+        confidence: Math.round(score * 0.95),
+      });
+    }
   }
   
-  // Sort by score and return top N
+  // Sort by score (highest first) and return top N
   const topOpportunities = opportunities
     .sort((a, b) => b.score - a.score)
     .slice(0, count);
   
-  console.log(`✅ Found ${topOpportunities.length} top opportunities`);
+  console.log(`✅ Found ${topOpportunities.length} top opportunities from ${marketData.length} scanned`);
   return topOpportunities;
 };
 
