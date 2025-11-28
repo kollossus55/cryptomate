@@ -317,7 +317,8 @@ export default function Trading() {
     // Scan altcoins every 5 minutes for auto-trading opportunities
     const scanAltcoinsForTrading = async () => {
       try {
-        const opportunities = await scanAltcoins(10);
+        // Scan for top 50 opportunities from the top 250 assets
+        const opportunities = await scanAltcoins(50);
         setAltcoinOpportunities(opportunities);
         
         // Store in global scope for auto-trading access
