@@ -75,6 +75,8 @@ export default function AdvancedChart({ asset }) {
             date: new Date(timestamp).toLocaleDateString(),
             time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             price: value,
+            open: value, high: value, low: value, close: value,
+            candleRange: [value, value],
             volume: volume / 1e9,
             isPositive: value >= prevValue,
             change: ((value - prevValue) / prevValue) * 100
@@ -244,7 +246,8 @@ export default function AdvancedChart({ asset }) {
         high,
         low,
         close,
-        price: close, // Keep for compatibility with existing code
+        price: close,
+        candleRange: [low, high],
         volume: (Math.random() * 2) + 0.5,
         isPositive: close >= open,
         change: ((close - open) / open) * 100
@@ -332,27 +335,31 @@ export default function AdvancedChart({ asset }) {
     const color = isPositive ? '#26a69a' : '#ef5350';
     const fill = isPositive ? '#26a69a' : '#ef5350';
     
-    const maxPrice = Math.max(high, open, close, low);
-    const minPrice = Math.min(high, open, close, low);
-    const priceRange = maxPrice - minPrice;
+    // Using range bar logic: y is high, height is (high - low) in pixels
+    const priceRange = high - low;
+    if (priceRange === 0) {
+        // Handle zero range (doji)
+        return (
+            <line x1={x} y1={y} x2={x + width} y2={y} stroke={color} strokeWidth={1.5} />
+        );
+    }
     
-    if (priceRange === 0) return null;
+    const ratio = height / priceRange;
     
-    // Calculate positions
-    const yScale = height / priceRange;
-    const highY = y + (maxPrice - high) * yScale;
-    const lowY = y + (maxPrice - low) * yScale;
-    const openY = y + (maxPrice - open) * yScale;
-    const closeY = y + (maxPrice - close) * yScale;
+    // Calculate positions relative to y (which is the high price position)
+    const openY = y + (high - open) * ratio;
+    const closeY = y + (high - close) * ratio;
+    const highY = y;
+    const lowY = y + height;
     
     const bodyTop = Math.min(openY, closeY);
     const bodyHeight = Math.abs(openY - closeY);
-    const candleWidth = Math.max(width * 0.7, 3);
+    const candleWidth = Math.max(width * 0.5, 5);
     const wickX = x + width / 2;
     
     return (
       <g>
-        <line x1={wickX} y1={highY} x2={wickX} y2={lowY} stroke={color} strokeWidth={1.5} />
+        <line x1={wickX} y1={highY} x2={wickX} y2={lowY} stroke={color} strokeWidth={1} />
         <rect
           x={x + (width - candleWidth) / 2}
           y={bodyTop}
@@ -517,7 +524,7 @@ export default function AdvancedChart({ asset }) {
                     orientation="right"
                     stroke="#363c4e"
                     tick={{ fill: '#b2b5be', fontSize: 11 }}
-                    domain={chartType === 'candles' ? ['auto', 'auto'] : ['dataMin', 'dataMax']}
+                    domain={['dataMin', 'dataMax']}
                     tickMargin={10}
                     axisLine={false}
                     tickLine={false}
@@ -551,7 +558,7 @@ export default function AdvancedChart({ asset }) {
                   {chartType === 'candles' ? (
                     <Bar
                       yAxisId="price"
-                      dataKey="high"
+                      dataKey="candleRange"
                       shape={<Candlestick />}
                       name="Price"
                       isAnimationActive={false}
