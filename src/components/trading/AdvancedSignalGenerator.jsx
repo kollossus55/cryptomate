@@ -129,17 +129,19 @@ export const generateAdvancedSignal = async (asset, signalConfig = null) => {
     const technicalScore = calculateTechnicalScore(asset);
 
     // Default to 70% Technical + 30% AI Sentiment (new standard)
-    const weights = signalConfig?.weights || {
+    const defaultWeights = {
       technical: 70,
       news: 30,
       social: 0,
       onchain: 0,
       predictive: 0
     };
+    
+    const weights = (signalConfig && signalConfig.weights) ? signalConfig.weights : defaultWeights;
 
     // Calculate weights as decimals
-    const wTech = weights.technical / 100;
-    const wNews = weights.news / 100;
+    const wTech = (weights.technical || 0) / 100;
+    const wNews = (weights.news || 0) / 100;
     const wSocial = (weights.social || 0) / 100;
     const wOnChain = (weights.onchain || 0) / 100;
     const wPred = (weights.predictive || 0) / 100;

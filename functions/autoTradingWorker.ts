@@ -401,7 +401,9 @@ Deno.serve(async (req) => {
     // Fetch AI Signal Config
     const aiConfigs = await base44.asServiceRole.entities.AISignalConfig.list();
     const activeConfig = aiConfigs.find(c => c.is_active) || null;
-    const signalWeights = activeConfig?.weights || { technical: 90, news: 10 };
+    
+    const defaultSignalWeights = { technical: 90, news: 10 };
+    const signalWeights = (activeConfig && activeConfig.weights) ? activeConfig.weights : defaultSignalWeights;
 
     console.log(`⚙️ Signal Logic: Technical ${signalWeights.technical}% + AI Sentiment ${signalWeights.news}%`);
 
