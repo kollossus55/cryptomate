@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -269,6 +269,25 @@ export default function Trading() {
     staleTime: 15000,
     retry: 1,
   });
+
+  // Ref to hold latest data for auto-trading interval
+  const latestDataRef = useRef({
+    autoTradingSettings,
+    portfolio,
+    assets,
+    assetConfidence,
+    hasBackendFunctions
+  });
+
+  useEffect(() => {
+    latestDataRef.current = {
+      autoTradingSettings,
+      portfolio,
+      assets,
+      assetConfidence,
+      hasBackendFunctions
+    };
+  }, [autoTradingSettings, portfolio, assets, assetConfidence, hasBackendFunctions]);
 
   const resetPortfolioMutation = useMutation({
     mutationFn: async () => {
@@ -642,45 +661,50 @@ export default function Trading() {
   }, [autoTradingSettings?.is_enabled, autoTradingSettings?.execution_mode]);
 
   useEffect(() => {
-    if (!autoTradingSettings?.is_enabled || !portfolio || !assets || assets.length === 0) {
-      if (autoTradingSettings?.is_enabled) {
-        console.log('⚠️ Auto-trading enabled but missing requirements:', {
-          hasPortfolio: !!portfolio,
-          hasAssets: assets?.length > 0,
-          confidenceReady: Object.keys(assetConfidence).length > 0
-        });
-      }
-      return;
-    }
-
-    if (Object.keys(assetConfidence).length === 0) {
-      console.log('⏳ Waiting for AI confidence data...');
+    // This effect only starts the interval if enabled. 
+    // Inside the interval, we read from latestDataRef to get fresh data without resetting the interval.
+    
+    if (!autoTradingSettings?.is_enabled) {
       return;
     }
     
-    // Determine if we should run browser-side trading
-    const executionMode = autoTradingSettings.execution_mode || 'auto';
-    const shouldRunBrowserTrading = 
-      executionMode === 'browser' || 
-      (executionMode === 'auto' && !hasBackendFunctions);
-
-    // If backend functions are available AND we are not forcing browser mode, browser-based trading is just for monitoring
-    if (hasBackendFunctions && executionMode !== 'browser') {
-      console.log('✅ Server-side auto-trading active - browser provides monitoring only');
-      return;
-    }
-
-    // If execution mode is 'server' but backend is not available, warn user
-    if (executionMode === 'server' && !hasBackendFunctions) {
-      console.warn('⚠️ Server-only mode selected but backend functions unavailable. Auto-trading paused.');
-      return;
-    }
-
-    console.log(`✅ Auto-trading monitor initialized (${executionMode === 'browser' ? 'Forced Browser Mode' : 'Auto Mode'})`);
-
     const checkAutoTrading = async () => {
-      console.log('\n═══════════════════════════════════════════════════');
-      console.log('🤖 AUTO-TRADING CHECK STARTED');
+      // Use fresh data from ref
+      const { 
+        autoTradingSettings, 
+        portfolio, 
+        assets, 
+        assetConfidence, 
+        hasBackendFunctions 
+      } = latestDataRef.current;
+
+      if (!autoTradingSettings?.is_enabled || !portfolio || !assets || assets.length === 0) {
+        console.log('⚠️ Auto-trading check skipped: Missing requirements');
+        return;
+      }
+
+      if (Object.keys(assetConfidence).length === 0) {
+        console.log('⏳ Auto-trading check delayed: Waiting for AI confidence data...');
+        return;
+      }
+      
+      // Determine if we should run browser-side trading
+      const executionMode = autoTradingSettings.execution_mode || 'auto';
+      
+      // If backend functions are available AND we are not forcing browser mode, browser-based trading is just for monitoring
+      if (hasBackendFunctions && executionMode !== 'browser') {
+        console.log('✅ Server-side auto-trading active - browser provides monitoring only');
+        return;
+      }
+
+      // If execution mode is 'server' but backend is not available, warn user
+      if (executionMode === 'server' && !hasBackendFunctions) {
+        console.warn('⚠️ Server-only mode selected but backend functions unavailable. Auto-trading paused.');
+        return;
+      }
+
+      console.log(`\n═══════════════════════════════════════════════════`);
+      console.log(`🤖 AUTO-TRADING CHECK STARTED (${executionMode === 'browser' ? 'Forced Browser Mode' : 'Auto Mode'})`);
       console.log('═══════════════════════════════════════════════════');
       
       BrowserState.save({
@@ -842,20 +866,18 @@ export default function Trading() {
       }
     };
 
-    console.log('⏱️ Setting up auto-trading interval (60 seconds)');
-    const interval = setInterval(checkAutoTrading, 60000);
-
-    const initialCheck = setTimeout(() => {
-      console.log('🎬 Running initial auto-trading check...');
-      checkAutoTrading();
-    }, 10000);
+    console.log('⏱️ Setting up auto-trading interval (45 seconds)');
+    // Run immediately once
+    checkAutoTrading();
+    
+    // Then every 45 seconds
+    const interval = setInterval(checkAutoTrading, 45000);
 
     return () => {
       console.log('🛑 Stopping auto-trading monitor');
       clearInterval(interval);
-      clearTimeout(initialCheck);
     };
-    }, [autoTradingSettings, portfolio, assets, assetConfidence, hasBackendFunctions]);
+  }, [autoTradingSettings?.is_enabled]); // Only restart if enabled state changes
 
   // Extracted auto-trading logic for manual triggering
   const runBrowserAutoTrading = async () => {
