@@ -308,14 +308,16 @@ export default function TradeHistory() {
                           </div>
                         </div>
                         
-                        {/* P&L Badge (if exists) */}
-                        {profitLoss !== 0 && trade.status === 'completed' && (
+                        {/* P&L Badge (for sell trades) */}
+                        {(profitLoss !== 0 || trade.trade_type === 'sell') && trade.status === 'completed' && (
                           <Badge className={`text-lg px-4 py-2 ${
-                            profitLoss >= 0 
+                            profitLoss > 0 
                               ? 'bg-green-500/20 text-green-400 border-green-500/50' 
-                              : 'bg-red-500/20 text-red-400 border-red-500/50'
+                              : profitLoss < 0
+                              ? 'bg-red-500/20 text-red-400 border-red-500/50'
+                              : 'bg-slate-500/20 text-slate-400 border-slate-500/50'
                           } border-2`}>
-                            {profitLoss >= 0 ? '+' : ''}${Math.abs(profitLoss).toFixed(2)} P&L
+                            {profitLoss > 0 ? '+' : ''}${Math.abs(profitLoss).toFixed(2)} P&L
                           </Badge>
                         )}
                       </div>
@@ -349,9 +351,9 @@ export default function TradeHistory() {
                               <h4 className="text-green-400 font-semibold mb-1">Trade Executed Successfully</h4>
                               <p className="text-slate-300 text-sm">
                                 {trade.trade_type === 'buy' ? 'Bought' : 'Sold'} {quantity.toFixed(6)} {trade.asset_symbol.split('/')[0]} at ${price.toLocaleString()}
-                                {profitLoss !== 0 && (
-                                  <span className={profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
-                                    {' • '}{profitLoss >= 0 ? 'Profit' : 'Loss'}: {profitLoss >= 0 ? '+' : ''}${Math.abs(profitLoss).toFixed(2)}
+                                {(profitLoss !== 0 || trade.trade_type === 'sell') && (
+                                  <span className={profitLoss > 0 ? 'text-green-400' : profitLoss < 0 ? 'text-red-400' : 'text-slate-400'}>
+                                    {' • '}{profitLoss > 0 ? 'Profit' : profitLoss < 0 ? 'Loss' : 'P&L'}: {profitLoss > 0 ? '+' : ''}${Math.abs(profitLoss).toFixed(2)}
                                   </span>
                                 )}
                               </p>
@@ -362,9 +364,9 @@ export default function TradeHistory() {
                               ℹ️ Position opened • Monitor for take profit/stop loss opportunities
                             </p>
                           )}
-                          {trade.trade_type === 'sell' && profitLoss !== 0 && (
+                          {trade.trade_type === 'sell' && (
                             <p className="text-xs text-slate-400 ml-7">
-                              ℹ️ Position closed • Return: {((profitLoss / totalValue) * 100).toFixed(2)}%
+                              ℹ️ Position closed • Return: {(totalValue - profitLoss) > 0 ? ((profitLoss / (totalValue - profitLoss)) * 100).toFixed(2) : '0.00'}%
                             </p>
                           )}
                         </div>
