@@ -280,15 +280,19 @@ export default function Trading() {
           total_profit_loss: 0,
           total_trades: 0
         });
+      }
 
-        if (autoTradingSettings?.id) {
-          await base44.entities.AutoTradingSettings.update(autoTradingSettings.id, {
-            trades_today: 0,
-            daily_loss: 0,
-            last_trade_date: null,
-            assets_traded_today: []
-          });
-        }
+      // Fetch settings directly to ensure we have the latest ID and handle the reset even if UI state is stale
+      const settingsList = await base44.entities.AutoTradingSettings.list();
+      const settings = settingsList[0];
+
+      if (settings?.id) {
+        await base44.entities.AutoTradingSettings.update(settings.id, {
+          trades_today: 0,
+          daily_loss: 0,
+          last_trade_date: null,
+          assets_traded_today: []
+        });
       }
     },
     onSuccess: () => {
