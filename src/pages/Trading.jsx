@@ -1239,6 +1239,29 @@ export default function Trading() {
 
   const totalProfit = trades.reduce((sum, trade) => sum + ((trade.profit_loss || 0)), 0);
 
+  // Combine standard assets with altcoin opportunities to ensure PortfolioCard has prices for all positions
+  const allAssets = React.useMemo(() => {
+    const combined = [...assets];
+    if (altcoinOpportunities && altcoinOpportunities.length > 0) {
+      altcoinOpportunities.forEach(opp => {
+        // Only add if not already in main assets list to prevent duplicates
+        if (!combined.find(a => a.symbol === opp.symbol)) {
+          combined.push({
+            symbol: opp.symbol,
+            name: opp.name,
+            price: opp.simulated_price || 0,
+            change24h: opp.momentum || 0,
+            volume24h: 0,
+            marketCap: opp.marketCap || 0,
+            icon: opp.symbol ? opp.symbol.substring(0, 1) : "?",
+            color: "bg-slate-500"
+          });
+        }
+      });
+    }
+    return combined;
+  }, [assets, altcoinOpportunities]);
+
   const signalCounts = {
     buy: assets.filter(a => window.assetSignalData?.[a.symbol]?.recommendation === 'buy').length,
     sell: assets.filter(a => window.assetSignalData?.[a.symbol]?.recommendation === 'sell').length,
