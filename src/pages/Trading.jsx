@@ -1560,7 +1560,7 @@ export default function Trading() {
           <PortfolioCard
             portfolio={portfolio}
             onClosePosition={handleClosePosition}
-            assets={assets}
+            assets={allAssets}
           />
         </div>
 
