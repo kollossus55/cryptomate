@@ -30,7 +30,18 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [] 
 
   const handleClosePosition = (position) => {
     console.log('🔴 Close Position Button Clicked:', position.asset_symbol);
-    if (window.confirm(`Close position for ${position.asset_symbol}?\n\nQuantity: ${position.quantity?.toFixed(6)}\nUnrealized P&L: ${position.profit_loss >= 0 ? '+' : ''}$${position.profit_loss?.toFixed(2)}`)) {
+    
+    // Calculate live metrics for the confirmation dialog
+    const currentPrice = currentPrices[position.asset_symbol] || position.avg_entry_price;
+    const estimatedPnL = (currentPrice - position.avg_entry_price) * position.quantity;
+    const estimatedValue = position.quantity * currentPrice;
+    
+    if (window.confirm(
+      `Close position for ${position.asset_symbol}?\n\n` +
+      `Quantity: ${position.quantity?.toFixed(6)}\n` +
+      `Current Value: $${estimatedValue.toFixed(2)}\n` +
+      `Unrealized P&L: ${estimatedPnL >= 0 ? '+' : ''}$${estimatedPnL.toFixed(2)}`
+    )) {
       console.log('✅ User confirmed closing position');
       if (onClosePosition) {
         console.log('📞 Calling onClosePosition callback');
