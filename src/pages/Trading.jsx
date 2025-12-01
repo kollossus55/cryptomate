@@ -270,24 +270,7 @@ export default function Trading() {
     retry: 1,
   });
 
-  // Ref to hold latest data for auto-trading interval
-  const latestDataRef = useRef({
-    autoTradingSettings,
-    portfolio,
-    assets,
-    assetConfidence,
-    hasBackendFunctions
-  });
 
-  useEffect(() => {
-    latestDataRef.current = {
-      autoTradingSettings,
-      portfolio,
-      assets,
-      assetConfidence,
-      hasBackendFunctions
-    };
-  }, [autoTradingSettings, portfolio, assets, assetConfidence, hasBackendFunctions]);
 
   const resetPortfolioMutation = useMutation({
     mutationFn: async () => {
@@ -659,6 +642,25 @@ export default function Trading() {
       };
     }
   }, [autoTradingSettings?.is_enabled, autoTradingSettings?.execution_mode]);
+
+  // Ref to hold latest data for auto-trading interval
+  const latestDataRef = useRef({
+    autoTradingSettings,
+    portfolio,
+    assets,
+    assetConfidence,
+    hasBackendFunctions
+  });
+
+  useEffect(() => {
+    latestDataRef.current = {
+      autoTradingSettings,
+      portfolio,
+      assets,
+      assetConfidence,
+      hasBackendFunctions
+    };
+  }, [autoTradingSettings, portfolio, assets, assetConfidence, hasBackendFunctions]);
 
   useEffect(() => {
     // This effect only starts the interval if enabled. 
