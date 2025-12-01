@@ -7,6 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertCircle, TrendingUp, Sparkles, Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import RealTimeMarketDepth from "./RealTimeMarketDepth";
 
 export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecuteTrade, portfolio }) {
   const [quantity, setQuantity] = useState("");
@@ -151,6 +152,9 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
 
         <div className="overflow-y-auto flex-1" style={{ maxHeight: "calc(90vh - 120px)" }}>
           <div className="space-y-6 py-4 px-1">
+          {/* Market Depth Widget */}
+          <RealTimeMarketDepth symbol={asset.symbol} />
+
           {/* Asset Info */}
           <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
             <div className="grid grid-cols-2 gap-4">

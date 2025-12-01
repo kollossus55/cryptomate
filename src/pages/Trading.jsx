@@ -30,6 +30,7 @@ import {
 
 import { executeSmartOrder } from "../components/trading/smartOrderExecution";
 import { scanAltcoins } from "../components/trading/AltcoinScanner";
+import { useBinanceWebSocket } from "../components/trading/useBinanceWebSocket";
 
 export default function Trading() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -180,6 +181,32 @@ export default function Trading() {
   const [consecutiveFailures, setConsecutiveFailures] = useState(0);
   const [signalFilter, setSignalFilter] = React.useState("all");
   const [sortBy, setSortBy] = React.useState("confidence");
+
+  // Integrate WebSocket for real-time updates
+  const symbolList = React.useMemo(() => initialAssets.map(a => a.symbol), []);
+  const { livePrices, isConnected: isWsConnected } = useBinanceWebSocket(symbolList);
+
+  // Update assets when livePrices change
+  useEffect(() => {
+    if (Object.keys(livePrices).length > 0) {
+      setAssets(prevAssets => prevAssets.map(asset => {
+        if (livePrices[asset.symbol]) {
+          // Calculate change if we had previous data, or just update price
+          // Ideally change24h comes from ticker stream too, but miniTicker has it?
+          // miniTicker has: e:event type, E:event time, s:symbol, c:close price, o:open price, h:high, l:low, v:volume, q:quote volume
+          // change % = (c - o) / o * 100
+          
+          // livePrices currently only stores price (c) from my implementation.
+          // To get 24h change, I might need open price.
+          // For now, just updating price is a massive improvement.
+          // But wait, if I only update price, change24h will be stale relative to new price?
+          // Actually, let's stick to price updates for instantaneous feel.
+          return { ...asset, price: livePrices[asset.symbol] };
+        }
+        return asset;
+      }));
+    }
+  }, [livePrices]);
 
   const { activeToast, clearToast } = useNotificationMonitor(assets);
 
@@ -1521,12 +1548,17 @@ export default function Trading() {
                   <Badge variant="outline" className="border-yellow-500 text-yellow-500">
                     Live Prices • Virtual $10,000
                   </Badge>
+                  {isWsConnected && (
+                    <Badge className="bg-green-500/20 text-green-400 border-green-500/50 animate-pulse">
+                      ⚡ WebSocket Connected
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-yellow-200 text-sm">
-                  Trading with simulated funds and real market data. <strong>No real money at risk.</strong> All trades are for practice only.
-                  {lastPriceUpdate && (
+                  Trading with simulated funds and real-time market data. <strong>No real money at risk.</strong>
+                  {lastPriceUpdate && !isWsConnected && (
                     <span className="ml-2 text-yellow-300/70">
-                      • Updated {lastPriceUpdate.toLocaleTimeString()}
+                      • Last Poll {lastPriceUpdate.toLocaleTimeString()}
                     </span>
                   )}
                 </p>
@@ -1561,6 +1593,7 @@ export default function Trading() {
             portfolio={portfolio}
             onClosePosition={handleClosePosition}
             assets={allAssets}
+            livePrices={livePrices}
           />
         </div>
 

@@ -4,13 +4,15 @@ import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Wallet, PieChart, Target, Award, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-export default function PortfolioCard({ portfolio, onClosePosition, assets = [] }) {
+export default function PortfolioCard({ portfolio, onClosePosition, assets = [], livePrices = {} }) {
   if (!portfolio) return null;
   
-  // Create a map of current prices for quick lookup
+  // Create a map of current prices for quick lookup, prioritizing live socket data
   const currentPrices = {};
   assets.forEach(asset => {
-    currentPrices[`${asset.symbol}/USDT`] = asset.price;
+    // If we have a live WebSocket price, use it. Otherwise fall back to asset list price.
+    const livePrice = livePrices[asset.symbol];
+    currentPrices[`${asset.symbol}/USDT`] = livePrice || asset.price;
   });
 
   const totalBalance = portfolio.total_balance || 0;
