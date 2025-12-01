@@ -283,17 +283,19 @@ export default function Trading() {
       }
 
       // Fetch settings directly to ensure we have the latest ID and handle the reset even if UI state is stale
+      // We iterate through ALL settings records to ensure we catch any duplicates or the correct active one
       const settingsList = await base44.entities.AutoTradingSettings.list();
-      const settings = settingsList[0];
-
-      if (settings?.id) {
-        console.log("Resetting auto-trading counters...");
-        await base44.entities.AutoTradingSettings.update(settings.id, {
-          trades_today: 0,
-          daily_loss: 0,
-          last_trade_date: null,
-          assets_traded_today: []
-        });
+      
+      if (settingsList && settingsList.length > 0) {
+        console.log(`Resetting auto-trading counters for ${settingsList.length} settings records...`);
+        await Promise.all(settingsList.map(settings => 
+          base44.entities.AutoTradingSettings.update(settings.id, {
+            trades_today: 0,
+            daily_loss: 0,
+            last_trade_date: null,
+            assets_traded_today: []
+          })
+        ));
       }
 
       // Delete existing trades to fully reset history

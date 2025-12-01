@@ -1059,10 +1059,11 @@ export default function AutoTrading() {
             <AutoTradingDebugPanel
               autoTradingSettings={settings}
               portfolio={portfolio}
-              assets={[]} // We don't fetch live assets here to keep it light
-              assetConfidence={{}} // We don't calculate confidence here
+              assets={[]} 
+              assetConfidence={{}} 
               isEnabled={settings.is_enabled}
-              onManualCheck={null} // Uses server check by default
+              onManualCheck={null}
+              isSettingsPage={true}
             />
           </div>
         )}

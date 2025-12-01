@@ -13,7 +13,8 @@ export default function AutoTradingDebugPanel({
   assets, 
   assetConfidence,
   isEnabled,
-  onManualCheck
+  onManualCheck,
+  isSettingsPage = false
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [logs, setLogs] = useState([]);
@@ -335,7 +336,10 @@ export default function AutoTradingDebugPanel({
   const tradesLimitReached = 
     (autoTradingSettings?.trades_today || 0) >= (autoTradingSettings?.max_trades_per_day || 10);
 
-  const hasRequirements = portfolio && assets && assets.length > 0 && Object.keys(assetConfidence).length > 0;
+  // In settings page, we are more lenient with requirements as we might just be monitoring server-side stats
+  const hasRequirements = isSettingsPage 
+    ? (portfolio && true) 
+    : (portfolio && assets && assets.length > 0 && Object.keys(assetConfidence).length > 0);
 
   const getTimeAgo = (timestamp) => {
     if (!timestamp) return 'Unknown';
@@ -493,35 +497,39 @@ export default function AutoTradingDebugPanel({
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-400">Assets Data</span>
-                    {assets && assets.length > 0 ? (
-                      <Badge className="bg-green-500/20 text-green-400">
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        {assets.length} assets
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-red-500/20 text-red-400">
-                        <XCircle className="w-3 h-3 mr-1" />
-                        No assets
-                      </Badge>
-                    )}
-                  </div>
+                  {!isSettingsPage && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-400">Assets Data</span>
+                        {assets && assets.length > 0 ? (
+                          <Badge className="bg-green-500/20 text-green-400">
+                            <CheckCircle2 className="w-3 h-3 mr-1" />
+                            {assets.length} assets
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-red-500/20 text-red-400">
+                            <XCircle className="w-3 h-3 mr-1" />
+                            No assets
+                          </Badge>
+                        )}
+                      </div>
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-400">AI Confidence</span>
-                    {Object.keys(assetConfidence).length > 0 ? (
-                      <Badge className="bg-green-500/20 text-green-400">
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        {Object.keys(assetConfidence).length} calculated
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-yellow-500/20 text-yellow-400">
-                        <AlertCircle className="w-3 h-3 mr-1" />
-                        Calculating...
-                      </Badge>
-                    )}
-                  </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-400">AI Confidence</span>
+                        {Object.keys(assetConfidence).length > 0 ? (
+                          <Badge className="bg-green-500/20 text-green-400">
+                            <CheckCircle2 className="w-3 h-3 mr-1" />
+                            {Object.keys(assetConfidence).length} calculated
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-yellow-500/20 text-yellow-400">
+                            <AlertCircle className="w-3 h-3 mr-1" />
+                            Calculating...
+                          </Badge>
+                        )}
+                      </div>
+                    </>
+                  )}
 
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-400">Market Condition</span>
