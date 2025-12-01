@@ -100,27 +100,13 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
     };
   }, [isMinimized]); // Only re-run when minimize state changes
 
-  // Inactivity auto-close timer
+  // Inactivity auto-close timer - DISABLED for continuous monitoring
   useEffect(() => {
-    const resetInactivityTimer = () => {
-      if (inactivityTimerRef.current) {
-        clearTimeout(inactivityTimerRef.current);
-      }
-
-      inactivityTimerRef.current = setTimeout(() => {
-        console.log('⏰ Auto-closing due to inactivity');
-        handleClose();
-      }, INACTIVITY_TIMEOUT);
-    };
-
-    resetInactivityTimer();
-
-    return () => {
-      if (inactivityTimerRef.current) {
-        clearTimeout(inactivityTimerRef.current);
-      }
-    };
-  }, [lastInteractionTime]);
+    // We want the popup to stay open for passive monitoring
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+  }, []);
 
   const handleUserInteraction = () => {
     setLastInteractionTime(Date.now());
