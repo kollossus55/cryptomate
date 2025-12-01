@@ -287,12 +287,20 @@ export default function Trading() {
       const settings = settingsList[0];
 
       if (settings?.id) {
+        console.log("Resetting auto-trading counters...");
         await base44.entities.AutoTradingSettings.update(settings.id, {
           trades_today: 0,
           daily_loss: 0,
           last_trade_date: null,
           assets_traded_today: []
         });
+      }
+
+      // Delete existing trades to fully reset history
+      console.log("Deleting trade history...");
+      const allTrades = await base44.entities.Trade.list(null, 100); 
+      if (allTrades && allTrades.length > 0) {
+        await Promise.all(allTrades.map(trade => base44.entities.Trade.delete(trade.id)));
       }
     },
     onSuccess: () => {
