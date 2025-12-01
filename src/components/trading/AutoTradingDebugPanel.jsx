@@ -324,6 +324,16 @@ export default function AutoTradingDebugPanel({
     }
   };
 
+  const getLogBadgeStyle = (type) => {
+    switch(type) {
+      case 'error': return 'text-red-400 border-red-500/50 bg-red-500/10';
+      case 'warning': return 'text-yellow-400 border-yellow-500/50 bg-yellow-500/10';
+      case 'success': return 'text-green-400 border-green-500/50 bg-green-500/10';
+      case 'opportunity': return 'text-indigo-400 border-indigo-500/50 bg-indigo-500/10';
+      default: return 'text-slate-400 border-slate-500/50 bg-slate-500/10';
+    }
+  };
+
   // Get top 5 assets by confidence
   const topAssets = Object.entries(assetConfidence || {})
     .sort(([, a], [, b]) => b - a)
@@ -721,8 +731,8 @@ export default function AutoTradingDebugPanel({
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-xs text-slate-400 font-mono">{log.timestamp}</span>
-                              <Badge variant="outline" className="text-xs">
-                                {log.type}
+                              <Badge variant="outline" className={`text-xs ${getLogBadgeStyle(log.type)}`}>
+                                {log.type.toUpperCase()}
                               </Badge>
                             </div>
                             <p className="text-xs text-slate-300 break-words">{log.message}</p>
