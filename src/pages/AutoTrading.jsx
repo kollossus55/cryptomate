@@ -8,8 +8,9 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Sparkles, AlertTriangle, Shield, Zap, CheckCircle, Settings, TrendingUp, Target, AlertCircle, Clock, Server, Globe } from "lucide-react"; // Added AlertCircle and Clock icons
+import { Sparkles, AlertTriangle, Shield, Zap, CheckCircle, Settings, TrendingUp, Target, AlertCircle, Clock, Server, Globe, Activity, PlayCircle } from "lucide-react"; // Added AlertCircle and Clock icons
 import { Checkbox } from "@/components/ui/checkbox";
+import AutoTradingDebugPanel from "../components/trading/AutoTradingDebugPanel";
 
 export default function AutoTrading() {
   const [settings, setSettings] = useState({
@@ -59,6 +60,14 @@ export default function AutoTrading() {
     queryFn: async () => {
       const result = await base44.entities.AutoTradingSettings.list();
       return result[0]; // Assuming only one set of auto-trading settings per user
+    },
+  });
+
+  const { data: portfolio } = useQuery({
+    queryKey: ['portfolio'],
+    queryFn: async () => {
+      const result = await base44.entities.Portfolio.list();
+      return result[0] || null;
     },
   });
 
@@ -1020,7 +1029,7 @@ export default function AutoTrading() {
         </Card>
 
         {/* Save Button */}
-        <div className="mt-8 flex gap-4">
+        <div className="mt-8 flex gap-4 mb-12">
           <Button
             onClick={handleSave}
             disabled={saveSettingsMutation.isPending}
@@ -1030,6 +1039,33 @@ export default function AutoTrading() {
             {saveSettingsMutation.isPending ? 'Saving...' : 'Save Settings'}
           </Button>
         </div>
+
+        {/* Debug Panel for Testing */}
+        {settings.id && (
+          <div className="mt-12 pt-8 border-t border-slate-800">
+            <div className="flex items-center gap-2 mb-6">
+              <Activity className="w-6 h-6 text-indigo-400" />
+              <h2 className="text-2xl font-bold text-white">Live Monitoring & Testing</h2>
+            </div>
+            <p className="text-slate-400 mb-6">
+              Monitor your auto-trading activity in real-time. 
+              {settings.execution_mode === 'browser' && (
+                <span className="text-yellow-400 ml-1">
+                  Note: For browser-based trading to execute, you must keep the <strong>Trading Dashboard</strong> open.
+                </span>
+              )}
+            </p>
+            
+            <AutoTradingDebugPanel
+              autoTradingSettings={settings}
+              portfolio={portfolio}
+              assets={[]} // We don't fetch live assets here to keep it light
+              assetConfidence={{}} // We don't calculate confidence here
+              isEnabled={settings.is_enabled}
+              onManualCheck={null} // Uses server check by default
+            />
+          </div>
+        )}
       </div>
     </div>
   );
