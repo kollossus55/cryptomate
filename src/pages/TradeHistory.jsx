@@ -96,6 +96,10 @@ export default function TradeHistory() {
                 Trade History
               </h1>
               <p className="text-slate-400">View and analyze your trading activity</p>
+              <div className="flex items-center gap-2 mt-2 text-xs text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-lg border border-indigo-500/20 w-fit">
+                <Sparkles className="w-3 h-3" />
+                <span>Auto-trading will automatically add sell trades here when profit targets are met</span>
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
