@@ -239,10 +239,17 @@ Deno.serve(async (req) => {
 
     // Sort by score and pick top 1
     opportunities.sort((a, b) => b.score - a.score);
+    
+    // Log top candidates for debugging
+    console.log('📋 Top 3 Candidates:');
+    opportunities.slice(0, 3).forEach((opp, i) => 
+      console.log(`   #${i+1} ${opp.symbol}: Score ${opp.score}`)
+    );
+
     const bestOpp = opportunities[0];
 
     if (bestOpp) {
-      console.log(`🎯 Best Opportunity: ${bestOpp.symbol} (Score: ${bestOpp.score})`);
+      console.log(`🎯 Best Opportunity Selected: ${bestOpp.symbol} (Score: ${bestOpp.score})`);
       
       // 5. AI Confirmation (Optional but recommended)
       // We only use AI if score is borderline (e.g. 70-80). If >85, we just buy.
