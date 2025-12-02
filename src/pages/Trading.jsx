@@ -1505,7 +1505,7 @@ export default function Trading() {
           </div>
         )}
 
-        <BackendMigrationGuide />
+        <BackendMigrationGuide isActive={hasBackendFunctions} />
 
         <AutoTradingDebugPanel
           autoTradingSettings={autoTradingSettings}

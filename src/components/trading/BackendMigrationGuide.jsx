@@ -15,11 +15,94 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function BackendMigrationGuide() {
+export default function BackendMigrationGuide({ isActive }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
+  if (isActive) {
+    return (
+      <Card className="bg-gradient-to-br from-slate-900 to-slate-800 border-green-500/30 mb-6">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center">
+                <Server className="w-5 h-5 text-green-400" />
+              </div>
+              <div>
+                <CardTitle className="text-white flex items-center gap-2">
+                  Backend Trading Active
+                  <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
+                    Live 24/7
+                  </Badge>
+                </CardTitle>
+                <p className="text-xs text-slate-400 mt-1">
+                  Server-side trading functions are running automatically
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="text-slate-400 hover:text-white"
+            >
+              {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </Button>
+          </div>
+        </CardHeader>
+
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+            >
+              <CardContent className="space-y-6">
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle2 className="w-5 h-5 text-green-400" />
+                    <h4 className="font-semibold text-white">System Fully Operational</h4>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock className="w-4 h-4 text-green-400" />
+                        <span className="text-white font-medium text-sm">True 24/7</span>
+                      </div>
+                      <p className="text-xs text-slate-300">
+                        Trading continues while you sleep or are offline
+                      </p>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Zap className="w-4 h-4 text-green-400" />
+                        <span className="text-white font-medium text-sm">Reliable</span>
+                      </div>
+                      <p className="text-xs text-slate-300">
+                        Server-grade execution without browser dependency
+                      </p>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Shield className="w-4 h-4 text-green-400" />
+                        <span className="text-white font-medium text-sm">Secure</span>
+                      </div>
+                      <p className="text-xs text-slate-300">
+                        Running in a secure backend environment
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </Card>
+    );
+  }
+
   return (
-    <Card className="bg-gradient-to-br from-slate-900 to-slate-800 border-indigo-500/30">
+    <Card className="bg-gradient-to-br from-slate-900 to-slate-800 border-indigo-500/30 mb-6">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
