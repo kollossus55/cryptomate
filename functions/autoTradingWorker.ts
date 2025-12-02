@@ -45,6 +45,10 @@ function calculateMomentumScore(asset) {
   // This ensures we don't get stuck with identical scores every run
   score += (Math.random() * 10) - 5;
 
+  // 6. Altcoin Bonus (Lower Market Cap = Higher Potential Volatility/Reward)
+  // Give a small boost to mid-cap altcoins to ensure they surface
+  if (mcap < 1000000000 && mcap > 50000000) score += 5; 
+
   return Math.min(95, Math.max(20, Math.round(score)));
 }
 
@@ -125,7 +129,8 @@ Deno.serve(async (req) => {
     let idToSymbolMap = {};
     
     try {
-      console.log(`🔍 Fetching top ${TOP_ASSETS_COUNT} crypto assets...`);
+      // Combined scan: Top 250 by Market Cap + Top Gainers check logic via sorting later
+      console.log(`🔍 Fetching top ${TOP_ASSETS_COUNT} crypto assets for opportunities...`);
       const resp = await fetch(
         `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${TOP_ASSETS_COUNT}&page=1&sparkline=false`,
         { headers: { 'Accept': 'application/json' } }
