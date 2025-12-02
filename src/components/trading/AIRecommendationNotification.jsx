@@ -140,8 +140,11 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
 
       // Combine main assets with altcoin opportunities
       let combinedAssets = [...currentAssets];
+      const altcoinSymbols = new Set();
+      
       if (window.altcoinOpportunities && window.altcoinOpportunities.length > 0) {
         window.altcoinOpportunities.forEach(opp => {
+          altcoinSymbols.add(opp.symbol);
           if (!combinedAssets.find(a => a.symbol === opp.symbol)) {
             combinedAssets.push({
               symbol: opp.symbol,
@@ -157,25 +160,42 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
         });
       }
 
-      // Apply user preference filters
-      let topAssets = combinedAssets.slice(0, 10);
-
-      // Filter by user preferences if available
-      if (userPreferences) {
-        const prefs = userPreferences;
-
-        // Exclude assets the user doesn't want
-        if (prefs.excluded_assets && prefs.excluded_assets.length > 0) {
-          topAssets = topAssets.filter(a => !prefs.excluded_assets.includes(a.symbol));
-        }
-
-        // Prioritize preferred assets
-        if (prefs.preferred_assets && prefs.preferred_assets.length > 0) {
-          const preferred = topAssets.filter(a => prefs.preferred_assets.includes(a.symbol));
-          const others = topAssets.filter(a => !prefs.preferred_assets.includes(a.symbol));
-          topAssets = [...preferred, ...others].slice(0, 10);
-        }
+      // Filter by user preferences FIRST to remove unwanted assets
+      if (userPreferences?.excluded_assets?.length > 0) {
+        combinedAssets = combinedAssets.filter(a => !userPreferences.excluded_assets.includes(a.symbol));
       }
+
+      // Score and sort assets to find best candidates for AI analysis
+      // We want to mix major coins with high-potential altcoins
+      const scoredAssets = combinedAssets.map(asset => {
+        let score = 0;
+        
+        // Base score for volatility/momentum (absolute change)
+        score += Math.abs(asset.change24h || 0) * 2;
+        
+        // Boost for altcoin opportunities
+        if (altcoinSymbols.has(asset.symbol)) {
+          score += 50; // High priority for scanned opportunities
+        }
+        
+        // Boost for preferred assets
+        if (userPreferences?.preferred_assets?.includes(asset.symbol)) {
+          score += 30;
+        }
+        
+        // Boost for high volume (logarithmic to avoid skewing too much)
+        if (asset.volume24h > 0) {
+          score += Math.log10(asset.volume24h);
+        }
+
+        return { asset, score };
+      });
+
+      // Sort by score descending and take top 10
+      let topAssets = scoredAssets
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10)
+        .map(item => item.asset);
       
       const assetsData = topAssets.map(asset => {
         const signalData = window.assetSignalData?.[asset.symbol];
