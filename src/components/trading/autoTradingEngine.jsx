@@ -484,9 +484,13 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
         details: trailingStop
       };
     }
-  }
-  
-  // Buy signal: positive momentum + high confidence
+
+    // If we have a position but no sell/update action, we hold.
+    // Do NOT fall through to buy logic (prevents duplicate positions)
+    return { action: null, reason: 'position_exists_hold' };
+    }
+
+    // Buy signal: positive momentum + high confidence
   // BUT check if we've already traded this asset today
   if (priceChange > 0.5 && confidence >= minConfidence) {
     if (hasAssetBeenTradedToday(asset.symbol, settings)) {
