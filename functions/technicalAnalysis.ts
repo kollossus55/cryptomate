@@ -8,20 +8,32 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
 // Fetch historical OHLCV data from CoinGecko
 async function fetchHistoricalData(coinId, days = 30) {
   try {
-    const response = await fetch(
+    // Fetch Market Chart (Prices/Volumes)
+    const marketChartPromise = fetch(
       `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}&interval=daily`,
       { headers: { 'Accept': 'application/json' } }
     );
+
+    // Fetch OHLC (Open, High, Low, Close) for better precision
+    const ohlcPromise = fetch(
+      `https://api.coingecko.com/api/v3/coins/${coinId}/ohlc?vs_currency=usd&days=${days}`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+
+    const [marketRes, ohlcRes] = await Promise.all([marketChartPromise, ohlcPromise]);
     
-    if (!response.ok) {
-      console.warn(`Failed to fetch history for ${coinId}: ${response.status}`);
-      return null;
+    if (!marketRes.ok) return null;
+    const marketData = await marketRes.json();
+
+    let ohlcData = [];
+    if (ohlcRes.ok) {
+      ohlcData = await ohlcRes.json();
     }
-    
-    const data = await response.json();
+
     return {
-      prices: data.prices || [],
-      volumes: data.total_volumes || []
+      prices: marketData.prices || [],
+      volumes: marketData.total_volumes || [],
+      ohlc: ohlcData // [time, open, high, low, close]
     };
   } catch (error) {
     console.error(`Error fetching historical data for ${coinId}:`, error.message);
@@ -48,6 +60,48 @@ function calculateEMA(prices, period) {
   }
   
   return ema;
+}
+
+// Calculate Stochastic Oscillator
+function calculateStochastic(ohlc, period = 14) {
+  if (!ohlc || ohlc.length < period) return null;
+  
+  // OHLC format: [time, open, high, low, close]
+  // We need the last 'period' candles
+  const recent = ohlc.slice(-period);
+  const current = recent[recent.length - 1];
+  const currentClose = current[4];
+  
+  // Find Lowest Low and Highest High in period
+  const lowestLow = Math.min(...recent.map(c => c[3]));
+  const highestHigh = Math.max(...recent.map(c => c[2]));
+  
+  if (highestHigh === lowestLow) return 50;
+  
+  const k = ((currentClose - lowestLow) / (highestHigh - lowestLow)) * 100;
+  return k;
+}
+
+// Calculate On-Balance Volume (OBV)
+function calculateOBV(prices, volumes) {
+  if (!prices || !volumes || prices.length !== volumes.length) return null;
+  if (prices.length < 2) return 0;
+  
+  let obv = 0;
+  // Start from index 1
+  for (let i = 1; i < prices.length; i++) {
+    const currentPrice = prices[i];
+    const prevPrice = prices[i-1];
+    const volume = volumes[i]; // Assuming volumes aligned
+    
+    if (currentPrice > prevPrice) {
+      obv += volume;
+    } else if (currentPrice < prevPrice) {
+      obv -= volume;
+    }
+    // If equal, obv stays same
+  }
+  return obv;
 }
 
 // Calculate RSI (Relative Strength Index)
@@ -240,11 +294,20 @@ export async function analyzeAsset(coinId, symbol) {
   const rsi = calculateRSI(prices, 14);
   const macd = calculateMACD(prices);
   const bollinger = calculateBollingerBands(prices, 20);
-  const atr = calculateATR(null, null, prices, 14);
+  const atr = calculateATR(
+    historical.ohlc?.map(c => c[2]), // Highs
+    historical.ohlc?.map(c => c[3]), // Lows
+    prices, 
+    14
+  );
   const supportResistance = detectSupportResistance(prices);
   const trend = determineTrend(prices);
   const volumeAnalysis = analyzeVolume(volumes);
   
+  // New Indicators
+  const stochastic = calculateStochastic(historical.ohlc, 14);
+  const obv = calculateOBV(prices, volumes);
+
   // Calculate momentum (7-day price change)
   const priceChange7d = prices.length >= 7 
     ? ((currentPrice - prices[prices.length - 7]) / prices[prices.length - 7]) * 100 
@@ -275,6 +338,10 @@ export async function analyzeAsset(coinId, symbol) {
     atr,
     volatilityPercent,
     bollinger,
+
+    // Advanced
+    stochastic,
+    obv,
     
     // Support/Resistance
     supportResistance,
@@ -395,6 +462,27 @@ export function generateSignal(analysis) {
   } else if (analysis.volatilityPercent < 3) {
     buyScore += 5;
     reasons.push('Low volatility environment');
+  }
+
+  // 8. STOCHASTIC OSCILLATOR (Weight: 10%)
+  if (analysis.stochastic !== null) {
+    if (analysis.stochastic < 20) {
+      buyScore += 15;
+      reasons.push(`Stochastic oversold (${analysis.stochastic.toFixed(0)})`);
+    } else if (analysis.stochastic > 80) {
+      sellScore += 15;
+      reasons.push(`Stochastic overbought (${analysis.stochastic.toFixed(0)})`);
+    }
+  }
+
+  // 9. ON-BALANCE VOLUME (Weight: 5%)
+  if (analysis.obv !== null && analysis.trend === 'uptrend') {
+    // Checking if OBV is trending up would require historical OBV, 
+    // simplified check: if positive volume flow matches price
+    if (analysis.volumeAnalysis?.trend === 'increasing') {
+      buyScore += 5;
+      reasons.push('Strong volume support (OBV)');
+    }
   }
   
   // Calculate final scores

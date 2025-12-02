@@ -251,12 +251,39 @@ Deno.serve(async (req) => {
     if (bestOpp) {
       console.log(`🎯 Best Opportunity Selected: ${bestOpp.symbol} (Score: ${bestOpp.score})`);
       
-      // 5. AI Confirmation (Optional but recommended)
-      // We only use AI if score is borderline (e.g. 70-80). If >85, we just buy.
       let confirmed = true;
-      let aiReason = "Strong Technicals";
-      
-      if (bestOpp.score < 85) {
+      let tradeReason = "Strong Technicals";
+
+      // 5. Deep Technical Analysis (RSI, MACD, Stochastic, OBV)
+      // We perform this ONLY on the best candidate to ensure strongest signal without rate limiting
+      try {
+        console.log(`🔬 Running Deep Technical Analysis for ${bestOpp.symbol}...`);
+        
+        // Call technicalAnalysis function internally or via invoke
+        const techRes = await base44.functions.invoke('technicalAnalysis', {
+          coinId: bestOpp.data.id || bestOpp.symbol.toLowerCase(), // ID is needed for history
+          symbol: bestOpp.symbol
+        });
+        
+        if (techRes.data && techRes.data.success && techRes.data.signal) {
+          const techSignal = techRes.data.signal;
+          console.log(`📊 Technical Signal: ${techSignal.signal.toUpperCase()} (Conf: ${techSignal.confidence}%)`);
+          console.log(`   Reasons: ${techSignal.reasons.join(', ')}`);
+          
+          if (techSignal.signal === 'sell' || techSignal.signal === 'strong_sell' || techSignal.confidence < 40) {
+            confirmed = false;
+            console.log(`⛔ Technical Analysis Vetoed: ${techSignal.signal}`);
+          } else {
+            // Append technical reasons
+            tradeReason += ` + Tech: ${techSignal.signal} (${techSignal.confidence}%)`;
+          }
+        }
+      } catch (err) {
+        console.warn('Technical analysis check skipped/failed:', err.message);
+      }
+
+      // 6. AI Sentiment Confirmation (if still confirmed)
+      if (confirmed && bestOpp.score < 85) {
         const aiRes = await analyzeAISentiment(base44, bestOpp.symbol, bestOpp.data);
         console.log(`🤖 AI Analysis for ${bestOpp.symbol}: ${aiRes.sentiment} (${aiRes.confidence}%)`);
         
@@ -264,7 +291,7 @@ Deno.serve(async (req) => {
           confirmed = false;
           console.log('⛔ AI Vetoed trade');
         } else {
-          aiReason = `AI: ${aiRes.sentiment} (${aiRes.confidence}%)`;
+          tradeReason += ` + AI: ${aiRes.sentiment}`;
         }
       }
 
