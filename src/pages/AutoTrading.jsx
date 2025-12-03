@@ -8,7 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Sparkles, AlertTriangle, Shield, Zap, CheckCircle, Settings, TrendingUp, Target, AlertCircle, Clock, Server, Globe, Activity, PlayCircle } from "lucide-react"; // Added AlertCircle and Clock icons
+import { Sparkles, AlertTriangle, Shield, Zap, CheckCircle, Settings, TrendingUp, Target, AlertCircle, Clock, Server, Globe, Activity, PlayCircle, Calendar, Layers } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import AutoTradingDebugPanel from "../components/trading/AutoTradingDebugPanel";
 
@@ -51,6 +51,19 @@ export default function AutoTrading() {
     twap_threshold_percent: 5, // Use TWAP for trades larger than this % of portfolio
     twap_duration_minutes: 15, // Time to execute all TWAP orders
     twap_num_orders: 5, // Split trade into this many orders
+    // NEW: DCA Settings
+    dca_enabled: false,
+    dca_multiplier: 1.5,
+    dca_dip_threshold: 5,
+    max_dca_buys: 3,
+    // NEW: Trading Schedule
+    trading_schedule: {
+      enabled: false,
+      days: ["mon", "tue", "wed", "thu", "fri"],
+      start_hour: 9,
+      end_hour: 17,
+      timezone: "UTC"
+    }
   });
 
   const queryClient = useQueryClient();
@@ -118,6 +131,19 @@ export default function AutoTrading() {
         twap_threshold_percent: savedSettings.twap_threshold_percent ?? 5,
         twap_duration_minutes: savedSettings.twap_duration_minutes ?? 15,
         twap_num_orders: savedSettings.twap_num_orders ?? 5,
+        // NEW: DCA Settings
+        dca_enabled: savedSettings.dca_enabled ?? false,
+        dca_multiplier: savedSettings.dca_multiplier ?? 1.5,
+        dca_dip_threshold: savedSettings.dca_dip_threshold ?? 5,
+        max_dca_buys: savedSettings.max_dca_buys ?? 3,
+        // NEW: Trading Schedule
+        trading_schedule: savedSettings.trading_schedule || {
+          enabled: false,
+          days: ["mon", "tue", "wed", "thu", "fri"],
+          start_hour: 9,
+          end_hour: 17,
+          timezone: "UTC"
+        }
       }));
     }
   }, [savedSettings]);
@@ -764,6 +790,178 @@ export default function AutoTrading() {
               </div>
             </div>
 
+          </CardContent>
+        </Card>
+
+        {/* DCA Strategy */}
+        <Card className="bg-slate-800 border-2 border-purple-500/50 mt-6 shadow-[0_0_15px_rgba(168,85,247,0.15)]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-purple-100">
+              <Layers className="w-5 h-5 text-purple-400" />
+              Dollar-Cost Averaging (DCA)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-purple-500/30">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="text-purple-100 font-semibold flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-purple-400" />
+                    DCA on Dips
+                  </h4>
+                  <p className="text-xs text-purple-400/60 mt-1">
+                    Automatically add to positions when price drops
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.dca_enabled}
+                  onCheckedChange={(checked) => setSettings({...settings, dca_enabled: checked})}
+                  className="data-[state=checked]:bg-purple-500"
+                />
+              </div>
+              
+              {settings.dca_enabled && (
+                <div className="space-y-4 pt-4 border-t border-purple-500/20">
+                  <div>
+                    <Label className="text-purple-200 mb-2 block">
+                      Dip Threshold: <span className="text-purple-400 font-bold">-{settings.dca_dip_threshold}%</span>
+                    </Label>
+                    <Slider
+                      value={[settings.dca_dip_threshold]}
+                      onValueChange={(value) => setSettings({...settings, dca_dip_threshold: value[0]})}
+                      min={1}
+                      max={20}
+                      step={0.5}
+                      className="mb-2 [&>.relative>.bg-primary]:bg-purple-500 [&>.block]:border-purple-500"
+                    />
+                    <p className="text-xs text-purple-400/60">Buy more when price drops by this amount</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-purple-200 mb-2 block">
+                      Buy Multiplier: <span className="text-purple-400 font-bold">{settings.dca_multiplier}x</span>
+                    </Label>
+                    <Slider
+                      value={[settings.dca_multiplier]}
+                      onValueChange={(value) => setSettings({...settings, dca_multiplier: value[0]})}
+                      min={1}
+                      max={3}
+                      step={0.1}
+                      className="mb-2 [&>.relative>.bg-primary]:bg-purple-500 [&>.block]:border-purple-500"
+                    />
+                    <p className="text-xs text-purple-400/60">Multiply original trade size (e.g. 1.5x)</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-purple-200 mb-2 block">
+                      Max DCA Buys: <span className="text-purple-400 font-bold">{settings.max_dca_buys}</span>
+                    </Label>
+                    <Slider
+                      value={[settings.max_dca_buys]}
+                      onValueChange={(value) => setSettings({...settings, max_dca_buys: value[0]})}
+                      min={1}
+                      max={10}
+                      step={1}
+                      className="mb-2 [&>.relative>.bg-primary]:bg-purple-500 [&>.block]:border-purple-500"
+                    />
+                    <p className="text-xs text-purple-400/60">Max times to add to a single position</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Trading Schedule */}
+        <Card className="bg-slate-800 border-2 border-blue-500/50 mt-6 shadow-[0_0_15px_rgba(59,130,246,0.15)]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-100">
+              <Calendar className="w-5 h-5 text-blue-400" />
+              Trading Schedule (Server-Side)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-blue-500/30">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="text-blue-100 font-semibold flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-blue-400" />
+                    Active Hours & Days
+                  </h4>
+                  <p className="text-xs text-blue-400/60 mt-1">
+                    Limit trading to specific times (UTC)
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.trading_schedule?.enabled}
+                  onCheckedChange={(checked) => setSettings({
+                    ...settings, 
+                    trading_schedule: { ...settings.trading_schedule, enabled: checked }
+                  })}
+                  className="data-[state=checked]:bg-blue-500"
+                />
+              </div>
+              
+              {settings.trading_schedule?.enabled && (
+                <div className="space-y-4 pt-4 border-t border-blue-500/20">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-blue-200 mb-2 block">Start Hour (UTC)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={settings.trading_schedule.start_hour}
+                        onChange={(e) => setSettings({
+                          ...settings,
+                          trading_schedule: { ...settings.trading_schedule, start_hour: parseInt(e.target.value) || 0 }
+                        })}
+                        className="bg-slate-800 border-blue-500/30 text-white"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-blue-200 mb-2 block">End Hour (UTC)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={settings.trading_schedule.end_hour}
+                        onChange={(e) => setSettings({
+                          ...settings,
+                          trading_schedule: { ...settings.trading_schedule, end_hour: parseInt(e.target.value) || 0 }
+                        })}
+                        className="bg-slate-800 border-blue-500/30 text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-blue-200 mb-2 block">Active Days</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map(day => (
+                        <div key={day} className="flex items-center gap-2">
+                          <Checkbox
+                            checked={settings.trading_schedule.days.includes(day)}
+                            onCheckedChange={(checked) => {
+                              const currentDays = settings.trading_schedule.days;
+                              const newDays = checked 
+                                ? [...currentDays, day]
+                                : currentDays.filter(d => d !== day);
+                              setSettings({
+                                ...settings,
+                                trading_schedule: { ...settings.trading_schedule, days: newDays }
+                              });
+                            }}
+                            className="border-blue-500 data-[state=checked]:bg-blue-500"
+                          />
+                          <span className="text-sm uppercase text-slate-300">{day}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 

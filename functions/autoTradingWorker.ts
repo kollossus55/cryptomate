@@ -113,6 +113,24 @@ Deno.serve(async (req) => {
     
     // 1. Circuit Breaker & Limits
     if (!settings.is_enabled) return Response.json({ success: true, reason: 'disabled' });
+
+    // Schedule Check
+    if (settings.trading_schedule?.enabled) {
+      const now = new Date();
+      const currentHour = now.getUTCHours();
+      const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+      const currentDay = days[now.getUTCDay()];
+
+      if (!settings.trading_schedule.days.includes(currentDay)) {
+        console.log(`🛑 Trading paused: ${currentDay} not in schedule`);
+        return Response.json({ success: true, reason: 'schedule_day_paused' });
+      }
+
+      if (currentHour < settings.trading_schedule.start_hour || currentHour >= settings.trading_schedule.end_hour) {
+        console.log(`🛑 Trading paused: Outside hours (${currentHour} UTC)`);
+        return Response.json({ success: true, reason: 'schedule_hour_paused' });
+      }
+    }
     
     if ((settings.daily_loss || 0) >= (settings.max_daily_loss_percent || 5)) {
       console.log('🛑 Circuit breaker active');
@@ -188,10 +206,39 @@ Deno.serve(async (req) => {
         
         let sellReason = null;
         
+        // 3.1 Trailing Stop Logic
+        let trailingStopTriggered = false;
+        let highestPrice = position.highest_price || position.avg_entry_price;
+        
+        // Update highest price if current is higher
+        if (currentPrice > highestPrice) {
+          highestPrice = currentPrice;
+          // We'll update this in the DB via executeTrade (if selling) or position update logic (not implemented here yet for just update)
+          // For now, we assume position update happens on sell or buy.
+          // Ideally we should update position highest_price in DB periodically, but for serverless workers, we can just calculate it relative to 'highest_price' stored.
+          // Limitation: If we don't write back highest_price, trailing stop resets every run.
+          // FIX: We need to update the position record if new high is reached.
+        }
+
+        if (settings.use_trailing_stop && pnlPercent >= (settings.trailing_stop_activation || 3)) {
+          const trailingStopPrice = highestPrice * (1 - (settings.trailing_stop_percent || 2) / 100);
+          if (currentPrice < trailingStopPrice) {
+            sellReason = 'trailing_stop';
+            trailingStopTriggered = true;
+          }
+        }
+
+        // Dynamic Take Profit based on market volatility (approximated by 24h change magnitude)
+        let targetProfit = settings.take_profit_percent || 8;
+        if (Math.abs(data.usd_24h_change) > 10) {
+          // High volatility - aim higher
+          targetProfit = targetProfit * 1.5; 
+        }
+
         // Stop Loss
         if (pnlPercent <= -(settings.stop_loss_percent || 3)) sellReason = 'stop_loss';
         // Take Profit
-        else if (pnlPercent >= (settings.take_profit_percent || 8)) sellReason = 'take_profit';
+        else if (pnlPercent >= targetProfit) sellReason = 'take_profit';
         
         if (sellReason) {
           console.log(`📉 SELLING ${symbol}: ${sellReason} (${pnlPercent.toFixed(2)}%)`);
@@ -200,6 +247,49 @@ Deno.serve(async (req) => {
             symbol, action: 'sell', quantity: position.quantity, price: currentPrice, reason: sellReason, pnl: pnlPercent
           });
           return Response.json({ success: true, executed: true, type: 'sell', symbol });
+        }
+
+        // 3.2 DCA Logic (Buy the dip on existing positions)
+        if (settings.dca_enabled && !sellReason) {
+          const dipThreshold = settings.dca_dip_threshold || 5;
+          if (pnlPercent <= -dipThreshold) {
+            const dcaCount = position.dca_count || 0;
+            const maxDCA = settings.max_dca_buys || 3;
+            
+            if (dcaCount < maxDCA) {
+              console.log(`📉 DCA Opportunity for ${symbol}: Down ${pnlPercent.toFixed(2)}%`);
+              
+              // Calculate DCA amount
+              const multiplier = settings.dca_multiplier || 1.5;
+              const lastBuyValue = position.current_value / (dcaCount + 1); // Approx
+              const dcaValue = Math.min(portfolio.available_balance, 5000, (position.current_value * 0.5) * multiplier); // Safety cap
+              
+              if (dcaValue > 10) {
+                const dcaQuantity = dcaValue / currentPrice;
+                console.log(`🚀 DCA BUYING ${symbol}: ${dcaQuantity.toFixed(4)} @ $${currentPrice}`);
+                
+                await executeTrade(base44, user_email, portfolio, settings, {
+                  symbol, 
+                  action: 'buy', 
+                  quantity: dcaQuantity, 
+                  price: currentPrice, 
+                  reason: `DCA Dip Buy #${dcaCount + 1} (Down ${pnlPercent.toFixed(2)}%)`,
+                  confidence: 80, // High confidence for DCA usually
+                  isDCA: true
+                });
+                return Response.json({ success: true, executed: true, type: 'dca_buy', symbol });
+              }
+            }
+          }
+        }
+
+        // Update highest price in DB if changed (and no trade happened)
+        if (highestPrice > (position.highest_price || 0)) {
+           // Silent update of position high water mark
+           const newPositions = portfolio.positions.map(p => 
+             p.asset_symbol === position.asset_symbol ? { ...p, highest_price: highestPrice } : p
+           );
+           await base44.asServiceRole.entities.Portfolio.update(portfolio.id, { positions: newPositions });
         }
       }
     }
@@ -325,7 +415,7 @@ Deno.serve(async (req) => {
 
 // Helper to Execute Trade & Update DB
 async function executeTrade(base44, user_email, portfolio, settings, tradeDetails) {
-  const { symbol, action, quantity, price, reason, pnl, confidence } = tradeDetails;
+  const { symbol, action, quantity, price, reason, pnl, confidence, isDCA } = tradeDetails;
   const totalValue = quantity * price;
   const assetSymbol = `${symbol}/USDT`;
   
@@ -351,14 +441,34 @@ async function executeTrade(base44, user_email, portfolio, settings, tradeDetail
   // 2. Update Portfolio
   let positions = [...(portfolio.positions || [])];
   if (action === 'buy') {
-    positions.push({
-      asset_symbol: assetSymbol,
-      quantity,
-      avg_entry_price: price,
-      current_value: totalValue,
-      profit_loss: 0,
-      highest_price: price
-    });
+    const existingIndex = positions.findIndex(p => p.asset_symbol === assetSymbol);
+    if (existingIndex >= 0) {
+      // DCA / Adding to position
+      const existing = positions[existingIndex];
+      const newQuantity = existing.quantity + quantity;
+      const newCostBasis = (existing.quantity * existing.avg_entry_price) + totalValue;
+      const newAvgPrice = newCostBasis / newQuantity;
+      
+      positions[existingIndex] = {
+        ...existing,
+        quantity: newQuantity,
+        avg_entry_price: newAvgPrice,
+        current_value: newQuantity * price, // Updated valuation
+        dca_count: (existing.dca_count || 0) + (isDCA ? 1 : 0),
+        highest_price: Math.max(existing.highest_price || 0, price)
+      };
+    } else {
+      // New Position
+      positions.push({
+        asset_symbol: assetSymbol,
+        quantity,
+        avg_entry_price: price,
+        current_value: totalValue,
+        profit_loss: 0,
+        highest_price: price,
+        dca_count: 0
+      });
+    }
   } else {
     positions = positions.filter(p => p.asset_symbol !== assetSymbol);
   }
