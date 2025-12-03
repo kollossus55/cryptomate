@@ -1606,8 +1606,7 @@ export default function Trading() {
               <Button
                 onClick={fetchLivePrices}
                 disabled={isPriceLoading}
-                variant="outline"
-                className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10"
+                className="bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-bold border-none shadow-lg hover:shadow-yellow-500/20 transition-all"
                 size="sm"
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${isPriceLoading ? 'animate-spin' : ''}`} />
@@ -1615,11 +1614,11 @@ export default function Trading() {
               </Button>
               <Button
                 onClick={handleResetPortfolio}
-                variant="outline"
-                className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10"
+                className="bg-red-500 hover:bg-red-600 text-white font-bold border-none shadow-lg hover:shadow-red-500/20 transition-all"
                 size="sm"
                 disabled={resetPortfolioMutation.isPending}
               >
+                <RefreshCw className="w-4 h-4 mr-2" />
                 Reset Portfolio
               </Button>
             </div>
