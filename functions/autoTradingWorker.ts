@@ -305,7 +305,7 @@ Deno.serve(async (req) => {
             action: 'buy',
             quantity: posSize.quantity,
             price: bestOpp.data.usd,
-            reason: `Score ${bestOpp.score} | ${aiReason}`,
+            reason: `Score ${bestOpp.score} | ${tradeReason}`,
             confidence: bestOpp.score
           });
           return Response.json({ success: true, executed: true, type: 'buy', symbol: bestOpp.symbol });
