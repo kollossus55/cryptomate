@@ -18,7 +18,7 @@ export default function TradeHistory() {
 
   const { data: trades, isLoading } = useQuery({
     queryKey: ['trades'],
-    queryFn: () => base44.entities.Trade.list('-created_date', 100),
+    queryFn: () => base44.entities.Trade.list('-created_date', 1000),
     initialData: [],
   });
 
