@@ -193,14 +193,15 @@ Deno.serve(async (req) => {
     if (portfolio.positions && portfolio.positions.length > 0) {
       for (const position of portfolio.positions) {
         const symbol = position.asset_symbol.replace('/USDT', '');
-        const data = priceMap[symbol];
-        
+        // Use toUpperCase to ensure match, or fallback to ID match if available
+        let data = priceMap[symbol] || priceMap[symbol.toUpperCase()];
+
         if (!data) {
-          // If asset not in top 250, we might miss it. 
-          // ideally we should fetch specific IDs for positions, but for now we skip if not in top 250.
+          console.warn(`⚠️ No price data for ${symbol} (orphaned?). Skipping logic for this position.`);
+          // TODO: Implement fallback specific fetch for held assets if needed
           continue; 
         }
-        
+
         const currentPrice = data.usd;
         const pnlPercent = ((currentPrice - position.avg_entry_price) / position.avg_entry_price) * 100;
         
@@ -294,12 +295,20 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. BUY Logic (Scan ALL top 250 assets for opportunities)
+    // 4. BUY Logic
+    // Check Max Open Positions
+    const openPositionsCount = portfolio.positions?.length || 0;
+    if (openPositionsCount >= (settings.max_open_positions || 5)) {
+       console.log(`🛑 Max open positions reached (${openPositionsCount}/${settings.max_open_positions || 5}). Skipping new buys.`);
+       return Response.json({ success: true, executed: false, reason: 'max_positions_reached' });
+    }
+
+    // Scan ALL top 250 assets for opportunities
     const tradedToday = settings.assets_traded_today || [];
     const opportunities = [];
-    
+
     console.log('🧠 Scoring assets...');
-    
+
     for (const coin of marketData) {
       const symbol = coin.symbol.toUpperCase();
       

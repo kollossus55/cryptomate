@@ -18,6 +18,7 @@ export default function AutoTrading() {
     execution_mode: 'auto',
     min_confidence: 70,
     max_position_size_percent: 10,
+    max_open_positions: 5, // Default limit
     max_daily_loss_percent: 5,
     allowed_risk_levels: ["low", "medium"],
     trade_types: ["buy", "sell"],
@@ -112,6 +113,7 @@ export default function AutoTrading() {
         ],
         assets_traded_today: savedSettings.assets_traded_today || [], // NEW: Initialize assets traded list
         execution_mode: savedSettings.execution_mode || 'auto',
+        max_open_positions: savedSettings.max_open_positions ?? 5,
         // Ensure boolean/number values have defaults if coming from null/undefined in savedSettings
         use_trailing_stop: savedSettings.use_trailing_stop ?? false,
         trailing_stop_percent: savedSettings.trailing_stop_percent ?? 2,
@@ -518,6 +520,21 @@ export default function AutoTrading() {
                   className="mb-2 [&>.relative>.bg-primary]:bg-rose-500 [&>.block]:border-rose-500"
                 />
                 <p className="text-xs text-rose-300/60">Maximum % of portfolio per trade</p>
+              </div>
+
+              <div>
+                <Label className="text-rose-200 mb-3 block font-medium">
+                  Max Open Positions: <span className="text-rose-400 font-bold">{settings.max_open_positions}</span>
+                </Label>
+                <Slider
+                  value={[settings.max_open_positions]}
+                  onValueChange={(value) => setSettings({...settings, max_open_positions: value[0]})}
+                  min={1}
+                  max={20}
+                  step={1}
+                  className="mb-2 [&>.relative>.bg-primary]:bg-rose-500 [&>.block]:border-rose-500"
+                />
+                <p className="text-xs text-rose-300/60">Limit the number of simultaneous trades</p>
               </div>
 
               <div>
