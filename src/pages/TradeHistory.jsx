@@ -95,7 +95,14 @@ export default function TradeHistory() {
               <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
                 Trade History
               </h1>
-              <p className="text-slate-400">View and analyze your trading activity</p>
+              <div className="flex flex-col gap-1">
+                <p className="text-slate-400">View and analyze your trading activity</p>
+                {portfolio?.positions?.length > 0 && (
+                  <p className="text-sm font-medium text-emerald-400">
+                    Current Open Positions: {portfolio.positions.length} (Waiting for targets)
+                  </p>
+                )}
+              </div>
               <div className="flex items-center gap-2 mt-2 text-xs text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-lg border border-indigo-500/20 w-fit">
                 <Sparkles className="w-3 h-3" />
                 <span>Auto-trading will automatically add sell trades here when profit targets are met</span>
