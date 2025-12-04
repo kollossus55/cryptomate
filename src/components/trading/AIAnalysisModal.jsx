@@ -66,8 +66,10 @@ export default function AIAnalysisModal({ isOpen, onClose, asset }) {
       // Check if we have cached signal data first
       const cachedSignal = window.assetSignalData?.[asset.symbol];
       
-      if (cachedSignal) {
-        // Use cached data if available
+      // Check if cached signal exists and has the detailed breakdown data we need
+      // Many basic signals generated in the background don't have the full breakdown
+      if (cachedSignal && cachedSignal.breakdown && cachedSignal.breakdown.news) {
+        // Use cached data if available and complete
         setAdvancedData({
           news: cachedSignal.breakdown?.news,
           social: cachedSignal.breakdown?.social,
