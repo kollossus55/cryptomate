@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Newspaper, TrendingUp, TrendingDown, Clock, ExternalLink, Bell, Filter } from "lucide-react";
+import { Newspaper, TrendingUp, TrendingDown, Clock, ExternalLink, Bell, Filter, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
 
@@ -217,9 +217,9 @@ export default function NewsWidget({ assets, onNewsAlert, isCompact = false }) {
               size="sm"
               onClick={fetchNewsForAssets}
               disabled={isLoading}
-              className="border-slate-700 text-slate-300"
+              className="border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300 hover:border-indigo-500"
             >
-              <Bell className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
