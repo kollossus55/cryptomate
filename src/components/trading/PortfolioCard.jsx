@@ -153,9 +153,12 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
                       </div>
                       <div className="text-right">
                         <p className="text-white font-semibold">${currentValue.toLocaleString()}</p>
-                        <p className={`text-sm font-bold ${profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {profitLoss >= 0 ? '+' : ''}${profitLoss.toFixed(2)} ({profitLoss >= 0 ? '+' : ''}{profitLossPercent}%)
-                        </p>
+                        <div className="flex flex-col items-end">
+                          <span className="text-[10px] text-slate-500 uppercase tracking-wider">Unrealized P&L</span>
+                          <p className={`text-sm font-bold ${profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {profitLoss >= 0 ? '+' : ''}${profitLoss.toFixed(2)} ({profitLoss >= 0 ? '+' : ''}{profitLossPercent}%)
+                          </p>
+                        </div>
                       </div>
                     </div>
                     <div className="flex gap-2 mt-2">
