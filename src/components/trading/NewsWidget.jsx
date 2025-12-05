@@ -13,6 +13,18 @@ export default function NewsWidget({ assets, onNewsAlert, isCompact = false }) {
   const [selectedAsset, setSelectedAsset] = useState("all");
   const [sentimentFilter, setSentimentFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Refs to hold latest data for the interval callback
+  const assetsRef = useRef(assets);
+  const selectedAssetRef = useRef(selectedAsset);
+
+  useEffect(() => {
+    assetsRef.current = assets;
+    selectedAssetRef.current = selectedAsset;
+  }, [assets, selectedAsset]);
+
+  // Memoize asset symbols to prevent refetching on price updates
+  const assetSymbols = useMemo(() => assets.map(a => a.symbol).join(','), [assets]);
 
   useEffect(() => {
     if (assets && assets.length > 0) {
@@ -22,15 +34,18 @@ export default function NewsWidget({ assets, onNewsAlert, isCompact = false }) {
       const interval = setInterval(fetchNewsForAssets, 5 * 60 * 1000);
       return () => clearInterval(interval);
     }
-  }, [assets, selectedAsset]);
+  }, [assetSymbols, selectedAsset]);
 
   const fetchNewsForAssets = async () => {
     setIsLoading(true);
     try {
+      const currentAssets = assetsRef.current;
+      const currentSelected = selectedAssetRef.current;
+      
       const newsItems = [];
-      const assetsToFetch = selectedAsset === "all" 
-        ? assets.slice(0, 5) // Top 5 for "all" view
-        : assets.filter(a => a.symbol === selectedAsset);
+      const assetsToFetch = currentSelected === "all" 
+        ? currentAssets.slice(0, 5) // Top 5 for "all" view
+        : currentAssets.filter(a => a.symbol === currentSelected);
 
       for (const asset of assetsToFetch) {
         const signalData = window.assetSignalData?.[asset.symbol];
