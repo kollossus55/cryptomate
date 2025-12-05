@@ -448,7 +448,7 @@ export default function AutoTradingDebugPanel({
             <CardContent className="space-y-4">
               
               {/* Status Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 <div className="bg-slate-800 rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-1">
                     <Clock className="w-4 h-4 text-indigo-400" />
@@ -469,8 +469,18 @@ export default function AutoTradingDebugPanel({
 
                 <div className="bg-slate-800 rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-1">
-                    <TrendingUp className="w-4 h-4 text-yellow-400" />
-                    <span className="text-xs text-slate-400">Trades Today</span>
+                    <TrendingUp className="w-4 h-4 text-blue-400" />
+                    <span className="text-xs text-slate-400">Open Positions</span>
+                  </div>
+                  <p className="text-lg font-bold text-white">
+                    {portfolio?.positions?.length || 0}/{autoTradingSettings?.max_open_positions || 5}
+                  </p>
+                </div>
+
+                <div className="bg-slate-800 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Sparkles className="w-4 h-4 text-yellow-400" />
+                    <span className="text-xs text-slate-400">Auto-Trades Today</span>
                   </div>
                   <p className="text-lg font-bold text-white">
                     {autoTradingSettings?.trades_today || 0}/{autoTradingSettings?.max_trades_per_day || 10}
