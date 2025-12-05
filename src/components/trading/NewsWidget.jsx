@@ -56,7 +56,7 @@ export default function NewsWidget({ assets, onNewsAlert, isCompact = false }) {
           // Create news items from the data
           newsData.key_headlines?.forEach((headline, idx) => {
             newsItems.push({
-              id: `${asset.symbol}-${idx}-${Date.now()}`,
+              id: `${asset.symbol}-${idx}-${headline.substring(0, 20).replace(/\s+/g, '')}`,
               asset: asset.symbol,
               headline: headline,
               sentiment: newsData.sentiment_label,
