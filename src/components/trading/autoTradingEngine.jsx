@@ -44,12 +44,19 @@ export function isRiskLevelAllowed(riskLevel, settings) {
 export function determineTradeAction(asset, confidence, settings, portfolio) {
   const priceChange = asset.change24h || 0;
   const minConfidence = settings.min_confidence || 70;
-  
-  // Buy signal: positive momentum + high confidence
-  if (priceChange > 1.5 && confidence >= minConfidence) {
-    return { action: 'buy', reason: 'positive_momentum' };
+
+  // Buy Logic
+  // 1. Momentum Buy: Price is moving up, but not overextended (>1% and <7%)
+  if (priceChange > 1.0 && priceChange < 7.0 && confidence >= minConfidence) {
+    return { action: 'buy', reason: 'positive_momentum_breakout' };
   }
-  
+
+  // 2. Dip Buy: Price is down (dip) but confidence is still high (smart money buying)
+  // Only if DCA is enabled or user allows high risk, OR if confidence is very high (>80)
+  if (priceChange < -2.0 && priceChange > -8.0 && confidence >= (minConfidence + 5)) {
+    return { action: 'buy', reason: 'high_confidence_dip_buy' };
+  }
+
   // Sell signal: check if we have a position first
   const assetSymbol = `${asset.symbol}/USDT`;
   const position = portfolio.positions?.find(p => p.asset_symbol === assetSymbol);
