@@ -498,21 +498,32 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
     return { action: null, reason: 'position_exists_hold' };
     }
 
-    // Buy signal: positive momentum + high confidence
-  // BUT check if we've already traded this asset today
-  if (priceChange > 0.5 && confidence >= minConfidence) {
-    if (hasAssetBeenTradedToday(asset.symbol, settings)) {
-      return { 
-        action: null, 
-        reason: 'asset_already_traded_today',
-        assetSymbol: asset.symbol
-      };
+    // Buy Logic
+      let buyReason = null;
+
+      // 1. Momentum Buy: Rising but not overbought (>0.5% and <7%)
+      if (priceChange > 0.5 && priceChange < 7.0 && confidence >= minConfidence) {
+        buyReason = 'positive_momentum_breakout';
+      }
+      // 2. Dip Buy: Dropping but high confidence (Buying the dip)
+      else if (priceChange < -2.0 && priceChange > -10.0 && confidence >= (minConfidence + 5)) {
+        buyReason = 'high_confidence_dip_buy';
+      }
+
+      if (buyReason) {
+        // Check if already traded today
+        if (hasAssetBeenTradedToday(asset.symbol, settings)) {
+          return { 
+            action: null, 
+            reason: 'asset_already_traded_today',
+            assetSymbol: asset.symbol
+          };
+        }
+        return { action: 'buy', reason: buyReason };
+      }
+
+      return { action: null, reason: 'no_signal' };
     }
-    return { action: 'buy', reason: 'positive_momentum' };
-  }
-  
-  return { action: null, reason: 'no_signal' };
-}
 
 /**
  * Check if trade type is allowed in settings
