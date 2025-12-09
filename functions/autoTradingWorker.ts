@@ -17,13 +17,14 @@ const TOP_ASSETS_COUNT = 250;
 function calculateConfidence(asset) {
   let score = 50;
 
-  // 24h Change impact
-  if (asset.change24h > 5) score += 15;
-  else if (asset.change24h > 2) score += 10;
-  else if (asset.change24h > 0) score += 5;
-  else if (asset.change24h < -5) score -= 15;
-  else if (asset.change24h < -2) score -= 10;
-  else score -= 5;
+  // 24h Change impact (Refined for V4)
+  // Reward moderate growth, penalize crash, but allow for healthy pullbacks
+  if (asset.change24h > 2 && asset.change24h <= 10) score += 15; // Sweet spot
+  else if (asset.change24h > 10) score += 5; // Overextended - less bonus
+  else if (asset.change24h > 0) score += 10; // Slow grind up
+  else if (asset.change24h > -3) score += 5; // Minor dip / consolidation (Good for entry)
+  else if (asset.change24h > -8) score -= 5; // Moderate correction
+  else score -= 20; // Crash / Dump - Heavy penalty
 
   // Volume impact
   const avgVolume = 1500000000;
