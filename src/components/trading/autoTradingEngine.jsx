@@ -75,14 +75,15 @@ export function determineTradeAction(asset, confidence, settings, portfolio) {
       return { action: 'sell', reason: 'take_profit', profitPercent };
     }
     
-    // Negative signal sell
-    if (priceChange < -2 || confidence < 55) {
-      return { action: 'sell', reason: 'negative_signal', profitPercent };
+    // Negative signal sell (REMOVED - caused panic selling on dips)
+    // Only sell on low confidence if it really crashes (-10%) or confidence collapses (<40)
+    if (priceChange < -10 || confidence < 40) {
+       return { action: 'sell', reason: 'confidence_collapse_or_crash', profitPercent };
     }
-  }
-  
-  return { action: null, reason: 'no_signal' };
-}
+    }
+
+    return { action: null, reason: 'no_signal' };
+    }
 
 /**
  * Advanced Risk Management: Check trailing stop loss
