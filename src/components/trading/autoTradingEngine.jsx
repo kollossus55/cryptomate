@@ -823,7 +823,10 @@ export function scanTradingOpportunitiesAdvanced(assets, assetConfidence, settin
     
     // Check adjusted confidence threshold for new buy trades
     if (tradeDecision.action === 'buy' && confidence < adjustedMinConfidence) {
-      continue;
+      // Exception: Allow "Dip Buys" if they passed the logic in determineTradeActionAdvanced
+      if (tradeDecision.reason !== 'high_confidence_dip_buy') {
+         continue;
+      }
     }
     
     // Determine risk level for buy orders
