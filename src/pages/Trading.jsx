@@ -1081,12 +1081,13 @@ export default function Trading() {
   const calculateBasicConfidence = (asset) => {
     let score = 50;
 
-    if (asset.change24h > 5) score += 15;
-    else if (asset.change24h > 2) score += 10;
-    else if (asset.change24h > 0) score += 5;
-    else if (asset.change24h < -5) score -= 15;
-    else if (asset.change24h < -2) score -= 10;
-    else score -= 5;
+    // Refined logic for V4: Reward moderate growth, penalize crash, allow dips
+    if (asset.change24h > 2 && asset.change24h <= 10) score += 15; // Sweet spot
+    else if (asset.change24h > 10) score += 5; // Overextended
+    else if (asset.change24h > 0) score += 10; // Grind up
+    else if (asset.change24h > -3) score += 5; // Dip/Consolidation
+    else if (asset.change24h > -8) score -= 5; // Moderate correction
+    else score -= 20; // Crash
 
     const avgVolume = 1500000000;
     if (asset.volume24h > avgVolume * 2) score += 10;
