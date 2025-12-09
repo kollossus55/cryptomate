@@ -474,11 +474,12 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
       };
     }
     
-    // Negative signal sell
-    if (priceChange < -2 || confidence < 55) {
+    // Negative signal sell (RELAXED)
+    // Only sell if confidence drastically drops or crash occurs
+    if (priceChange < -15 || confidence < 35) {
       return {
         action: 'sell',
-        reason: 'negative_signal',
+        reason: 'confidence_collapse_or_crash',
         quantity: position.quantity,
         profitPercent
       };
