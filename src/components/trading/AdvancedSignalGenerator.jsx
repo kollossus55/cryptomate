@@ -202,14 +202,14 @@ export const generateAdvancedSignal = async (asset, signalConfig = null) => {
 const calculateTechnicalScore = (asset) => {
   let score = 50;
 
-  // Price momentum
+  // Price momentum (Refined V4)
   const change = asset.change24h || 0;
-  if (change > 5) score += 20;
-  else if (change > 2) score += 15;
-  else if (change > 0) score += 5;
-  else if (change < -5) score -= 20;
-  else if (change < -2) score -= 15;
-  else score -= 5;
+  if (change > 2 && change <= 10) score += 20; // Sweet spot
+  else if (change > 10) score += 5; // Overextended
+  else if (change > 0) score += 10; // Slow grind
+  else if (change > -3) score += 5; // Dip
+  else if (change > -8) score -= 5; // Correction
+  else score -= 20; // Crash
 
   // Volume analysis
   const avgVolume = 1500000000;
