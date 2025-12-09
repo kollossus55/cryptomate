@@ -566,12 +566,13 @@ export function scanTradingOpportunities(assets, assetConfidence, settings, port
   
   for (const asset of assets) {
     const confidence = assetConfidence[asset.symbol] || 0;
-    
-    // Check confidence threshold
-    if (confidence < (settings.min_confidence || 70)) {
+
+    // Check confidence threshold (allow slightly lower for potential dip buys)
+    // We let determineTradeAction make the final call
+    if (confidence < ((settings.min_confidence || 70) - 10)) {
       continue;
     }
-    
+
     // Determine risk level
     const riskLevel = calculateRiskLevel(confidence);
     
