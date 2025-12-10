@@ -178,6 +178,13 @@ export const generateAdvancedSignal = async (asset, signalConfig = null) => {
       recommendation,
       riskLevel,
       prediction,
+      activeIndicators: [
+          { name: "Technical Analysis", status: "active", score: technicalScore, weight: "70%" },
+          { name: "News Sentiment AI", status: "active", score: (newsData.sentiment_score + 1) * 50, weight: "30%" },
+          { name: "Social Trends", status: "simulated", score: socialData.social_score, weight: "0%" },
+          { name: "On-Chain Metrics", status: "simulated", score: onChainData.onchain_score, weight: "0%" },
+          { name: "Pattern Recognition", status: "active", score: prediction.prediction_confidence, weight: "Variable" }
+      ],
       breakdown: {
         technical: technicalScore,
         news: newsData,
