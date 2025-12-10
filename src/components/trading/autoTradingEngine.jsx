@@ -502,13 +502,14 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
     // Buy Logic
       let buyReason = null;
 
-      // 1. Momentum Buy: Rising but not overbought (>0.2% and <15%) - Widened window
-      if (priceChange > 0.2 && priceChange < 15.0 && confidence >= minConfidence) {
+      // 1. Momentum Buy: Rising (>0.1%) - Allow slightly lower confidence for strong momentum
+      // We lower the strict confidence requirement by 5% to catch more moves in the demo
+      if (priceChange > 0.1 && priceChange < 20.0 && confidence >= (minConfidence - 5)) {
         buyReason = 'positive_momentum_breakout';
       }
-      // 2. Dip Buy: Dropping but high confidence (Buying the dip)
-      // Catch smaller dips too (starting from -1%)
-      else if (priceChange < -1.0 && priceChange > -15.0 && confidence >= (minConfidence + 5)) {
+      // 2. Dip Buy: Dropping (Buying the dip) - Removed the +5 confidence premium
+      // Catch smaller dips (starting from -0.5%) to be more active
+      else if (priceChange < -0.5 && priceChange > -20.0 && confidence >= minConfidence) {
         buyReason = 'high_confidence_dip_buy';
       }
 
@@ -570,7 +571,8 @@ export function scanTradingOpportunities(assets, assetConfidence, settings, port
 
     // Check confidence threshold (allow slightly lower for potential dip buys)
     // We let determineTradeAction make the final call
-    if (confidence < ((settings.min_confidence || 70) - 10)) {
+    // Relaxed pre-filter: Allow -15 variance (was -10) to let more assets be evaluated
+    if (confidence < ((settings.min_confidence || 70) - 15)) {
       continue;
     }
 
