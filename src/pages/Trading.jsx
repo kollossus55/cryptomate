@@ -1412,6 +1412,7 @@ export default function Trading() {
         </div>
 
         {autoTradingSettings?.is_enabled && (
+          <>
             <div className="mb-6">
           <SystemHealthMonitor 
             autoTradingSettings={autoTradingSettings}
@@ -1513,7 +1514,8 @@ export default function Trading() {
                 </div>
               )}
             </div>
-          )}
+          </>
+        )}
 
         {showVisibilityWarning && !isPageVisible && autoTradingSettings?.is_enabled && (
           <div className="bg-orange-500/10 border-2 border-orange-500/50 rounded-xl p-4 mb-6">
