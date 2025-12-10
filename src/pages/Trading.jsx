@@ -325,7 +325,7 @@ export default function Trading() {
 
       if (!visible && autoTradingSettings?.is_enabled) {
         setShowVisibilityWarning(true);
-        console.log('⚠️ Page hidden - auto-trading may be throttled');
+        console.log('ℹ️ Page hidden - auto-trading continuing via background worker');
       } else if (visible && autoTradingSettings?.is_enabled) {
         console.log('✅ Page visible - auto-trading resumed');
         const savedState = BrowserState.load();
@@ -890,16 +890,40 @@ export default function Trading() {
       }
     };
 
-    console.log('⏱️ Setting up auto-trading interval (45 seconds)');
+    console.log('⏱️ Setting up auto-trading background worker (45 seconds)');
     // Run immediately once
     checkAutoTrading();
     
-    // Then every 45 seconds
-    const interval = setInterval(checkAutoTrading, 45000);
+    // Use a Web Worker for reliable timing in background
+    const workerScript = `
+      self.onmessage = function(e) {
+        if (e.data === 'start') {
+          // Clear any existing interval
+          if (self.timer) clearInterval(self.timer);
+          self.timer = setInterval(() => {
+            self.postMessage('tick');
+          }, 45000);
+        } else if (e.data === 'stop') {
+          if (self.timer) clearInterval(self.timer);
+        }
+      };
+    `;
+    
+    const blob = new Blob([workerScript], { type: 'application/javascript' });
+    const worker = new Worker(URL.createObjectURL(blob));
+    
+    worker.onmessage = (e) => {
+      if (e.data === 'tick') {
+        checkAutoTrading();
+      }
+    };
+    
+    worker.postMessage('start');
 
     return () => {
       console.log('🛑 Stopping auto-trading monitor');
-      clearInterval(interval);
+      worker.postMessage('stop');
+      worker.terminate();
     };
   }, [autoTradingSettings?.is_enabled]); // Only restart if enabled state changes
 
@@ -1518,14 +1542,13 @@ export default function Trading() {
         )}
 
         {showVisibilityWarning && !isPageVisible && autoTradingSettings?.is_enabled && (
-          <div className="bg-orange-500/10 border-2 border-orange-500/50 rounded-xl p-4 mb-6">
+          <div className="bg-indigo-500/10 border-2 border-indigo-500/50 rounded-xl p-4 mb-6">
             <div className="flex items-start gap-3">
-              <EyeOff className="w-6 h-6 text-orange-400 flex-shrink-0 mt-0.5" />
+              <EyeOff className="w-6 h-6 text-indigo-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <h4 className="text-orange-300 font-semibold mb-1">Page Hidden - Auto-Trading May Be Throttled</h4>
-                <p className="text-orange-200 text-sm mb-3">
-                  Your browser may throttle background tabs, affecting auto-trading reliability.
-                  For best results, keep this tab visible and active.
+                <h4 className="text-indigo-300 font-semibold mb-1">Running in Background</h4>
+                <p className="text-indigo-200 text-sm mb-3">
+                  Background worker active. Auto-trading checks will continue every 45s even while minimized.
                 </p>
                 <Button
                   onClick={() => setShowVisibilityWarning(false)}
