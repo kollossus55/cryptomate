@@ -19,6 +19,7 @@ import { generateAdvancedSignal } from "../components/trading/AdvancedSignalGene
 import AutoTradingDebugPanel from "../components/trading/AutoTradingDebugPanel";
 import BackendMigrationGuide from "../components/trading/BackendMigrationGuide";
 import NewsWidget from "../components/trading/NewsWidget";
+import SystemHealthMonitor from "../components/trading/SystemHealthMonitor";
 import AITradingAdvisor from "../components/trading/AITradingAdvisor";
 import SignalAlertSettings from "../components/trading/SignalAlertSettings";
 
@@ -50,6 +51,9 @@ export default function Trading() {
   const [showWatchlistModal, setShowWatchlistModal] = useState(false);
   const [userPreferences, setUserPreferences] = useState(null);
   const [altcoinOpportunities, setAltcoinOpportunities] = useState([]);
+  const [lastScanResult, setLastScanResult] = useState(null);
+  const [lastScanTime, setLastScanTime] = useState(null);
+  const [currentMarketCondition, setCurrentMarketCondition] = useState('normal');
 
   const queryClient = useQueryClient();
 
@@ -860,10 +864,28 @@ export default function Trading() {
           if (result.circuitBreakerStatus) {
             console.log('🛡️ Circuit breaker:', result.circuitBreakerStatus);
           }
-        }
-        
-        console.log('═══════════════════════════════════════════════════\n');
-      } catch (error) {
+          }
+
+          // Update System Health Monitor
+          setLastScanTime(Date.now());
+          if (result.executed) {
+          setLastScanResult(`EXECUTED: ${result.opportunity.action.toUpperCase()} ${result.opportunity.asset.symbol}`);
+          } else if (result.reason) {
+          // Make the reason more user friendly
+          const friendlyReasons = {
+             'no_opportunities': `Scanned ${combinedAssets.length} assets - No signals met criteria`,
+             'no_valid_opportunity': 'Signals found but filtered by risk/rules',
+             'circuit_breaker_triggered': 'Circuit Breaker Active - Trading Halted',
+             'confidence_not_ready': 'Waiting for AI Confidence Models...'
+          };
+          setLastScanResult(friendlyReasons[result.reason] || result.reason);
+          }
+          if (result.marketCondition) {
+          setCurrentMarketCondition(result.marketCondition);
+          }
+
+          console.log('═══════════════════════════════════════════════════\n');
+          } catch (error) {
         console.error('❌ Auto-trading check failed:', error);
       }
     };
@@ -1390,7 +1412,17 @@ export default function Trading() {
         </div>
 
         {autoTradingSettings?.is_enabled && (
-            <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 border-2 border-green-500/40 rounded-2xl p-4 mb-6">
+            <div className="mb-6">
+          <SystemHealthMonitor 
+            autoTradingSettings={autoTradingSettings}
+            lastScanTime={lastScanTime}
+            lastScanResult={lastScanResult}
+            activeAssetsCount={Object.keys(assetConfidence).length}
+            marketCondition={currentMarketCondition}
+          />
+        </div>
+
+        <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 border-2 border-green-500/40 rounded-2xl p-4 mb-6">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center relative shadow-lg">
