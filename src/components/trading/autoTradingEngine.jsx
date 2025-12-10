@@ -76,8 +76,8 @@ export function determineTradeAction(asset, confidence, settings, portfolio) {
     }
     
     // Negative signal sell (REMOVED - caused panic selling on dips)
-    // Only sell on low confidence if it really crashes (-10%) or confidence collapses (<40)
-    if (priceChange < -10 || confidence < 40) {
+    // Only sell on low confidence if it really crashes (-20%) or confidence collapses (<20)
+    if (priceChange < -20 || confidence < 20) {
        return { action: 'sell', reason: 'confidence_collapse_or_crash', profitPercent };
     }
     }
@@ -476,7 +476,7 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
     
     // Negative signal sell (RELAXED)
     // Only sell if confidence drastically drops or crash occurs
-    if (priceChange < -15 || confidence < 35) {
+    if (priceChange < -20 || confidence < 20) {
       return {
         action: 'sell',
         reason: 'confidence_collapse_or_crash',
@@ -789,9 +789,14 @@ export function scanTradingOpportunitiesAdvanced(assets, assetConfidence, settin
     
     // Use advanced trade action determination
     const tradeDecision = determineTradeActionAdvanced(asset, confidence, settings, portfolio);
-    
+
     if (!tradeDecision.action) {
-      if (checkedCount <= 5 || confidence >= adjustedMinConfidence - 10) {
+      if (tradeDecision.reason === 'position_exists_hold') {
+         const assetSymbol = `${asset.symbol}/USDT`;
+         const position = portfolio.positions?.find(p => p.asset_symbol === assetSymbol);
+         const pnl = position ? ((asset.price - position.avg_entry_price) / position.avg_entry_price) * 100 : 0;
+         console.log(`    💎 Holding ${asset.symbol}: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}% (Target: +${settings.take_profit_percent || 8}%)`);
+      } else if (checkedCount <= 5 || confidence >= adjustedMinConfidence - 10) {
         console.log(`    ❌ No action: ${tradeDecision.reason}`);
       }
       continue;
