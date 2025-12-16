@@ -252,7 +252,7 @@ export default function AISignals() {
           </div>
           <Button 
             onClick={() => setShowIndicatorSettings(true)}
-            className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700"
+            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 shadow-lg shadow-indigo-500/20"
           >
             <Settings className="w-4 h-4 mr-2" />
             Configure Indicators
