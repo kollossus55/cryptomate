@@ -1,4 +1,4 @@
-
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -141,6 +141,15 @@ export default function AssetCard({ asset, rank, onTrade, onAnalyze }) {
               AI Signal: {recommendation.toUpperCase()}
             </Badge>
           </div>
+
+          {/* Technical Indicator Signal Display */}
+          {window.assetSignalData?.[asset.symbol]?.technicalDetails?.signals?.length > 0 && (
+            <div className="mt-1 text-center">
+              <span className="text-[10px] uppercase font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                {window.assetSignalData[asset.symbol].technicalDetails.signals[0]}
+              </span>
+            </div>
+          )}
 
           <div>
             <div className="text-2xl font-bold text-white mb-1">
