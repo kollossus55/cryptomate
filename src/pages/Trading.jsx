@@ -11,6 +11,7 @@ import TradeModal from "../components/trading/TradeModal";
 import AIAnalysisModal from "../components/trading/AIAnalysisModal";
 import AIRecommendationNotification from "../components/trading/AIRecommendationNotification";
 import AltcoinScannerModal from "../components/trading/AltcoinScannerModal";
+import IndicatorSettingsModal from "../components/trading/IndicatorSettingsModal";
 import WatchlistModal from "../components/trading/WatchlistModal";
 import PortfolioCard from "../components/trading/PortfolioCard";
 import NotificationToast from "../components/notifications/NotificationToast";
@@ -54,6 +55,14 @@ export default function Trading() {
   const [lastScanResult, setLastScanResult] = useState(null);
   const [lastScanTime, setLastScanTime] = useState(null);
   const [currentMarketCondition, setCurrentMarketCondition] = useState('normal');
+  const [showIndicatorSettings, setShowIndicatorSettings] = useState(false);
+  const [indicatorSettings, setIndicatorSettings] = useState({
+    rsi: true,
+    macd: true,
+    bollinger: true,
+    ema: true,
+    stoch: true
+  });
 
   const queryClient = useQueryClient();
 
@@ -1073,15 +1082,15 @@ export default function Trading() {
       
       // Take top 10 for deep analysis
       return priorityAssets.slice(0, 10);
-    };
+      };
 
-    const assetsForDeepAnalysis = selectAssetsForDeepAnalysis();
-    console.log(`🎯 Deep AI analysis for: ${assetsForDeepAnalysis.map(a => a.symbol).join(', ')}`);
+      const assetsForDeepAnalysis = selectAssetsForDeepAnalysis();
+      console.log(`🎯 Deep AI analysis for: ${assetsForDeepAnalysis.map(a => a.symbol).join(', ')}`);
 
-    // Process priority assets with advanced AI
-    for (const asset of assetsForDeepAnalysis) {
+      // Process priority assets with advanced AI
+      for (const asset of assetsForDeepAnalysis) {
       try {
-        const advancedSignal = await generateAdvancedSignal(asset);
+        const advancedSignal = await generateAdvancedSignal(asset, null, indicatorSettings);
         confidence[asset.symbol] = advancedSignal.confidence;
 
         if (!window.assetSignalData) window.assetSignalData = {};
@@ -1413,14 +1422,24 @@ export default function Trading() {
               <Newspaper className="w-5 h-5 mr-2" />
               News Feed
             </Button>
-            <Button
-              onClick={() => setShowRecommendations(true)}
-              size="lg"
-              className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold"
-            >
-              <Sparkles className="w-5 h-5 mr-2" />
-              AI Signals
-            </Button>
+            <div className="flex gap-1">
+              <Button
+                onClick={() => setShowRecommendations(true)}
+                size="lg"
+                className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold rounded-r-none border-r border-white/20"
+              >
+                <Sparkles className="w-5 h-5 mr-2" />
+                AI Signals
+              </Button>
+              <Button
+                onClick={() => setShowIndicatorSettings(true)}
+                size="lg"
+                className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold rounded-l-none px-3"
+                title="Configure Indicators"
+              >
+                <Settings className="w-5 h-5" />
+              </Button>
+            </div>
             <Button
               onClick={() => setShowAltcoinScanner(true)}
               size="lg"
@@ -1862,6 +1881,15 @@ export default function Trading() {
             setShowWatchlistModal(false);
             queryClient.invalidateQueries({ queryKey: ['trading-preferences'] });
           }}
+        />
+      )}
+
+      {showIndicatorSettings && (
+        <IndicatorSettingsModal
+          isOpen={showIndicatorSettings}
+          onClose={() => setShowIndicatorSettings(false)}
+          settings={indicatorSettings}
+          onUpdate={setIndicatorSettings}
         />
       )}
 

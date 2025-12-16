@@ -4,6 +4,7 @@
  */
 
 import { base44 } from "@/api/base44Client";
+import { analyzeIndicators } from "./TechnicalAnalysisEngine";
 
 // Cache for API results to prevent rate limiting
 const cache = {
@@ -113,7 +114,7 @@ const predictPriceMovement = (asset) => {
 };
 
 // Generate comprehensive AI signal combining all data sources
-export const generateAdvancedSignal = async (asset, signalConfig = null) => {
+export const generateAdvancedSignal = async (asset, signalConfig = null, indicatorSettings = { rsi: true, macd: true, bollinger: true, ema: true, stoch: true }) => {
   try {
     // Fetch all data sources in parallel (now using cached/simulated data)
     const [newsData, socialData, onChainData] = await Promise.all([
@@ -125,8 +126,14 @@ export const generateAdvancedSignal = async (asset, signalConfig = null) => {
     // Generate predictive analysis
     const prediction = predictPriceMovement(asset);
 
-    // Technical indicators (from asset data)
-    const technicalScore = calculateTechnicalScore(asset);
+    // Advanced Technical Analysis (using the new Engine)
+    const technicalAnalysis = analyzeIndicators(asset, indicatorSettings);
+
+    // Technical indicators (from asset data + advanced indicators)
+    let technicalScore = calculateTechnicalScore(asset);
+    
+    // Apply modifier from advanced indicators
+    technicalScore = Math.max(0, Math.min(100, technicalScore + technicalAnalysis.scoreModifier));
 
     // Default to 70% Technical + 30% AI Sentiment (new standard)
     const defaultWeights = {
@@ -185,11 +192,13 @@ export const generateAdvancedSignal = async (asset, signalConfig = null) => {
           { name: "On-Chain Metrics", status: "simulated", score: onChainData.onchain_score, weight: "0%" },
           { name: "Pattern Recognition", status: "active", score: prediction.prediction_confidence, weight: "Variable" }
       ],
+      technicalDetails: technicalAnalysis,
       breakdown: {
         technical: technicalScore,
         news: newsData,
         social: socialData,
-        onchain: onChainData
+        onchain: onChainData,
+        advanced_indicators: technicalAnalysis.results
       },
       signals: {
         strength: confidence >= 75 ? 'strong' : confidence >= 60 ? 'moderate' : 'weak',
