@@ -1,3 +1,4 @@
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -133,18 +134,16 @@ export default function ConnectionStatusCard({ connection, onTest, onManage, isT
           <Button
             onClick={() => onTest(connection)}
             disabled={isTesting}
-            variant="outline"
             size="sm"
-            className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-700"
+            className="flex-1 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white border-0 shadow-lg shadow-blue-500/20"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${isTesting ? 'animate-spin' : ''}`} />
             {isTesting ? 'Testing...' : 'Test Connection'}
           </Button>
           <Button
             onClick={() => onManage(connection)}
-            variant="outline"
             size="sm"
-            className="border-indigo-500 text-indigo-400 hover:bg-indigo-500/10"
+            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white border-0 shadow-lg shadow-purple-500/20"
           >
             <Settings className="w-4 h-4 mr-2" />
             Manage
