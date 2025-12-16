@@ -27,6 +27,7 @@ import { motion } from "framer-motion";
 import { generatePredictiveSignal, detectMarketRegime } from "../components/trading/PredictiveModels";
 import { detectAnomalies, detectCorrelationAnomalies } from "../components/trading/AnomalyDetection";
 import { generateAdvancedSignal } from "../components/trading/AdvancedSignalGenerator";
+import IndicatorSettingsModal from "../components/trading/IndicatorSettingsModal";
 
 export default function AISignals() {
   const queryClient = useQueryClient();
@@ -34,6 +35,14 @@ export default function AISignals() {
   const [signalResults, setSignalResults] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [marketRegime, setMarketRegime] = useState(null);
+  const [showIndicatorSettings, setShowIndicatorSettings] = useState(false);
+  const [indicatorSettings, setIndicatorSettings] = useState({
+    rsi: true,
+    macd: true,
+    bollinger: true,
+    ema: true,
+    stoch: true
+  });
 
   // Fetch AI signal config
   const { data: configs } = useQuery({
@@ -123,7 +132,7 @@ export default function AISignals() {
 
       // 1. Traditional Advanced Signal
       if (activeConfig?.data_sources?.technical_indicators) {
-        results.advanced_signal = await generateAdvancedSignal(asset);
+        results.advanced_signal = await generateAdvancedSignal(asset, null, indicatorSettings);
       }
 
       // 2. Predictive Models
@@ -227,8 +236,8 @@ export default function AISignals() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
+        <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center">
               <Brain className="w-6 h-6 text-white" />
             </div>
@@ -241,6 +250,13 @@ export default function AISignals() {
               </p>
             </div>
           </div>
+          <Button 
+            onClick={() => setShowIndicatorSettings(true)}
+            className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700"
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Configure Indicators
+          </Button>
         </div>
 
         {/* Market Regime Banner */}
@@ -509,7 +525,16 @@ export default function AISignals() {
         </div>
 
         {/* Configuration Panel */}
-        {activeConfig && (
+        {showIndicatorSettings && (
+        <IndicatorSettingsModal
+          isOpen={showIndicatorSettings}
+          onClose={() => setShowIndicatorSettings(false)}
+          settings={indicatorSettings}
+          onUpdate={setIndicatorSettings}
+        />
+      )}
+
+      {activeConfig && (
           <Card className="mt-6 bg-slate-900 border-slate-700">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
