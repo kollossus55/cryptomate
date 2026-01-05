@@ -2,6 +2,146 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
 import { executeAutoTradingCheckAdvanced } from './autoTradingEngineBackend.js';
 
 /**
+ * Technical Analysis - Server-Side Port
+ */
+const generateSyntheticHistory = (currentPrice, change24h, points = 100) => {
+  const history = [];
+  let price = currentPrice * (1 - (change24h / 100));
+  const volatility = Math.abs(change24h / 100) / Math.sqrt(points);
+
+  for (let i = 0; i < points; i++) {
+    const drift = (currentPrice - price) / (points - i);
+    const shock = (Math.random() - 0.5) * volatility * price;
+    price += drift + shock;
+    history.push(price);
+  }
+  history[history.length - 1] = currentPrice;
+  return history;
+};
+
+const calculateRSI = (prices, period = 14) => {
+  if (prices.length < period + 1) return 50;
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const diff = prices[prices.length - i] - prices[prices.length - i - 1];
+    if (diff >= 0) gains += diff;
+    else losses -= diff;
+  }
+  const avgGain = gains / period;
+  const avgLoss = losses / period;
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
+};
+
+const calculateEMA = (prices, period) => {
+  if (prices.length < period) return prices[prices.length - 1];
+  const k = 2 / (period + 1);
+  let ema = prices[0];
+  for (let i = 1; i < prices.length; i++) {
+    ema = (prices[i] * k) + (ema * (1 - k));
+  }
+  return ema;
+};
+
+const calculateMACD = (prices) => {
+  if (prices.length < 26) return { histogram: 0 };
+  const emaFast = calculateEMA(prices, 12);
+  const emaSlow = calculateEMA(prices, 26);
+  const macdLine = emaFast - emaSlow;
+  const signalLine = macdLine * 0.9;
+  return { histogram: macdLine - signalLine };
+};
+
+const calculateBollingerBands = (prices, period = 20, multiplier = 2) => {
+  if (prices.length < period) return { upper: 0, middle: 0, lower: 0 };
+  const slice = prices.slice(-period);
+  const middle = slice.reduce((a, b) => a + b, 0) / period;
+  const variance = slice.map(p => Math.pow(p - middle, 2)).reduce((a, b) => a + b, 0) / period;
+  const stdDev = Math.sqrt(variance);
+  return {
+    upper: middle + (stdDev * multiplier),
+    middle: middle,
+    lower: middle - (stdDev * multiplier)
+  };
+};
+
+const calculateStochastic = (prices, period = 14) => {
+  if (prices.length < period) return { k: 50 };
+  const current = prices[prices.length - 1];
+  const slice = prices.slice(-period);
+  const low = Math.min(...slice);
+  const high = Math.max(...slice);
+  if (high === low) return { k: 50 };
+  return { k: ((current - low) / (high - low)) * 100 };
+};
+
+const analyzeIndicators = (asset, enabledIndicators = { rsi: true, macd: true, bollinger: true, ema: true, stoch: true }) => {
+  const prices = generateSyntheticHistory(asset.price, asset.change24h, 100);
+  let scoreModifier = 0;
+  const signals = [];
+
+  if (enabledIndicators.rsi) {
+    const rsi = calculateRSI(prices);
+    if (rsi < 30) {
+      scoreModifier += 15;
+      signals.push("RSI Oversold (Bullish)");
+    } else if (rsi > 70) {
+      scoreModifier -= 15;
+      signals.push("RSI Overbought (Bearish)");
+    }
+  }
+
+  if (enabledIndicators.macd) {
+    const { histogram } = calculateMACD(prices);
+    if (histogram > 0) {
+      scoreModifier += 10;
+      signals.push("MACD Bullish");
+    } else {
+      scoreModifier -= 10;
+      signals.push("MACD Bearish");
+    }
+  }
+
+  if (enabledIndicators.bollinger) {
+    const { upper, lower } = calculateBollingerBands(prices);
+    const current = prices[prices.length - 1];
+    if (current < lower) {
+      scoreModifier += 15;
+      signals.push("BB Lower Bounce");
+    } else if (current > upper) {
+      scoreModifier -= 15;
+      signals.push("BB Upper Pullback");
+    }
+  }
+
+  if (enabledIndicators.ema) {
+    const emaShort = calculateEMA(prices, 12);
+    const emaLong = calculateEMA(prices, 50);
+    if (emaShort > emaLong) {
+      scoreModifier += 10;
+      signals.push("EMA Golden Trend");
+    } else {
+      scoreModifier -= 10;
+      signals.push("EMA Death Trend");
+    }
+  }
+
+  if (enabledIndicators.stoch) {
+    const { k } = calculateStochastic(prices);
+    if (k < 20) {
+      scoreModifier += 10;
+      signals.push("Stoch Oversold");
+    } else if (k > 80) {
+      scoreModifier -= 10;
+      signals.push("Stoch Overbought");
+    }
+  }
+
+  return { scoreModifier, signals };
+};
+
+/**
  * Auto-Trading Worker V4 (Rebuilt)
  * 
  * Uses the exact same core logic as the browser-based engine
@@ -12,19 +152,18 @@ import { executeAutoTradingCheckAdvanced } from './autoTradingEngineBackend.js';
 const TOP_ASSETS_COUNT = 250;
 
 /**
- * Calculate basic confidence score (Ported from Trading.js)
+ * Calculate confidence score WITH Technical Indicators
  */
-function calculateConfidence(asset) {
+function calculateConfidence(asset, enabledIndicators = { rsi: true, macd: true, bollinger: true, ema: true, stoch: true }) {
   let score = 50;
 
-  // 24h Change impact (Refined for V4)
-  // Reward moderate growth, penalize crash, but allow for healthy pullbacks
-  if (asset.change24h > 2 && asset.change24h <= 10) score += 15; // Sweet spot
-  else if (asset.change24h > 10) score += 5; // Overextended - less bonus
-  else if (asset.change24h > 0) score += 10; // Slow grind up
-  else if (asset.change24h > -3) score += 5; // Minor dip / consolidation (Good for entry)
-  else if (asset.change24h > -8) score -= 5; // Moderate correction
-  else score -= 20; // Crash / Dump - Heavy penalty
+  // 24h Change impact
+  if (asset.change24h > 2 && asset.change24h <= 10) score += 15;
+  else if (asset.change24h > 10) score += 5;
+  else if (asset.change24h > 0) score += 10;
+  else if (asset.change24h > -3) score += 5;
+  else if (asset.change24h > -8) score -= 5;
+  else score -= 20;
 
   // Volume impact
   const avgVolume = 1500000000;
@@ -41,11 +180,21 @@ function calculateConfidence(asset) {
   if (volatility > 10) score -= 5;
   else if (volatility < 2) score += 5;
 
-  // Small random variation to simulate AI fluctuation
+  // APPLY TECHNICAL INDICATORS
+  const { scoreModifier, signals } = analyzeIndicators(asset, enabledIndicators);
+  score += scoreModifier;
+
+  // Small random variation
   const aiBonus = Math.random() * 10 - 5;
   score += aiBonus;
 
-  return Math.max(30, Math.min(95, Math.round(score)));
+  const finalScore = Math.max(30, Math.min(95, Math.round(score)));
+  
+  if (signals.length > 0) {
+    console.log(`  📊 ${asset.symbol} Indicators: ${signals.join(', ')} (Modifier: ${scoreModifier >= 0 ? '+' : ''}${scoreModifier}) → ${finalScore}%`);
+  }
+
+  return finalScore;
 }
 
 Deno.serve(async (req) => {
@@ -118,10 +267,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 3. Generate Confidence Scores
+    // 3. Generate Confidence Scores WITH TECHNICAL INDICATORS
+    const enabledIndicators = { rsi: true, macd: true, bollinger: true, ema: true, stoch: true };
     const assetConfidence = {};
+    console.log('📊 Calculating AI signals with technical indicators...');
     marketAssets.forEach(asset => {
-      assetConfidence[asset.symbol] = calculateConfidence(asset);
+      assetConfidence[asset.symbol] = calculateConfidence(asset, enabledIndicators);
     });
 
     // 4. Execute Auto-Trading Check (using ported Engine)
