@@ -152,16 +152,17 @@ const analyzeIndicators = (asset, enabledIndicators = { rsi: true, macd: true, b
 const TOP_ASSETS_COUNT = 250;
 
 /**
- * Calculate confidence score WITH Technical Indicators
+ * Calculate confidence score WITH Technical Indicators (BOOSTED for Server Mode)
  */
 function calculateConfidence(asset, enabledIndicators = { rsi: true, macd: true, bollinger: true, ema: true, stoch: true }) {
-  let score = 50;
+  // START HIGHER - Server mode needs more aggressive scoring to match browser
+  let score = 60; // Increased from 50
 
-  // 24h Change impact
-  if (asset.change24h > 2 && asset.change24h <= 10) score += 15;
-  else if (asset.change24h > 10) score += 5;
-  else if (asset.change24h > 0) score += 10;
-  else if (asset.change24h > -3) score += 5;
+  // 24h Change impact - MORE AGGRESSIVE
+  if (asset.change24h > 0.1 && asset.change24h <= 20.0) score += 20; // Broader range, bigger bonus
+  else if (asset.change24h > 20) score += 5;
+  else if (asset.change24h > -0.5) score += 15; // Catch minor dips
+  else if (asset.change24h > -3) score += 10; // Healthy dips
   else if (asset.change24h > -8) score -= 5;
   else score -= 20;
 
@@ -184,8 +185,8 @@ function calculateConfidence(asset, enabledIndicators = { rsi: true, macd: true,
   const { scoreModifier, signals } = analyzeIndicators(asset, enabledIndicators);
   score += scoreModifier;
 
-  // Small random variation
-  const aiBonus = Math.random() * 10 - 5;
+  // Larger random variation for more opportunities
+  const aiBonus = Math.random() * 20 - 10;
   score += aiBonus;
 
   const finalScore = Math.max(30, Math.min(95, Math.round(score)));
