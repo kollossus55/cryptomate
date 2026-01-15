@@ -45,13 +45,20 @@ Deno.serve(async (req) => {
         
         const portfolio = portfolios[0];
         
-        // Invoke auto-trading worker for this user
-        // We await here to ensure sequential processing and avoid rate limits
+        // Fetch user's indicator settings (if they exist)
+        const userPreferences = await base44.asServiceRole.entities.TradingPreferences.filter({
+          created_by: settings.created_by
+        });
+        const indicatorSettings = userPreferences?.[0]?.signal_alert_thresholds?.indicator_settings || 
+          { rsi: true, macd: true, bollinger: true, ema: true, stoch: true };
+
+        // Invoke auto-trading worker for this user with indicator settings
         console.log(`⏳ Invoking worker for ${settings.created_by}...`);
         const result = await base44.asServiceRole.functions.invoke('autoTradingWorker', {
           settings,
           portfolio,
-          user_email: settings.created_by
+          user_email: settings.created_by,
+          indicator_settings: indicatorSettings
         });
         
         processed++;

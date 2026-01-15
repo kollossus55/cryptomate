@@ -423,9 +423,9 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
       };
     }
     
-    // Negative signal sell (RELAXED)
+    // Negative signal sell (OPTIMIZED - Match Browser Logic)
     // Only sell if confidence drastically drops or crash occurs
-    if (priceChange < -15 || confidence < 35) {
+    if (priceChange < -20 || confidence < 20) {
       return {
         action: 'sell',
         reason: 'confidence_collapse_or_crash',
@@ -446,16 +446,16 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
     return { action: null, reason: 'position_exists_hold' };
   }
 
-  // Buy Logic
+  // Buy Logic (OPTIMIZED - Match Browser Logic)
   let buyReason = null;
 
-  // 1. Momentum Buy: Rising but not overbought (>0.2% and <15%)
-  if (priceChange > 0.2 && priceChange < 15.0 && confidence >= minConfidence) {
+  // 1. Momentum Buy: Rising (>0.1% and <20%) - Broader range
+  if (priceChange > 0.1 && priceChange < 20.0 && confidence >= (minConfidence - 5)) {
     buyReason = 'positive_momentum_breakout';
   }
-  // 2. Dip Buy: Dropping but high confidence (Buying the dip)
-  // Catch smaller dips too (starting from -1%)
-  else if (priceChange < -1.0 && priceChange > -15.0 && confidence >= (minConfidence + 5)) {
+  // 2. Dip Buy: Dropping but high confidence
+  // Catch smaller dips (starting from -0.5%) without extra confidence requirement
+  else if (priceChange < -0.5 && priceChange > -20.0 && confidence >= minConfidence) {
     buyReason = 'high_confidence_dip_buy';
   }
 

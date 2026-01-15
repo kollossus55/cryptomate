@@ -221,7 +221,7 @@ function calculateConfidence(asset, enabledIndicators = { rsi: true, macd: true,
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const { settings, portfolio, user_email } = await req.json();
+    const { settings, portfolio, user_email, indicator_settings } = await req.json();
 
     if (!settings || !portfolio) {
       return Response.json({ success: false, error: 'Missing parameters' }, { status: 400 });
@@ -289,9 +289,11 @@ Deno.serve(async (req) => {
     }
 
     // 3. Generate ADVANCED Confidence Scores (70% Technical + 30% News Sentiment)
-    const enabledIndicators = { rsi: true, macd: true, bollinger: true, ema: true, stoch: true };
+    // Use user's indicator preferences or default to all enabled
+    const enabledIndicators = indicator_settings || { rsi: true, macd: true, bollinger: true, ema: true, stoch: true };
     const assetConfidence = {};
-    console.log('📊 Calculating ADVANCED AI signals (Technical + News Sentiment + Indicators)...');
+    const activeIndicators = Object.entries(enabledIndicators).filter(([_, enabled]) => enabled).map(([name]) => name);
+    console.log(`📊 Calculating ADVANCED AI signals with indicators: ${activeIndicators.join(', ')}...`);
     marketAssets.forEach(asset => {
       assetConfidence[asset.symbol] = calculateConfidence(asset, enabledIndicators);
     });
