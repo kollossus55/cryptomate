@@ -121,8 +121,17 @@ export default function AISignals() {
   }, [assets]);
 
   const analyzeAsset = async (asset) => {
+    // Rate limit check (max 1 analysis per 15 seconds)
+    const lastAnalysisTime = localStorage.getItem('last_ai_analysis_time');
+    const now = Date.now();
+    if (lastAnalysisTime && (now - parseInt(lastAnalysisTime)) < 15000) {
+      alert('Please wait 15 seconds between analyses to avoid rate limits');
+      return;
+    }
+
     setIsAnalyzing(true);
     setSelectedAsset(asset);
+    localStorage.setItem('last_ai_analysis_time', now.toString());
 
     try {
       const results = {
@@ -155,6 +164,14 @@ export default function AISignals() {
       setSignalResults(results);
     } catch (error) {
       console.error('Analysis failed:', error);
+      const errorMsg = error.message || 'Analysis failed';
+      if (errorMsg.toLowerCase().includes('rate limit')) {
+        alert('⚠️ Rate limit reached. Please wait 60 seconds and try again.');
+        // Clear timestamp after cooldown
+        setTimeout(() => localStorage.removeItem('last_ai_analysis_time'), 60000);
+      } else {
+        alert('Analysis failed: ' + errorMsg);
+      }
     } finally {
       setIsAnalyzing(false);
     }
