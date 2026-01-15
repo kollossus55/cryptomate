@@ -152,47 +152,67 @@ const analyzeIndicators = (asset, enabledIndicators = { rsi: true, macd: true, b
 const TOP_ASSETS_COUNT = 250;
 
 /**
- * Calculate confidence score WITH Technical Indicators (BOOSTED for Server Mode)
+ * Generate simulated news sentiment (matching browser logic)
+ */
+function generateNewsSentiment(asset) {
+  const priceChange = asset.change24h || 0;
+  let sentimentValue = (Math.random() * 1.2) - 0.6;
+  
+  if (priceChange > 5) sentimentValue += 0.3;
+  else if (priceChange > 2) sentimentValue += 0.15;
+  else if (priceChange < -5) sentimentValue -= 0.3;
+  else if (priceChange < -2) sentimentValue -= 0.15;
+  
+  sentimentValue = Math.max(-1, Math.min(1, sentimentValue));
+  return sentimentValue;
+}
+
+/**
+ * Calculate ADVANCED confidence score (matching browser's generateAdvancedSignal)
  */
 function calculateConfidence(asset, enabledIndicators = { rsi: true, macd: true, bollinger: true, ema: true, stoch: true }) {
-  // START HIGHER - Server mode needs more aggressive scoring to match browser
-  let score = 60; // Increased from 50
+  // Base technical score (matching browser)
+  let technicalScore = 60;
 
-  // 24h Change impact - MORE AGGRESSIVE
-  if (asset.change24h > 0.1 && asset.change24h <= 20.0) score += 20; // Broader range, bigger bonus
-  else if (asset.change24h > 20) score += 5;
-  else if (asset.change24h > -0.5) score += 15; // Catch minor dips
-  else if (asset.change24h > -3) score += 10; // Healthy dips
-  else if (asset.change24h > -8) score -= 5;
-  else score -= 20;
+  // Price momentum (matching browser V4 logic exactly)
+  const change = asset.change24h || 0;
+  if (change > 2 && change <= 10) technicalScore += 20;
+  else if (change > 10) technicalScore += 5;
+  else if (change > 0) technicalScore += 10;
+  else if (change > -3) technicalScore += 5;
+  else if (change > -8) technicalScore -= 5;
+  else technicalScore -= 20;
 
-  // Volume impact
+  // Volume
   const avgVolume = 1500000000;
-  if (asset.volume24h > avgVolume * 2) score += 10;
-  else if (asset.volume24h > avgVolume) score += 5;
-  else if (asset.volume24h < avgVolume / 2) score -= 5;
+  if (asset.volume24h > avgVolume * 2) technicalScore += 15;
+  else if (asset.volume24h > avgVolume) technicalScore += 10;
+  else if (asset.volume24h < avgVolume / 2) technicalScore -= 10;
 
-  // Market Cap impact
-  if (asset.marketCap > 100000000000) score += 10;
-  else if (asset.marketCap > 10000000000) score += 5;
+  // Market Cap
+  if (asset.marketCap > 100000000000) technicalScore += 10;
+  else if (asset.marketCap > 10000000000) technicalScore += 5;
 
-  // Volatility impact
-  const volatility = Math.abs(asset.change24h);
-  if (volatility > 10) score -= 5;
-  else if (volatility < 2) score += 5;
+  // Volatility
+  const volatility = Math.abs(change);
+  if (volatility > 10) technicalScore -= 10;
+  else if (volatility < 2) technicalScore += 5;
 
   // APPLY TECHNICAL INDICATORS
   const { scoreModifier, signals } = analyzeIndicators(asset, enabledIndicators);
-  score += scoreModifier;
+  technicalScore = Math.max(0, Math.min(100, technicalScore + scoreModifier));
 
-  // Larger random variation for more opportunities
-  const aiBonus = Math.random() * 20 - 10;
-  score += aiBonus;
+  // NEWS SENTIMENT (70% Technical + 30% News = matching browser default weights)
+  const newsSentiment = generateNewsSentiment(asset);
+  const newsScore = (newsSentiment + 1) * 50; // Convert -1 to 1 into 0-100
 
-  const finalScore = Math.max(30, Math.min(95, Math.round(score)));
+  // COMPOSITE SCORE (matching browser's 70/30 split)
+  const compositeScore = (technicalScore * 0.7) + (newsScore * 0.3);
   
-  if (signals.length > 0) {
-    console.log(`  📊 ${asset.symbol} Indicators: ${signals.join(', ')} (Modifier: ${scoreModifier >= 0 ? '+' : ''}${scoreModifier}) → ${finalScore}%`);
+  const finalScore = Math.max(30, Math.min(95, Math.round(compositeScore)));
+  
+  if (signals.length > 0 && finalScore >= 65) {
+    console.log(`  📊 ${asset.symbol}: Tech=${technicalScore}%, News=${newsScore.toFixed(0)}%, Composite=${finalScore}% | ${signals.join(', ')}`);
   }
 
   return finalScore;
@@ -268,13 +288,16 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 3. Generate Confidence Scores WITH TECHNICAL INDICATORS
+    // 3. Generate ADVANCED Confidence Scores (70% Technical + 30% News Sentiment)
     const enabledIndicators = { rsi: true, macd: true, bollinger: true, ema: true, stoch: true };
     const assetConfidence = {};
-    console.log('📊 Calculating AI signals with technical indicators...');
+    console.log('📊 Calculating ADVANCED AI signals (Technical + News Sentiment + Indicators)...');
     marketAssets.forEach(asset => {
       assetConfidence[asset.symbol] = calculateConfidence(asset, enabledIndicators);
     });
+    
+    const highConfidenceCount = Object.values(assetConfidence).filter(c => c >= 70).length;
+    console.log(`✅ Generated signals for ${marketAssets.length} assets (${highConfidenceCount} with 70%+ confidence)`);
 
     // 4. Execute Auto-Trading Check (using ported Engine)
     const result = await executeAutoTradingCheckAdvanced(
