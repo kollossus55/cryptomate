@@ -16,6 +16,35 @@ const cache = {
 const CACHE_DURATION = 10 * 60 * 1000; // INCREASED: 10 minutes (was 5)
 const USE_SIMULATED_DATA = true; // Always use simulated data to avoid rate limits
 
+// Rate limit tracker
+const rateLimitTracker = {
+  lastCall: 0,
+  callCount: 0,
+  windowStart: Date.now()
+};
+
+// Check if we're within rate limits (max 5 calls per minute)
+const checkRateLimit = () => {
+  const now = Date.now();
+  const oneMinute = 60 * 1000;
+  
+  // Reset window if needed
+  if (now - rateLimitTracker.windowStart > oneMinute) {
+    rateLimitTracker.windowStart = now;
+    rateLimitTracker.callCount = 0;
+  }
+  
+  // Check if we've exceeded limit
+  if (rateLimitTracker.callCount >= 5) {
+    console.warn('⚠️ Rate limit protection: Skipping API call, using cached data');
+    return false;
+  }
+  
+  rateLimitTracker.callCount++;
+  rateLimitTracker.lastCall = now;
+  return true;
+};
+
 // Get cached result or return null
 const getCached = (type, assetSymbol) => {
   const cached = cache[type].get(assetSymbol);
@@ -37,6 +66,14 @@ const setCache = (type, assetSymbol, data) => {
 export const analyzeNewsSentiment = async (asset) => {
   const cached = getCached('news', asset.symbol);
   if (cached) return cached;
+
+  // Check rate limit before any API calls
+  if (!checkRateLimit()) {
+    // Return cached or simulated data if rate limited
+    const result = generateSimulatedNewsSentiment(asset);
+    setCache('news', asset.symbol, result);
+    return result;
+  }
 
   // ALWAYS use simulated data to avoid rate limits
   const result = generateSimulatedNewsSentiment(asset);
