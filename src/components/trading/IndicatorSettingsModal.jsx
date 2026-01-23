@@ -1,5 +1,5 @@
 import React from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -110,17 +110,17 @@ export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUp
   ];
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-white sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold flex items-center gap-2">
+    <Sheet open={isOpen} onOpenChange={onClose}>
+      <SheetContent className="bg-slate-900 border-slate-700 text-white overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="text-xl font-bold flex items-center gap-2">
             <Activity className="w-5 h-5 text-indigo-400" />
             Signal Indicators
-          </DialogTitle>
+          </SheetTitle>
           <p className="text-sm text-slate-400">
             Configure which technical indicators should influence the AI signal generation.
           </p>
-        </DialogHeader>
+        </SheetHeader>
 
         <div className="flex gap-2 mb-4">
           <Button 
@@ -170,12 +170,12 @@ export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUp
           })}
         </div>
 
-        <DialogFooter>
+        <SheetFooter className="mt-6">
           <Button onClick={onClose} className="w-full bg-indigo-600 hover:bg-indigo-700">
             Save Configuration
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
