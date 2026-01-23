@@ -127,11 +127,14 @@ export default function AISignals() {
   }, [assets]);
 
   const analyzeAsset = async (asset) => {
-    // Rate limit check (max 1 analysis per 15 seconds)
+    // ENHANCED: Rate limit check (max 1 analysis per 30 seconds)
     const lastAnalysisTime = localStorage.getItem('last_ai_analysis_time');
     const now = Date.now();
-    if (lastAnalysisTime && (now - parseInt(lastAnalysisTime)) < 15000) {
-      alert('Please wait 15 seconds between analyses to avoid rate limits');
+    const cooldownPeriod = 30000; // 30 seconds
+    
+    if (lastAnalysisTime && (now - parseInt(lastAnalysisTime)) < cooldownPeriod) {
+      const remainingTime = Math.ceil((cooldownPeriod - (now - parseInt(lastAnalysisTime))) / 1000);
+      alert(`⏳ Please wait ${remainingTime} seconds between analyses to avoid rate limits`);
       return;
     }
 
@@ -172,9 +175,16 @@ export default function AISignals() {
       console.error('Analysis failed:', error);
       const errorMsg = error.message || 'Analysis failed';
       if (errorMsg.toLowerCase().includes('rate limit')) {
-        alert('⚠️ Rate limit reached. Please wait 60 seconds and try again.');
-        // Clear timestamp after cooldown
-        setTimeout(() => localStorage.removeItem('last_ai_analysis_time'), 60000);
+        alert('⚠️ Rate limit reached. Analysis paused for 90 seconds. The system will automatically recover.');
+        // Set longer cooldown after rate limit hit
+        const extendedCooldown = Date.now() - 90000; // Force 90s wait
+        localStorage.setItem('last_ai_analysis_time', extendedCooldown.toString());
+        
+        // Auto-reset after cooldown
+        setTimeout(() => {
+          localStorage.removeItem('last_ai_analysis_time');
+          console.log('✅ Rate limit cooldown complete - ready for analysis');
+        }, 90000);
       } else {
         alert('Analysis failed: ' + errorMsg);
       }
