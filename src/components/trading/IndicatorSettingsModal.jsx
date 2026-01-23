@@ -81,7 +81,7 @@ export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUp
       id: 'candlestick', 
       name: 'Candlestick Patterns', 
       description: 'Recognizes bullish/bearish patterns like engulfing, morning/evening star.',
-      icon: Candle,
+      icon: CandlestickChart,
       color: 'text-amber-400'
     },
     { 
