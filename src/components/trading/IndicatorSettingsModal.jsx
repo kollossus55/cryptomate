@@ -13,6 +13,22 @@ export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUp
     });
   };
 
+  const handleSelectAll = () => {
+    const allEnabled = {};
+    indicators.forEach(ind => {
+      allEnabled[ind.id] = true;
+    });
+    onUpdate(allEnabled);
+  };
+
+  const handleClearAll = () => {
+    const allDisabled = {};
+    indicators.forEach(ind => {
+      allDisabled[ind.id] = false;
+    });
+    onUpdate(allDisabled);
+  };
+
   const indicators = [
     { 
       id: 'rsi', 
@@ -105,6 +121,25 @@ export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUp
             Configure which technical indicators should influence the AI signal generation.
           </p>
         </DialogHeader>
+
+        <div className="flex gap-2 mb-4">
+          <Button 
+            onClick={handleSelectAll}
+            variant="outline"
+            size="sm"
+            className="flex-1 border-indigo-500 text-indigo-400 hover:bg-indigo-500/10"
+          >
+            Select All
+          </Button>
+          <Button 
+            onClick={handleClearAll}
+            variant="outline"
+            size="sm"
+            className="flex-1 border-slate-600 text-slate-400 hover:bg-slate-700"
+          >
+            Clear All
+          </Button>
+        </div>
 
         <div className="space-y-4 py-4">
           {indicators.map((indicator) => {
