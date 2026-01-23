@@ -115,6 +115,155 @@ export const calculateStochastic = (prices, period = 14) => {
   return { k, d };
 };
 
+// 6. Average Directional Index (ADX)
+// Measures trend strength (0-100). >25 indicates strong trend.
+export const calculateADX = (prices, period = 14) => {
+  if (prices.length < period + 1) return { adx: 50, trend: 'neutral' };
+  
+  let plusDM = 0, minusDM = 0, tr = 0;
+  for (let i = prices.length - period; i < prices.length; i++) {
+    const high = Math.max(prices[i], prices[i - 1]);
+    const low = Math.min(prices[i], prices[i - 1]);
+    const upMove = high - prices[i - 1];
+    const downMove = prices[i - 1] - low;
+    
+    if (upMove > downMove && upMove > 0) plusDM += upMove;
+    if (downMove > upMove && downMove > 0) minusDM += downMove;
+    tr += Math.abs(prices[i] - prices[i - 1]);
+  }
+  
+  const plusDI = (plusDM / tr) * 100;
+  const minusDI = (minusDM / tr) * 100;
+  const adx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
+  
+  const trend = adx > 25 ? (plusDI > minusDI ? 'strong_uptrend' : 'strong_downtrend') : 'weak_trend';
+  
+  return { adx: Math.min(100, adx), plusDI, minusDI, trend };
+};
+
+// 7. Simple Moving Average (SMA)
+export const calculateSMA = (prices, period) => {
+  if (prices.length < period) return prices[prices.length - 1];
+  const slice = prices.slice(-period);
+  return slice.reduce((a, b) => a + b, 0) / period;
+};
+
+// 8. Awesome Oscillator
+// Momentum indicator based on SMA difference.
+export const calculateAwesomeOscillator = (prices) => {
+  if (prices.length < 34) return { ao: 0, signal: 'neutral' };
+  
+  const sma5 = calculateSMA(prices, 5);
+  const sma34 = calculateSMA(prices, 34);
+  const ao = sma5 - sma34;
+  
+  const signal = ao > 0 ? 'bullish' : ao < 0 ? 'bearish' : 'neutral';
+  
+  return { ao, signal };
+};
+
+// 9. Aroon Indicator
+// Identifies trend changes and strength.
+export const calculateAroon = (prices, period = 25) => {
+  if (prices.length < period) return { aroonUp: 50, aroonDown: 50, trend: 'neutral' };
+  
+  const slice = prices.slice(-period);
+  const highIndex = slice.indexOf(Math.max(...slice));
+  const lowIndex = slice.indexOf(Math.min(...slice));
+  
+  const aroonUp = ((period - (period - 1 - highIndex)) / period) * 100;
+  const aroonDown = ((period - (period - 1 - lowIndex)) / period) * 100;
+  
+  let trend = 'neutral';
+  if (aroonUp > 70 && aroonDown < 30) trend = 'strong_uptrend';
+  else if (aroonDown > 70 && aroonUp < 30) trend = 'strong_downtrend';
+  else if (aroonUp > aroonDown) trend = 'uptrend';
+  else if (aroonDown > aroonUp) trend = 'downtrend';
+  
+  return { aroonUp, aroonDown, trend };
+};
+
+// 10. Candlestick Pattern Detection
+// Recognizes common price action patterns.
+export const detectCandlestickPattern = (prices) => {
+  if (prices.length < 3) return { pattern: 'none', signal: 'neutral' };
+  
+  const current = prices[prices.length - 1];
+  const prev = prices[prices.length - 2];
+  const prev2 = prices[prices.length - 3];
+  
+  const body = Math.abs(current - prev);
+  const prevBody = Math.abs(prev - prev2);
+  
+  // Bullish patterns
+  if (current > prev && body > prevBody * 1.5) {
+    return { pattern: 'bullish_engulfing', signal: 'buy' };
+  }
+  if (current > prev && prev < prev2 && current > prev2) {
+    return { pattern: 'morning_star', signal: 'buy' };
+  }
+  
+  // Bearish patterns
+  if (current < prev && body > prevBody * 1.5) {
+    return { pattern: 'bearish_engulfing', signal: 'sell' };
+  }
+  if (current < prev && prev > prev2 && current < prev2) {
+    return { pattern: 'evening_star', signal: 'sell' };
+  }
+  
+  // Doji
+  if (body < (Math.max(current, prev) * 0.001)) {
+    return { pattern: 'doji', signal: 'neutral' };
+  }
+  
+  return { pattern: 'none', signal: 'neutral' };
+};
+
+// 11. Ichimoku Cloud
+// Comprehensive trend and momentum indicator.
+export const calculateIchimoku = (prices) => {
+  if (prices.length < 52) return { signal: 'neutral', cloud: 'neutral' };
+  
+  // Tenkan-sen (Conversion Line): (9-period high + 9-period low)/2
+  const tenkanPeriod = 9;
+  const tenkanSlice = prices.slice(-tenkanPeriod);
+  const tenkanSen = (Math.max(...tenkanSlice) + Math.min(...tenkanSlice)) / 2;
+  
+  // Kijun-sen (Base Line): (26-period high + 26-period low)/2
+  const kijunPeriod = 26;
+  const kijunSlice = prices.slice(-kijunPeriod);
+  const kijunSen = (Math.max(...kijunSlice) + Math.min(...kijunSlice)) / 2;
+  
+  // Senkou Span A: (Conversion Line + Base Line)/2
+  const senkouA = (tenkanSen + kijunSen) / 2;
+  
+  // Senkou Span B: (52-period high + 52-period low)/2
+  const senkouSlice = prices.slice(-52);
+  const senkouB = (Math.max(...senkouSlice) + Math.min(...senkouSlice)) / 2;
+  
+  const current = prices[prices.length - 1];
+  
+  // Determine cloud position and signal
+  let cloud = 'neutral';
+  let signal = 'neutral';
+  
+  if (senkouA > senkouB) {
+    cloud = 'bullish';
+    if (current > senkouA) signal = 'strong_buy';
+    else if (current > senkouB) signal = 'buy';
+  } else {
+    cloud = 'bearish';
+    if (current < senkouA) signal = 'strong_sell';
+    else if (current < senkouB) signal = 'sell';
+  }
+  
+  // TK Cross
+  if (tenkanSen > kijunSen && cloud === 'bullish') signal = 'strong_buy';
+  if (tenkanSen < kijunSen && cloud === 'bearish') signal = 'strong_sell';
+  
+  return { signal, cloud, tenkanSen, kijunSen, senkouA, senkouB };
+};
+
 export const analyzeIndicators = (asset, enabledIndicators) => {
   // Generate synthetic history based on asset's current state
   const prices = generateSyntheticHistory(asset.price, asset.change24h, 100);
@@ -182,6 +331,86 @@ export const analyzeIndicators = (asset, enabledIndicators) => {
     } else if (k > 80) {
       scoreModifier -= 10;
       signals.push("Stoch Overbought");
+    }
+  }
+
+  if (enabledIndicators.adx) {
+    const adx = calculateADX(prices);
+    results.adx = adx;
+    if (adx.trend === 'strong_uptrend') {
+      scoreModifier += 15;
+      signals.push(`ADX Strong Uptrend (${adx.adx.toFixed(0)})`);
+    } else if (adx.trend === 'strong_downtrend') {
+      scoreModifier -= 15;
+      signals.push(`ADX Strong Downtrend (${adx.adx.toFixed(0)})`);
+    }
+  }
+
+  if (enabledIndicators.sma) {
+    const sma20 = calculateSMA(prices, 20);
+    const sma50 = calculateSMA(prices, 50);
+    const current = prices[prices.length - 1];
+    results.sma = { sma20, sma50 };
+    if (current > sma20 && sma20 > sma50) {
+      scoreModifier += 12;
+      signals.push("SMA Golden Cross");
+    } else if (current < sma20 && sma20 < sma50) {
+      scoreModifier -= 12;
+      signals.push("SMA Death Cross");
+    }
+  }
+
+  if (enabledIndicators.ao) {
+    const ao = calculateAwesomeOscillator(prices);
+    results.awesomeOscillator = ao;
+    if (ao.signal === 'bullish') {
+      scoreModifier += 10;
+      signals.push("AO Bullish");
+    } else if (ao.signal === 'bearish') {
+      scoreModifier -= 10;
+      signals.push("AO Bearish");
+    }
+  }
+
+  if (enabledIndicators.aroon) {
+    const aroon = calculateAroon(prices);
+    results.aroon = aroon;
+    if (aroon.trend === 'strong_uptrend') {
+      scoreModifier += 15;
+      signals.push("Aroon Strong Uptrend");
+    } else if (aroon.trend === 'strong_downtrend') {
+      scoreModifier -= 15;
+      signals.push("Aroon Strong Downtrend");
+    }
+  }
+
+  if (enabledIndicators.candlestick) {
+    const pattern = detectCandlestickPattern(prices);
+    results.candlestick = pattern;
+    if (pattern.signal === 'buy') {
+      scoreModifier += 12;
+      signals.push(`${pattern.pattern.replace(/_/g, ' ').toUpperCase()}`);
+    } else if (pattern.signal === 'sell') {
+      scoreModifier -= 12;
+      signals.push(`${pattern.pattern.replace(/_/g, ' ').toUpperCase()}`);
+    }
+  }
+
+  if (enabledIndicators.ichimoku) {
+    const ichimoku = calculateIchimoku(prices);
+    results.ichimoku = ichimoku;
+    if (ichimoku.signal === 'strong_buy') {
+      scoreModifier += 18;
+      signals.push("Ichimoku Strong Buy");
+    } else if (ichimoku.signal === 'strong_sell') {
+      scoreModifier -= 18;
+      signals.push("Ichimoku Strong Sell");
+    } else if (ichimoku.signal === 'buy') {
+      scoreModifier += 10;
+      signals.push("Ichimoku Buy");
+    } else if (ichimoku.signal === 'sell') {
+      scoreModifier -= 10;
+      signals.push("Ichimoku Sell");
     }
   }
 
