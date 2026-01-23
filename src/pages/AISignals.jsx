@@ -41,7 +41,13 @@ export default function AISignals() {
     macd: true,
     bollinger: true,
     ema: true,
-    stoch: true
+    stoch: true,
+    adx: true,
+    sma: true,
+    ao: true,
+    aroon: true,
+    candlestick: true,
+    ichimoku: true
   });
 
   // Fetch AI signal config

@@ -61,7 +61,13 @@ export default function Trading() {
     macd: true,
     bollinger: true,
     ema: true,
-    stoch: true
+    stoch: true,
+    adx: true,
+    sma: true,
+    ao: true,
+    aroon: true,
+    candlestick: true,
+    ichimoku: true
   });
 
   const queryClient = useQueryClient();
