@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Activity, BarChart2, TrendingUp, Zap, Waves } from "lucide-react";
+import { Activity, BarChart2, TrendingUp, Zap, Waves, Signal, LineChart, ArrowUpDown, Sparkles, CandlestickChart, Cloud } from "lucide-react";
 
 export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUpdate }) {
   const handleToggle = (key) => {
@@ -48,6 +48,48 @@ export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUp
       description: 'Momentum indicator comparing closing price to a range of prices.',
       icon: Zap,
       color: 'text-orange-400'
+    },
+    { 
+      id: 'adx', 
+      name: 'ADX (Average Directional Index)', 
+      description: 'Measures trend strength. >25 indicates strong trend.',
+      icon: Signal,
+      color: 'text-green-400'
+    },
+    { 
+      id: 'sma', 
+      name: 'SMA (Simple Moving Average)', 
+      description: 'Identifies support/resistance levels and trend direction.',
+      icon: LineChart,
+      color: 'text-pink-400'
+    },
+    { 
+      id: 'ao', 
+      name: 'Awesome Oscillator', 
+      description: 'Momentum indicator using 5-period and 34-period moving averages.',
+      icon: ArrowUpDown,
+      color: 'text-teal-400'
+    },
+    { 
+      id: 'aroon', 
+      name: 'Aroon Indicator', 
+      description: 'Identifies trend changes and measures trend strength.',
+      icon: Sparkles,
+      color: 'text-indigo-400'
+    },
+    { 
+      id: 'candlestick', 
+      name: 'Candlestick Patterns', 
+      description: 'Recognizes bullish/bearish patterns like engulfing, morning/evening star.',
+      icon: Candle,
+      color: 'text-amber-400'
+    },
+    { 
+      id: 'ichimoku', 
+      name: 'Ichimoku Cloud', 
+      description: 'Comprehensive indicator showing support/resistance, trend, and momentum.',
+      icon: Cloud,
+      color: 'text-violet-400'
     }
   ];
 
