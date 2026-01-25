@@ -85,6 +85,7 @@ export default function Trading() {
   // Save indicator settings to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('indicator_settings', JSON.stringify(indicatorSettings));
+    console.log('💾 Saved indicator settings:', indicatorSettings);
   }, [indicatorSettings]);
 
   // Fetch user preferences
