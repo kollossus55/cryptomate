@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertCircle, TrendingUp, Sparkles, Target } from "lucide-react";
+import { AlertCircle, TrendingUp, Sparkles, Target, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import RealTimeMarketDepth from "./RealTimeMarketDepth";
 
@@ -13,6 +14,14 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
   const [quantity, setQuantity] = useState("");
   const [percentage, setPercentage] = useState([25]);
   const [isExecuting, setIsExecuting] = useState(false);
+  
+  // Risk Management Settings
+  const [useRiskManagement, setUseRiskManagement] = useState(false);
+  const [stopLossPercent, setStopLossPercent] = useState(3);
+  const [takeProfitPercent, setTakeProfitPercent] = useState(8);
+  const [useTrailingStop, setUseTrailingStop] = useState(false);
+  const [trailingStopPercent, setTrailingStopPercent] = useState(2);
+  const [useBreakeven, setUseBreakeven] = useState(false);
 
   const availableBalance = portfolio?.available_balance || 10000;
   const assetPrice = asset?.price || 0;
@@ -100,7 +109,15 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
         tradeType,
         quantity: parseFloat(quantity),
         price: assetPrice,
-        totalValue: calculatedTotal
+        totalValue: calculatedTotal,
+        // Risk Management Settings
+        riskManagement: useRiskManagement ? {
+          stopLoss: stopLossPercent,
+          takeProfit: takeProfitPercent,
+          useTrailingStop,
+          trailingStopPercent,
+          useBreakeven
+        } : null
       });
       onClose();
     } catch (error) {
@@ -376,6 +393,96 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
                 <span className="text-indigo-400 font-semibold">{percentage[0]}%</span>
                 <span>100%</span>
               </div>
+            </div>
+          )}
+
+          {/* Risk Management Settings */}
+          {tradeType === 'buy' && (
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-indigo-400" />
+                  <h3 className="font-semibold text-white">Risk Management</h3>
+                </div>
+                <Switch
+                  checked={useRiskManagement}
+                  onCheckedChange={setUseRiskManagement}
+                  className="data-[state=checked]:bg-indigo-600"
+                />
+              </div>
+
+              {useRiskManagement && (
+                <div className="space-y-4 pt-2">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-slate-300 mb-2 block text-sm">Stop Loss %</Label>
+                      <Input
+                        type="number"
+                        value={stopLossPercent}
+                        onChange={(e) => setStopLossPercent(parseFloat(e.target.value))}
+                        className="bg-slate-900 border-slate-600 text-white"
+                        step="0.5"
+                        min="0"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Exit at ${(assetPrice * (1 - stopLossPercent / 100)).toFixed(2)}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-slate-300 mb-2 block text-sm">Take Profit %</Label>
+                      <Input
+                        type="number"
+                        value={takeProfitPercent}
+                        onChange={(e) => setTakeProfitPercent(parseFloat(e.target.value))}
+                        className="bg-slate-900 border-slate-600 text-white"
+                        step="0.5"
+                        min="0"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Exit at ${(assetPrice * (1 + takeProfitPercent / 100)).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-slate-900/50 rounded-lg p-3">
+                    <div>
+                      <Label className="text-slate-300 text-sm">Trailing Stop</Label>
+                      <p className="text-xs text-slate-500">Lock in profits as price rises</p>
+                    </div>
+                    <Switch
+                      checked={useTrailingStop}
+                      onCheckedChange={setUseTrailingStop}
+                      className="data-[state=checked]:bg-green-600"
+                    />
+                  </div>
+
+                  {useTrailingStop && (
+                    <div>
+                      <Label className="text-slate-300 mb-2 block text-sm">Trailing Distance %</Label>
+                      <Input
+                        type="number"
+                        value={trailingStopPercent}
+                        onChange={(e) => setTrailingStopPercent(parseFloat(e.target.value))}
+                        className="bg-slate-900 border-slate-600 text-white"
+                        step="0.5"
+                        min="0.5"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between bg-slate-900/50 rounded-lg p-3">
+                    <div>
+                      <Label className="text-slate-300 text-sm">Break-Even Protection</Label>
+                      <p className="text-xs text-slate-500">Move stop to entry after +4% profit</p>
+                    </div>
+                    <Switch
+                      checked={useBreakeven}
+                      onCheckedChange={setUseBreakeven}
+                      className="data-[state=checked]:bg-blue-600"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
