@@ -336,9 +336,27 @@ export default function Trading() {
 
       // Delete existing trades to fully reset history
       console.log("Deleting trade history...");
-      const allTrades = await base44.entities.Trade.list(null, 100); 
-      if (allTrades && allTrades.length > 0) {
+      let allTrades = [];
+      let hasMore = true;
+      let skip = 0;
+      const batchSize = 100;
+
+      // Fetch all trades in batches
+      while (hasMore) {
+        const batch = await base44.entities.Trade.list(null, batchSize);
+        if (batch && batch.length > 0) {
+          allTrades = [...allTrades, ...batch];
+          skip += batchSize;
+          hasMore = batch.length === batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      console.log(`Found ${allTrades.length} trades to delete`);
+      if (allTrades.length > 0) {
         await Promise.all(allTrades.map(trade => base44.entities.Trade.delete(trade.id)));
+        console.log(`✅ Deleted ${allTrades.length} trades`);
       }
     },
     onSuccess: () => {
