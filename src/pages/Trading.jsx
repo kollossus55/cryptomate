@@ -56,21 +56,36 @@ export default function Trading() {
   const [lastScanTime, setLastScanTime] = useState(null);
   const [currentMarketCondition, setCurrentMarketCondition] = useState('normal');
   const [showIndicatorSettings, setShowIndicatorSettings] = useState(false);
-  const [indicatorSettings, setIndicatorSettings] = useState({
-    rsi: true,
-    macd: true,
-    bollinger: true,
-    ema: true,
-    stoch: true,
-    adx: true,
-    sma: true,
-    ao: true,
-    aroon: true,
-    candlestick: true,
-    ichimoku: true
+  const [indicatorSettings, setIndicatorSettings] = useState(() => {
+    const saved = localStorage.getItem('indicator_settings');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse saved indicator settings');
+      }
+    }
+    return {
+      rsi: true,
+      macd: true,
+      bollinger: true,
+      ema: true,
+      stoch: true,
+      adx: true,
+      sma: true,
+      ao: true,
+      aroon: true,
+      candlestick: true,
+      ichimoku: true
+    };
   });
 
   const queryClient = useQueryClient();
+
+  // Save indicator settings to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('indicator_settings', JSON.stringify(indicatorSettings));
+  }, [indicatorSettings]);
 
   // Fetch user preferences
   const { data: preferences } = useQuery({
