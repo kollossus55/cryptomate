@@ -474,6 +474,19 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
       };
     }
     
+    // Check for opposite signal (sell signal on existing buy position)
+    // Use signal data from window.assetSignalData to check if AI now recommends selling
+    const signalData = typeof window !== 'undefined' ? window.assetSignalData?.[asset.symbol] : null;
+    if (signalData && signalData.recommendation === 'sell' && signalData.confidence >= (settings.min_confidence || 70)) {
+      console.log(`🔄 Opposite signal detected: ${asset.symbol} now shows SELL signal (${signalData.confidence}% confidence) - closing position`);
+      return {
+        action: 'sell',
+        reason: 'opposite_signal_detected',
+        quantity: position.quantity,
+        profitPercent
+      };
+    }
+    
     // Negative signal sell (RELAXED)
     // Only sell if confidence drastically drops or crash occurs
     if (priceChange < -20 || confidence < 20) {
