@@ -16,6 +16,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
   const [hasNewSignals, setHasNewSignals] = useState(false);
   const [lastInteractionTime, setLastInteractionTime] = useState(Date.now());
   const [userPreferences, setUserPreferences] = useState(null);
+  const [selectedTrades, setSelectedTrades] = useState(new Set());
   
   const autoRefreshIntervalRef = useRef(null);
   const inactivityTimerRef = useRef(null);
@@ -494,7 +495,51 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
 
   const handleRefresh = () => {
     analyzeTopAssets();
+    setSelectedTrades(new Set());
     handleUserInteraction();
+  };
+
+  const toggleTradeSelection = (symbol) => {
+    setSelectedTrades(prev => {
+      const next = new Set(prev);
+      if (next.has(symbol)) {
+        next.delete(symbol);
+      } else {
+        next.add(symbol);
+      }
+      return next;
+    });
+  };
+
+  const handleExecuteSelected = () => {
+    if (selectedTrades.size === 0) return;
+    
+    const selectedRecs = recommendations.recommendations.filter(rec => selectedTrades.has(rec.symbol));
+    
+    selectedRecs.forEach(rec => {
+      let asset = assets.find(a => a.symbol === rec.symbol);
+      if (!asset && window.altcoinOpportunities) {
+        const altcoin = window.altcoinOpportunities.find(a => a.symbol === rec.symbol);
+        if (altcoin) {
+          asset = {
+            symbol: altcoin.symbol,
+            name: altcoin.name,
+            price: altcoin.simulated_price,
+            change24h: altcoin.momentum,
+            volume24h: altcoin.marketCap * 0.1,
+            marketCap: altcoin.marketCap,
+            icon: altcoin.symbol.substring(0, 2),
+            color: "bg-cyan-500"
+          };
+        }
+      }
+      if (asset) {
+        onTradeAsset(asset, rec.action);
+      }
+    });
+    
+    setSelectedTrades(new Set());
+    handleClose();
   };
 
 
@@ -630,6 +675,34 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
                     </div>
                   )}
 
+                  {selectedTrades.size > 0 && (
+                    <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg p-4 mb-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-white font-bold">{selectedTrades.size} trade{selectedTrades.size > 1 ? 's' : ''} selected</p>
+                          <p className="text-indigo-200 text-sm">Execute multiple trades at once</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedTrades(new Set())}
+                            className="border-white/30 text-white hover:bg-white/10"
+                          >
+                            Clear
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={handleExecuteSelected}
+                            className="bg-white text-indigo-600 hover:bg-white/90 font-bold"
+                          >
+                            Execute {selectedTrades.size} Trade{selectedTrades.size > 1 ? 's' : ''}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {recommendations.recommendations?.map((rec, idx) => {
                     // Look for asset in both main assets and altcoin opportunities
                     let asset = assets.find(a => a.symbol === rec.symbol);
@@ -659,10 +732,20 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: idx * 0.1 }}
-                        className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/10 hover:border-white/20 transition-all"
+                        className={`bg-white/5 backdrop-blur-sm rounded-xl p-4 border transition-all ${
+                          selectedTrades.has(rec.symbol) 
+                            ? 'border-indigo-400 bg-indigo-500/10' 
+                            : 'border-white/10 hover:border-white/20'
+                        }`}
                       >
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedTrades.has(rec.symbol)}
+                              onChange={() => toggleTradeSelection(rec.symbol)}
+                              className="w-5 h-5 rounded bg-white/10 border-white/30 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${asset.color}`}>
                               <span className="text-lg font-bold">{asset.icon}</span>
                             </div>
