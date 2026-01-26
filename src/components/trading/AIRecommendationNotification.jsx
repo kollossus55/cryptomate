@@ -282,6 +282,28 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
 
       setRecommendations(result);
       
+      // 🔥 SYNC SIGNALS TO AUTO-TRADING ENGINE
+      if (result?.recommendations) {
+        result.recommendations.forEach(rec => {
+          if (!window.assetSignalData) window.assetSignalData = {};
+          window.assetSignalData[rec.symbol] = {
+            confidence: rec.confidence,
+            recommendation: rec.action,
+            riskLevel: rec.risk_level,
+            timestamp: Date.now(),
+            source: 'ai_popup',
+            reasoning: rec.reasoning,
+            breakdown: {
+              technical: rec.data_sources?.technical_score || 0,
+              news: { sentiment_label: rec.data_sources?.news_sentiment || 'neutral' },
+              social: { social_score: rec.data_sources?.social_score || 0 },
+              onchain: { signal: rec.data_sources?.onchain_signal || 'neutral' }
+            }
+          };
+        });
+        console.log('✅ Synced', result.recommendations.length, 'signals to auto-trading engine');
+      }
+      
       // Cache the recommendations
       localStorage.setItem('cached_ai_recommendations', JSON.stringify(result));
       localStorage.setItem('last_llm_recommendation_call', Date.now().toString());
@@ -404,10 +426,34 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
       return rec;
     });
 
-    setRecommendations({
+    const result = {
       recommendations,
       market_summary: `Market analysis based on cached signal data${window.altcoinOpportunities?.length ? ' including altcoin scanner' : ''}. ${recommendations.length} opportunities identified.`
-    });
+    };
+    
+    // 🔥 SYNC SIGNALS TO AUTO-TRADING ENGINE
+    if (recommendations) {
+      recommendations.forEach(rec => {
+        if (!window.assetSignalData) window.assetSignalData = {};
+        window.assetSignalData[rec.symbol] = {
+          confidence: rec.confidence,
+          recommendation: rec.action,
+          riskLevel: rec.risk_level,
+          timestamp: Date.now(),
+          source: 'basic_analysis',
+          reasoning: rec.reasoning,
+          breakdown: {
+            technical: rec.data_sources?.technical_score || 0,
+            news: { sentiment_label: rec.data_sources?.news_sentiment || 'neutral' },
+            social: { social_score: rec.data_sources?.social_score || 0 },
+            onchain: { signal: rec.data_sources?.onchain_signal || 'neutral' }
+          }
+        };
+      });
+      console.log('✅ Synced', recommendations.length, 'basic signals to auto-trading engine');
+    }
+    
+    setRecommendations(result);
   };
 
   const checkForNewSignals = async () => {
