@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 
-export default function AIRecommendationNotification({ assets, onTradeAsset, onClose, useAltcoinScanner = false }) {
+export default function AIRecommendationNotification({ assets, onTradeAsset, onBatchExecute, portfolio, onClose, useAltcoinScanner = false }) {
   const [recommendations, setRecommendations] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
@@ -514,16 +514,18 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
   const handleExecuteSelected = async () => {
     if (selectedTrades.size === 0) return;
     
+    if (!onBatchExecute) {
+      alert('Batch execution not available. Please select one trade at a time.');
+      return;
+    }
+    
     const selectedRecs = recommendations.recommendations.filter(rec => selectedTrades.has(rec.symbol));
     
-    console.log(`🎯 Executing ${selectedRecs.length} trades from AI popup...`);
+    console.log(`🎯 Batch executing ${selectedRecs.length} trades...`);
     
-    // Import executeAutoTradeFunc if available from window/props, or notify user to use individual trades
-    // Since we don't have direct access to handleExecuteTrade from Trading page,
-    // we'll open the trade modal for each with proper sequencing
+    const tradesToExecute = [];
     
-    for (let i = 0; i < selectedRecs.length; i++) {
-      const rec = selectedRecs[i];
+    for (const rec of selectedRecs) {
       let asset = assets.find(a => a.symbol === rec.symbol);
       
       if (!asset && window.altcoinOpportunities) {
@@ -543,21 +545,43 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
       }
       
       if (asset) {
-        console.log(`📊 Opening trade ${i + 1}/${selectedRecs.length}: ${rec.action.toUpperCase()} ${asset.symbol}`);
-        onTradeAsset(asset, rec.action);
+        // Calculate quantity based on action
+        let quantity = 0;
         
-        // Wait longer between each modal to ensure they process
-        if (i < selectedRecs.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 800));
+        if (rec.action === 'buy' && portfolio) {
+          const maxPositionSize = (portfolio.available_balance * 0.1); // 10% of balance
+          quantity = maxPositionSize / asset.price;
+        } else if (rec.action === 'sell') {
+          // Find existing position
+          const assetSymbol = `${asset.symbol}/USDT`;
+          const position = portfolio?.positions?.find(p => p.asset_symbol === assetSymbol);
+          if (position) {
+            quantity = position.quantity;
+          }
+        }
+        
+        if (quantity > 0) {
+          tradesToExecute.push({
+            asset,
+            action: rec.action,
+            quantity
+          });
         }
       }
     }
     
+    if (tradesToExecute.length > 0) {
+      try {
+        await onBatchExecute(tradesToExecute);
+        console.log(`✅ Successfully executed ${tradesToExecute.length} trades`);
+      } catch (error) {
+        console.error('Batch execution failed:', error);
+        alert(`Failed to execute trades: ${error.message}`);
+      }
+    }
+    
     setSelectedTrades(new Set());
-    // Don't close immediately to allow user to see the last modal
-    setTimeout(() => {
-      handleClose();
-    }, 500);
+    handleClose();
   };
 
 

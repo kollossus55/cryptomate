@@ -1902,6 +1902,24 @@ export default function Trading() {
         <AIRecommendationNotification
           assets={assets}
           onTradeAsset={handleTrade}
+          onBatchExecute={async (selectedAssets) => {
+            for (const { asset, action, quantity } of selectedAssets) {
+              console.log(`🤖 Batch executing: ${action.toUpperCase()} ${quantity} ${asset.symbol}`);
+              await handleExecuteTrade({
+                asset,
+                tradeType: action,
+                quantity,
+                price: asset.price,
+                totalValue: quantity * asset.price
+              });
+              // Small delay between trades
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            // Refresh data after batch
+            queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+            queryClient.invalidateQueries({ queryKey: ['trades'] });
+          }}
+          portfolio={portfolio}
           onClose={() => setShowRecommendations(false)}
         />
       )}
