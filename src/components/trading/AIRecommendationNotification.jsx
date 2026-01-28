@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 
-export default function AIRecommendationNotification({ assets, onTradeAsset, onBatchExecute, portfolio, onClose, useAltcoinScanner = false }) {
+export default function AIRecommendationNotification({ assets, onTradeAsset, onExecuteTrade, portfolio, onClose, useAltcoinScanner = false }) {
   const [recommendations, setRecommendations] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
@@ -514,7 +514,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onB
   const handleExecuteSelected = async () => {
     if (selectedTrades.size === 0) return;
     
-    if (!onBatchExecute) {
+    if (!onExecuteTrade) {
       alert('Batch execution not available. Please select one trade at a time.');
       return;
     }
@@ -522,8 +522,6 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onB
     const selectedRecs = recommendations.recommendations.filter(rec => selectedTrades.has(rec.symbol));
     
     console.log(`🎯 Batch executing ${selectedRecs.length} trades...`);
-    
-    const tradesToExecute = [];
     
     for (const rec of selectedRecs) {
       let asset = assets.find(a => a.symbol === rec.symbol);
@@ -545,14 +543,12 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onB
       }
       
       if (asset) {
-        // Calculate quantity based on action
         let quantity = 0;
         
         if (rec.action === 'buy' && portfolio) {
-          const maxPositionSize = (portfolio.available_balance * 0.1); // 10% of balance
+          const maxPositionSize = (portfolio.available_balance * 0.1);
           quantity = maxPositionSize / asset.price;
         } else if (rec.action === 'sell') {
-          // Find existing position
           const assetSymbol = `${asset.symbol}/USDT`;
           const position = portfolio?.positions?.find(p => p.asset_symbol === assetSymbol);
           if (position) {
@@ -561,22 +557,21 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onB
         }
         
         if (quantity > 0) {
-          tradesToExecute.push({
-            asset,
-            action: rec.action,
-            quantity
-          });
+          try {
+            console.log(`📊 Executing ${rec.action.toUpperCase()} ${quantity.toFixed(6)} ${asset.symbol}`);
+            await onExecuteTrade({
+              asset,
+              tradeType: rec.action,
+              quantity,
+              price: asset.price,
+              totalValue: quantity * asset.price
+            });
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (error) {
+            console.error(`Failed to execute ${rec.action} for ${asset.symbol}:`, error);
+            alert(`Failed to execute ${rec.action.toUpperCase()} ${asset.symbol}: ${error.message}`);
+          }
         }
-      }
-    }
-    
-    if (tradesToExecute.length > 0) {
-      try {
-        await onBatchExecute(tradesToExecute);
-        console.log(`✅ Successfully executed ${tradesToExecute.length} trades`);
-      } catch (error) {
-        console.error('Batch execution failed:', error);
-        alert(`Failed to execute trades: ${error.message}`);
       }
     }
     
