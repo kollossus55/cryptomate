@@ -511,12 +511,13 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
     });
   };
 
-  const handleExecuteSelected = () => {
+  const handleExecuteSelected = async () => {
     if (selectedTrades.size === 0) return;
     
     const selectedRecs = recommendations.recommendations.filter(rec => selectedTrades.has(rec.symbol));
     
-    selectedRecs.forEach(rec => {
+    // Execute trades sequentially with small delay between each
+    for (const rec of selectedRecs) {
       let asset = assets.find(a => a.symbol === rec.symbol);
       if (!asset && window.altcoinOpportunities) {
         const altcoin = window.altcoinOpportunities.find(a => a.symbol === rec.symbol);
@@ -535,8 +536,10 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
       }
       if (asset) {
         onTradeAsset(asset, rec.action);
+        // Small delay between opening trade modals
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
-    });
+    }
     
     setSelectedTrades(new Set());
     handleClose();
