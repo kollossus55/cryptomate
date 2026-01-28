@@ -1904,6 +1904,7 @@ export default function Trading() {
           onTradeAsset={handleTrade}
           onExecuteTrade={handleExecuteTrade}
           portfolio={portfolio}
+          autoTradingSettings={autoTradingSettings}
           onClose={() => setShowRecommendations(false)}
         />
       )}

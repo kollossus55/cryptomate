@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 
-export default function AIRecommendationNotification({ assets, onTradeAsset, onExecuteTrade, portfolio, onClose, useAltcoinScanner = false }) {
+export default function AIRecommendationNotification({ assets, onTradeAsset, onExecuteTrade, portfolio, autoTradingSettings, onClose, useAltcoinScanner = false }) {
   const [recommendations, setRecommendations] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
@@ -542,7 +542,8 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
         let quantity = 0;
         
         if (rec.action === 'buy' && portfolio) {
-          const maxPositionSize = (portfolio.available_balance * 0.1);
+          const positionSizePercent = (autoTradingSettings?.max_position_size_percent || 10) / 100;
+          const maxPositionSize = portfolio.available_balance * positionSizePercent;
           quantity = maxPositionSize / asset.price;
         } else if (rec.action === 'sell') {
           const assetSymbol = `${asset.symbol}/USDT`;
