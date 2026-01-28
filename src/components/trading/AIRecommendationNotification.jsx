@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 
-export default function AIRecommendationNotification({ assets, onTradeAsset, portfolio, onClose, useAltcoinScanner = false }) {
+export default function AIRecommendationNotification({ assets, onTradeAsset, onExecuteTrade, portfolio, onClose, useAltcoinScanner = false }) {
   const [recommendations, setRecommendations] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
@@ -513,10 +513,11 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, por
 
   const handleExecuteSelected = async () => {
     if (selectedTrades.size === 0) return;
+    if (!onExecuteTrade) return;
     
     const selectedRecs = recommendations.recommendations.filter(rec => selectedTrades.has(rec.symbol));
     
-    console.log(`🎯 Opening ${selectedRecs.length} trade windows...`);
+    console.log(`🎯 Executing ${selectedRecs.length} trades directly...`);
     
     for (const rec of selectedRecs) {
       let asset = assets.find(a => a.symbol === rec.symbol);
@@ -538,11 +539,38 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, por
       }
       
       if (asset) {
-        onTradeAsset(asset, rec.action);
-        await new Promise(resolve => setTimeout(resolve, 100));
+        let quantity = 0;
+        
+        if (rec.action === 'buy' && portfolio) {
+          const maxPositionSize = (portfolio.available_balance * 0.1);
+          quantity = maxPositionSize / asset.price;
+        } else if (rec.action === 'sell') {
+          const assetSymbol = `${asset.symbol}/USDT`;
+          const position = portfolio?.positions?.find(p => p.asset_symbol === assetSymbol);
+          if (position) {
+            quantity = position.quantity;
+          }
+        }
+        
+        if (quantity > 0) {
+          try {
+            console.log(`📊 Executing ${rec.action.toUpperCase()} ${quantity.toFixed(6)} ${asset.symbol}`);
+            await onExecuteTrade({
+              asset,
+              tradeType: rec.action,
+              quantity,
+              price: asset.price,
+              totalValue: quantity * asset.price
+            });
+            await new Promise(resolve => setTimeout(resolve, 800));
+          } catch (error) {
+            console.error(`Failed to execute ${rec.action} for ${asset.symbol}:`, error);
+          }
+        }
       }
     }
     
+    console.log(`✅ Batch execution complete`);
     setSelectedTrades(new Set());
   };
 

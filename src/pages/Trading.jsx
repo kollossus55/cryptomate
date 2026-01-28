@@ -1902,6 +1902,7 @@ export default function Trading() {
         <AIRecommendationNotification
           assets={assets}
           onTradeAsset={handleTrade}
+          onExecuteTrade={handleExecuteTrade}
           portfolio={portfolio}
           onClose={() => setShowRecommendations(false)}
         />
