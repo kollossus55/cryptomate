@@ -516,9 +516,16 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
     
     const selectedRecs = recommendations.recommendations.filter(rec => selectedTrades.has(rec.symbol));
     
-    // Execute trades sequentially with small delay between each
-    for (const rec of selectedRecs) {
+    console.log(`🎯 Executing ${selectedRecs.length} trades from AI popup...`);
+    
+    // Import executeAutoTradeFunc if available from window/props, or notify user to use individual trades
+    // Since we don't have direct access to handleExecuteTrade from Trading page,
+    // we'll open the trade modal for each with proper sequencing
+    
+    for (let i = 0; i < selectedRecs.length; i++) {
+      const rec = selectedRecs[i];
       let asset = assets.find(a => a.symbol === rec.symbol);
+      
       if (!asset && window.altcoinOpportunities) {
         const altcoin = window.altcoinOpportunities.find(a => a.symbol === rec.symbol);
         if (altcoin) {
@@ -534,15 +541,23 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onC
           };
         }
       }
+      
       if (asset) {
+        console.log(`📊 Opening trade ${i + 1}/${selectedRecs.length}: ${rec.action.toUpperCase()} ${asset.symbol}`);
         onTradeAsset(asset, rec.action);
-        // Small delay between opening trade modals
-        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Wait longer between each modal to ensure they process
+        if (i < selectedRecs.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 800));
+        }
       }
     }
     
     setSelectedTrades(new Set());
-    handleClose();
+    // Don't close immediately to allow user to see the last modal
+    setTimeout(() => {
+      handleClose();
+    }, 500);
   };
 
 
