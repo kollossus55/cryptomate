@@ -402,8 +402,20 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
   const position = portfolio.positions?.find(p => p.asset_symbol === assetSymbol);
   
   if (position) {
+    // Use manual trade risk settings if available, otherwise use auto-trading settings
+    const riskSettings = position.risk_management ? {
+      use_trailing_stop: position.risk_management.useTrailingStop,
+      trailing_stop_percent: position.risk_management.trailingStopPercent || 2,
+      trailing_stop_activation: 3,
+      use_breakeven_protection: position.risk_management.useBreakeven,
+      breakeven_trigger_percent: 4,
+      breakeven_offset_percent: 0.5,
+      stop_loss_percent: position.risk_management.stopLoss || 3,
+      take_profit_percent: position.risk_management.takeProfit || 8
+    } : settings;
+    
     // Check trailing stop
-    const trailingStop = checkTrailingStop(position, asset.price, settings);
+    const trailingStop = checkTrailingStop(position, asset.price, riskSettings);
     if (trailingStop?.shouldSell) {
       return {
         action: 'sell',
@@ -415,7 +427,7 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
     }
     
     // Check break-even
-    const breakeven = checkBreakeven(position, asset.price, settings);
+    const breakeven = checkBreakeven(position, asset.price, riskSettings);
     if (breakeven?.shouldActivate) {
       // If breakeven was already activated and price drops below it
       if (position.breakeven_activated && asset.price <= position.breakeven_price) {
@@ -438,8 +450,8 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
       }
     }
     
-    // Check partial profit taking
-    const partialProfits = checkPartialProfits(position, asset.price, settings);
+    // Check partial profit taking (only for auto-trading settings)
+    const partialProfits = position.risk_management ? null : checkPartialProfits(position, asset.price, settings);
     if (partialProfits && partialProfits.length > 0) {
       // Take the first available partial profit
       const bestPartial = partialProfits[0]; // Assuming targets are ordered or we take the first available
@@ -454,8 +466,8 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
     
     const profitPercent = ((asset.price - position.avg_entry_price) / position.avg_entry_price) * 100;
     
-    // Standard stop loss
-    if (profitPercent <= -(settings.stop_loss_percent || 3)) {
+    // Standard stop loss (use manual trade settings if available)
+    if (profitPercent <= -(riskSettings.stop_loss_percent || 3)) {
       return {
         action: 'sell',
         reason: 'stop_loss',
@@ -464,8 +476,8 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
       };
     }
     
-    // Standard take profit
-    if (profitPercent >= (settings.take_profit_percent || 8)) {
+    // Standard take profit (use manual trade settings if available)
+    if (profitPercent >= (riskSettings.take_profit_percent || 8)) {
       return {
         action: 'sell',
         reason: 'take_profit',
@@ -499,7 +511,7 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
     }
     
     // Update trailing stop data if needed (only if no sell signal was triggered)
-    if (settings.use_trailing_stop && trailingStop && !trailingStop.shouldSell && (position.highest_price || position.avg_entry_price) < trailingStop.highestPrice) {
+    if (riskSettings.use_trailing_stop && trailingStop && !trailingStop.shouldSell && (position.highest_price || position.avg_entry_price) < trailingStop.highestPrice) {
       return {
         action: 'update_trailing',
         reason: 'update_highest_price',

@@ -459,7 +459,7 @@ export default function Trading() {
     }
   }, [assets]);
 
-  const handleExecuteTrade = async ({ asset, tradeType, quantity, price, totalValue }) => {
+  const handleExecuteTrade = async ({ asset, tradeType, quantity, price, totalValue, riskManagement }) => {
     const slippage = 0.001 + (Math.random() * 0.001);
     const slippageAmount = tradeType === 'buy' ? slippage : -slippage;
     const executionPrice = price * (1 + slippageAmount);
@@ -490,7 +490,9 @@ export default function Trading() {
           profit_loss: (executionPrice - newAvgPrice) * totalQuantity,
           highest_price: executionPrice,
           trailing_stop_price: null,
-          breakeven_activated: false
+          breakeven_activated: false,
+          // Preserve or update risk management settings
+          risk_management: riskManagement || existingPosition.risk_management
         };
       } else {
         updatedPositions.push({
@@ -501,7 +503,9 @@ export default function Trading() {
           profit_loss: 0,
           highest_price: executionPrice,
           trailing_stop_price: null,
-          breakeven_activated: false
+          breakeven_activated: false,
+          // Store risk management settings for manual trades
+          risk_management: riskManagement
         });
       }
       profitLoss = 0;
