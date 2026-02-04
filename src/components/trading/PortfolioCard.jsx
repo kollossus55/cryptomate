@@ -14,6 +14,13 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
     const livePrice = livePrices[asset.symbol];
     currentPrices[`${asset.symbol}/USDT`] = livePrice || asset.price;
   });
+  
+  console.log('📊 PortfolioCard Price Debug:', {
+    websocketConnected: Object.keys(livePrices).length > 0,
+    assetsCount: assets.length,
+    priceMapSize: Object.keys(currentPrices).length,
+    samplePrices: Object.entries(currentPrices).slice(0, 3)
+  });
 
   const totalBalance = portfolio.total_balance || 0;
   const availableBalance = portfolio.available_balance || 0;
