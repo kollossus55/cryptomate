@@ -149,6 +149,17 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
                 const profitLoss = (currentPrice - avgEntryPrice) * quantity;
                 const profitLossPercent = avgEntryPrice > 0 ? ((profitLoss / (quantity * avgEntryPrice)) * 100).toFixed(2) : 0;
                 
+                // Debug logging for P&L calculation
+                console.log(`💰 Position P&L Debug [${position.asset_symbol}]:`, {
+                  quantity,
+                  avgEntryPrice,
+                  currentPrice,
+                  priceChange: (currentPrice - avgEntryPrice).toFixed(4),
+                  profitLoss: profitLoss.toFixed(2),
+                  profitLossPercent: profitLossPercent + '%',
+                  usingFallback: !currentPrices[position.asset_symbol]
+                });
+                
                 return (
                   <div key={idx} className="bg-slate-800 rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
