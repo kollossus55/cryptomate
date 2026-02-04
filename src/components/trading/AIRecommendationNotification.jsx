@@ -204,12 +204,26 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
         return `${asset.name} (${asset.symbol}): Price $${asset.price}, 24h Change ${asset.change24h}%, Volume $${(asset.volume24h / 1e9).toFixed(2)}B${prediction ? `, Predicted 24h: ${prediction.predicted_change > 0 ? '+' : ''}${prediction.predicted_change.toFixed(2)}%` : ''}`;
       }).join('\n');
 
+      // Get current positions for sell analysis
+      const positionsData = portfolio?.positions?.map(pos => {
+        const symbol = pos.asset_symbol.replace('/USDT', '');
+        const asset = topAssets.find(a => a.symbol === symbol);
+        const currentPrice = asset?.price || 0;
+        const profitPercent = pos.avg_entry_price > 0 ? ((currentPrice - pos.avg_entry_price) / pos.avg_entry_price * 100).toFixed(2) : 0;
+        return `${symbol}: Holding ${pos.quantity.toFixed(6)} @ $${pos.avg_entry_price.toFixed(2)} entry, Current $${currentPrice.toFixed(2)} (${profitPercent >= 0 ? '+' : ''}${profitPercent}% P&L)`;
+      }).join('\n') || 'No open positions';
+
       // Get user thresholds
       const minConfidenceBuy = userPreferences?.signal_alert_thresholds?.min_confidence_buy ?? 70;
       const minConfidenceSell = userPreferences?.signal_alert_thresholds?.min_confidence_sell ?? 65;
       const minPredictedGain = userPreferences?.signal_alert_thresholds?.min_predicted_gain ?? 5;
 
       const prompt = `As an advanced AI trading system, analyze these top cryptocurrencies using multi-factor analysis:
+
+      CURRENT PORTFOLIO POSITIONS:
+      ${positionsData}
+
+      MARKET DATA:
 
       ${assetsData}
 
@@ -225,16 +239,21 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
       5. **On-Chain Metrics**: Whale movements, exchange flows, network activity
 
       Recommend the BEST 3 trading opportunities with:
+      - PRIORITIZE: Sell signals for assets user currently holds if they show weakness or profit-taking opportunity
       - High conviction trades based on multiple confirming signals
       - Detailed reasoning incorporating all data sources including predictive analysis
+      - For held positions: Consider profit targets, risk of reversal, and optimal exit timing
+      - For new positions: Only recommend buy signals with predicted gains above ${minPredictedGain}%
       - Risk assessment considering volatility and market conditions
       - Realistic target prices based on support/resistance levels and predictions
-      - Only recommend buy signals with predicted gains above ${minPredictedGain}%
       - Ensure confidence levels meet user thresholds (${minConfidenceBuy}% for buys, ${minConfidenceSell}% for sells)
 
-      IMPORTANT: Return confidence as a percentage from 0-100 (e.g., 85 not 0.85).
+      IMPORTANT: 
+      - Include SELL opportunities for held positions if technical/sentiment signals indicate exits
+      - Return confidence as a percentage from 0-100 (e.g., 85 not 0.85)
+      - Balance recommendations between buy/sell based on market conditions and portfolio
 
-      Return ONLY the top 3 highest-conviction opportunities that meet the user's criteria.`;
+      Return ONLY the top 3 highest-conviction opportunities (can be mix of buy/sell).`;
 
       const result = await base44.integrations.Core.InvokeLLM({
         prompt,
