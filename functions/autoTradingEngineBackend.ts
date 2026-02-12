@@ -446,15 +446,14 @@ export function determineTradeActionAdvanced(asset, confidence, settings, portfo
     return { action: null, reason: 'position_exists_hold' };
   }
 
-  // Buy Logic (OPTIMIZED - Match Browser Logic)
+  // Buy Logic (STRICT - Match AI Popup Logic)
   let buyReason = null;
 
-  // 1. Momentum Buy: Rising (>0.1% and <20%) - Broader range
-  if (priceChange > 0.1 && priceChange < 20.0 && confidence >= (minConfidence - 5)) {
+  // 1. Momentum Buy: Rising (>0.1% and <20%) - STRICT confidence requirement
+  if (priceChange > 0.1 && priceChange < 20.0 && confidence >= minConfidence) {
     buyReason = 'positive_momentum_breakout';
   }
-  // 2. Dip Buy: Dropping but high confidence
-  // Catch smaller dips (starting from -0.5%) without extra confidence requirement
+  // 2. Dip Buy: Dropping but high confidence - STRICT confidence requirement
   else if (priceChange < -0.5 && priceChange > -20.0 && confidence >= minConfidence) {
     buyReason = 'high_confidence_dip_buy';
   }
@@ -554,12 +553,9 @@ export function scanTradingOpportunitiesAdvanced(assets, assetConfidence, settin
       continue;
     }
     
-    // Check adjusted confidence threshold for new buy trades
+    // Check adjusted confidence threshold for new buy trades - NO EXCEPTIONS
     if (tradeDecision.action === 'buy' && confidence < adjustedMinConfidence) {
-      // Exception: Allow "Dip Buys" if they passed the logic in determineTradeActionAdvanced
-      if (tradeDecision.reason !== 'high_confidence_dip_buy') {
-         continue;
-      }
+      continue;
     }
     
     // Determine risk level for buy orders
