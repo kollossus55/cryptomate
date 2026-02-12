@@ -298,8 +298,25 @@ Deno.serve(async (req) => {
       assetConfidence[asset.symbol] = calculateConfidence(asset, enabledIndicators);
     });
     
-    const highConfidenceCount = Object.values(assetConfidence).filter(c => c >= 70).length;
-    console.log(`✅ Generated signals for ${marketAssets.length} assets (${highConfidenceCount} with 70%+ confidence)`);
+    const minConfidence = settings.min_confidence || 70;
+    const highConfidenceCount = Object.values(assetConfidence).filter(c => c >= minConfidence).length;
+    console.log(`✅ Generated signals for ${marketAssets.length} assets (${highConfidenceCount} with ${minConfidence}%+ confidence)`);
+    
+    // Log top 10 opportunities for debugging
+    const topOpps = Object.entries(assetConfidence)
+      .map(([symbol, conf]) => ({ symbol, conf, asset: marketAssets.find(a => a.symbol === symbol) }))
+      .filter(o => o.conf >= minConfidence)
+      .sort((a, b) => b.conf - a.conf)
+      .slice(0, 10);
+    
+    if (topOpps.length > 0) {
+      console.log(`🎯 Top ${topOpps.length} opportunities:`);
+      topOpps.forEach(o => {
+        console.log(`   ${o.symbol}: ${o.conf}% confidence, ${o.asset?.change24h?.toFixed(2)}% 24h change`);
+      });
+    } else {
+      console.log(`⚠️ NO assets meet ${minConfidence}% confidence threshold`);
+    }
 
     // 4. Execute Auto-Trading Check (using ported Engine)
     const result = await executeAutoTradingCheckAdvanced(
