@@ -1,0 +1,88 @@
+{
+  "name": "Portfolio",
+  "type": "object",
+  "properties": {
+    "total_balance": {
+      "type": "number",
+      "default": 10000,
+      "description": "Total portfolio balance in USDT"
+    },
+    "available_balance": {
+      "type": "number",
+      "default": 10000,
+      "description": "Available balance for trading in USDT"
+    },
+    "positions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "asset_symbol": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "avg_entry_price": {
+            "type": "number"
+          },
+          "current_value": {
+            "type": "number"
+          },
+          "profit_loss": {
+            "type": "number"
+          },
+          "highest_price": {
+            "type": "number"
+          },
+          "trailing_stop_price": {
+            "type": "number"
+          },
+          "breakeven_activated": {
+            "type": "boolean"
+          },
+          "partial_profits_taken": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "dca_count": {
+            "type": "number",
+            "default": 0
+          }
+        }
+      },
+      "default": [],
+      "description": "Current open positions"
+    },
+    "total_profit_loss": {
+      "type": "number",
+      "default": 0,
+      "description": "Total realized profit/loss"
+    },
+    "total_trades": {
+      "type": "number",
+      "default": 0,
+      "description": "Total number of trades executed"
+    }
+  },
+  "required": [
+    "total_balance",
+    "available_balance"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

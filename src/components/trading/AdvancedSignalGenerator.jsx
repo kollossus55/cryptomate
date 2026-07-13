@@ -172,6 +172,12 @@ export const generateAdvancedSignal = async (asset, signalConfig = null, indicat
     // Apply modifier from advanced indicators
     technicalScore = Math.max(0, Math.min(100, technicalScore + technicalAnalysis.scoreModifier));
 
+    // SP500 AI Master Filter — if it blocks both buy AND sell, cap confidence low
+    const filterBlock = technicalAnalysis.filterBlock;
+    if (filterBlock?.buy && filterBlock?.sell) {
+      technicalScore = Math.min(technicalScore, 40); // No trade direction agreed
+    }
+
     // Default to 70% Technical + 30% AI Sentiment (new standard)
     const defaultWeights = {
       technical: 70,

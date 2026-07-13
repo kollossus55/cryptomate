@@ -3,7 +3,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/com
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Activity, BarChart2, TrendingUp, Zap, Waves, Signal, LineChart, ArrowUpDown, Sparkles, CandlestickChart, Cloud } from "lucide-react";
+import { Activity, BarChart2, TrendingUp, Zap, Waves, Signal, LineChart, ArrowUpDown, Sparkles, CandlestickChart, Cloud, Brain } from "lucide-react";
 
 export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUpdate }) {
   const handleToggle = (key) => {
@@ -106,6 +106,48 @@ export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUp
       description: 'Comprehensive indicator showing support/resistance, trend, and momentum.',
       icon: Cloud,
       color: 'text-violet-400'
+    },
+    {
+      id: 'sp500_filter',
+      name: 'SP500 AI — Master Filter',
+      description: 'All SP500 AI sub-components must confirm before a trade fires. Acts as a hard gate.',
+      icon: Brain,
+      color: 'text-emerald-400'
+    },
+    {
+      id: 'sp500_ssl',
+      name: 'SP500 AI — SSL Channel',
+      description: 'SSL Channel trend direction (period 9). Bullish above SMA, bearish below.',
+      icon: Brain,
+      color: 'text-emerald-300'
+    },
+    {
+      id: 'sp500_cmo',
+      name: 'SP500 AI — CMO (Chande Momentum)',
+      description: 'Filters out overbought (>50) and oversold (<-50) conditions. Adds momentum score.',
+      icon: Brain,
+      color: 'text-emerald-300'
+    },
+    {
+      id: 'sp500_ai_rsi',
+      name: 'SP500 AI — Dual RSI',
+      description: 'AI RSI crossover (short 5 vs long 13). Momentum confirmation signal.',
+      icon: Brain,
+      color: 'text-emerald-300'
+    },
+    {
+      id: 'sp500_tmo',
+      name: 'SP500 AI — Momentum (TMO)',
+      description: 'True Momentum Oscillator. Identifies sustained directional momentum.',
+      icon: Brain,
+      color: 'text-emerald-300'
+    },
+    {
+      id: 'sp500_money_flow',
+      name: 'SP500 AI — Money Flow',
+      description: 'Price-weighted volume flow. Positive = accumulation, negative = distribution.',
+      icon: Brain,
+      color: 'text-emerald-300'
     }
   ];
 

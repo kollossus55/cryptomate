@@ -264,6 +264,121 @@ export const calculateIchimoku = (prices) => {
   return { signal, cloud, tenkanSen, kijunSen, senkouA, senkouB };
 };
 
+// Helper: apply EMA over an array of values
+const emaOfArray = (arr, period) => {
+  if (arr.length < period) return arr.slice();
+  const k = 2 / (period + 1);
+  let ema = arr.slice(0, period).reduce((s, v) => s + v, 0) / period;
+  const result = [ema];
+  for (let i = period; i < arr.length; i++) {
+    ema = arr[i] * k + ema * (1 - k);
+    result.push(ema);
+  }
+  return result;
+};
+
+// SP500 AI Suite - Component 1: Heikin Ashi direction (close-only approximation)
+export const calculateHeikinAshi = (prices) => {
+  if (prices.length < 3) return { haBullish: true, haBearish: false };
+  let haOpen = prices[0];
+  let haClose = prices[0];
+  for (let i = 1; i < prices.length; i++) {
+    const prevHaOpen = haOpen;
+    const prevHaClose = haClose;
+    haClose = prices[i];
+    haOpen = (prevHaOpen + prevHaClose) / 2;
+  }
+  return { haBullish: haClose > haOpen, haBearish: haClose <= haOpen };
+};
+
+// SP500 AI Suite - Component 2: SSL Channel (price vs SMA-based trend)
+export const calculateSSLChannel = (prices, length = 9) => {
+  if (prices.length < length) return { sslBullish: true, sslBearish: false };
+  const sma = prices.slice(-length).reduce((s, p) => s + p, 0) / length;
+  const current = prices[prices.length - 1];
+  const sslBullish = current >= sma;
+  return { sslBullish, sslBearish: !sslBullish };
+};
+
+// SP500 AI Suite - Component 3: Chande Momentum Oscillator (CMO)
+export const calculateCMO = (prices, length = 14) => {
+  if (prices.length < length + 1) return { cmo: 0, overbought: false, oversold: false };
+  let sumUp = 0, sumDown = 0;
+  for (let i = prices.length - length; i < prices.length; i++) {
+    const change = prices[i] - prices[i - 1];
+    if (change > 0) sumUp += change;
+    else sumDown -= change;
+  }
+  const total = sumUp + sumDown;
+  const cmo = total === 0 ? 0 : ((sumUp - sumDown) / total) * 100;
+  return { cmo, overbought: cmo > 50, oversold: cmo < -50 };
+};
+
+// SP500 AI Suite - Component 4: AI RSI (dual RSI crossover)
+export const calculateAIRSI = (prices, shortLen = 5, longLen = 13, signalLen = 9) => {
+  if (prices.length < longLen + signalLen + 5) return { aiRSIBullish: false, aiRSIBearish: false };
+  const rsiShort = calculateRSI(prices, shortLen);
+  const rsiLong = calculateRSI(prices, longLen);
+  const aiRSIValue = rsiShort - rsiLong;
+  const totalRSI = rsiShort + rsiLong;
+  // Build signal line from recent windows
+  const history = [];
+  const start = Math.max(longLen + 2, prices.length - signalLen - 10);
+  for (let i = start; i < prices.length; i++) {
+    const sub = prices.slice(0, i + 1);
+    const rs = calculateRSI(sub, shortLen);
+    const rl = calculateRSI(sub, longLen);
+    history.push(rs - rl);
+  }
+  const signal = history.length > 0
+    ? history.slice(-Math.min(signalLen, history.length)).reduce((s, v) => s + v, 0) / Math.min(signalLen, history.length)
+    : 0;
+  return {
+    aiRSIBullish: aiRSIValue > signal && totalRSI > 100,
+    aiRSIBearish: aiRSIValue < signal && totalRSI <= 100
+  };
+};
+
+// SP500 AI Suite - Component 5: AI Momentum (TMO - True Momentum Oscillator)
+export const calculateTMO = (prices, length = 14, calcLen = 5, smoothLen = 3) => {
+  if (prices.length < length + calcLen + smoothLen * 2 + 2) return { tmoBullish: false, tmoBearish: false };
+  const tmoRaw = [];
+  for (let i = length; i < prices.length; i++) {
+    let val = 0;
+    for (let j = 0; j <= length; j++) {
+      if (i - j >= 0) {
+        if (prices[i] > prices[i - j]) val += 1;
+        else if (prices[i] < prices[i - j]) val -= 1;
+      }
+    }
+    tmoRaw.push(val);
+  }
+  if (tmoRaw.length < calcLen + smoothLen * 2) return { tmoBullish: false, tmoBearish: false };
+  const ema1 = emaOfArray(tmoRaw, calcLen);
+  const ema2 = emaOfArray(ema1, smoothLen);
+  const signalArr = emaOfArray(ema2, smoothLen);
+  const tmoMain = ema2[ema2.length - 1];
+  const tmoSignal = signalArr[signalArr.length - 1];
+  return {
+    tmoBullish: tmoMain > tmoSignal && tmoMain > 0,
+    tmoBearish: tmoMain < tmoSignal && tmoMain < 0
+  };
+};
+
+// SP500 AI Suite - Component 6: AI Money Flow
+export const calculateMoneyFlow = (prices, length = 9) => {
+  if (prices.length < length + 1) return { mfBullish: true, mfBearish: false, mfo: 0 };
+  let mfSum = 0;
+  for (let i = prices.length - length; i < prices.length; i++) {
+    if (i > 0) {
+      const avg = (prices[i] + prices[i - 1]) / 2;
+      if (avg > 0) mfSum += (prices[i] - prices[i - 1]) / avg;
+    }
+  }
+  const mfo = mfSum / length;
+  return { mfBullish: mfo >= 0, mfBearish: mfo < 0, mfo };
+};
+
 export const analyzeIndicators = (asset, enabledIndicators) => {
   // Generate synthetic history based on asset's current state
   const prices = generateSyntheticHistory(asset.price, asset.change24h, 100);
@@ -414,9 +529,71 @@ export const analyzeIndicators = (asset, enabledIndicators) => {
     }
   }
 
+  // ── SP500 AI Suite ─────────────────────────────────────────────
+  const ha   = calculateHeikinAshi(prices);
+  const ssl  = calculateSSLChannel(prices, 9);
+  const cmo  = calculateCMO(prices, 14);
+  const aiRsi = enabledIndicators.sp500_ai_rsi ? calculateAIRSI(prices, 5, 13, 9) : null;
+  const tmo   = enabledIndicators.sp500_tmo   ? calculateTMO(prices, 14, 5, 3)    : null;
+  const mf    = enabledIndicators.sp500_money_flow ? calculateMoneyFlow(prices, 9) : null;
+
+  if (enabledIndicators.sp500_ssl) {
+    results.sp500_ssl = ssl;
+    if (ssl.sslBullish) { scoreModifier += 12; signals.push("SP500 SSL Bullish"); }
+    else                { scoreModifier -= 12; signals.push("SP500 SSL Bearish"); }
+  }
+  if (enabledIndicators.sp500_cmo) {
+    results.sp500_cmo = cmo;
+    if (!cmo.overbought && !cmo.oversold) {
+      scoreModifier += cmo.cmo > 0 ? 10 : -10;
+      signals.push(cmo.cmo > 0 ? "CMO Bullish" : "CMO Bearish");
+    } else {
+      scoreModifier -= 15;
+      signals.push(cmo.overbought ? "CMO Overbought (Block)" : "CMO Oversold (Block)");
+    }
+  }
+  if (enabledIndicators.sp500_ai_rsi && aiRsi) {
+    results.sp500_ai_rsi = aiRsi;
+    if (aiRsi.aiRSIBullish)      { scoreModifier += 10; signals.push("AI RSI Bullish"); }
+    else if (aiRsi.aiRSIBearish) { scoreModifier -= 10; signals.push("AI RSI Bearish"); }
+  }
+  if (enabledIndicators.sp500_tmo && tmo) {
+    results.sp500_tmo = tmo;
+    if (tmo.tmoBullish)      { scoreModifier += 10; signals.push("AI Momentum (TMO) Bullish"); }
+    else if (tmo.tmoBearish) { scoreModifier -= 10; signals.push("AI Momentum (TMO) Bearish"); }
+  }
+  if (enabledIndicators.sp500_money_flow && mf) {
+    results.sp500_money_flow = mf;
+    if (mf.mfBullish)      { scoreModifier += 8; signals.push("Money Flow Bullish"); }
+    else if (mf.mfBearish) { scoreModifier -= 8; signals.push("Money Flow Bearish"); }
+  }
+
+  // SP500 Filter: all active SP500 sub-indicators must agree with trade direction
+  let filterBlock = { buy: false, sell: false };
+  if (enabledIndicators.sp500_filter) {
+    const buyRequired  = [];
+    const sellRequired = [];
+
+    // Always check SSL and CMO when filter is on
+    buyRequired.push(ssl.sslBullish && !cmo.overbought);
+    sellRequired.push(ssl.sslBearish && !cmo.oversold);
+    // HA direction
+    buyRequired.push(ha.haBullish);
+    sellRequired.push(ha.haBearish);
+    if (aiRsi) { buyRequired.push(aiRsi.aiRSIBullish); sellRequired.push(aiRsi.aiRSIBearish); }
+    if (tmo)   { buyRequired.push(tmo.tmoBullish);     sellRequired.push(tmo.tmoBearish); }
+    if (mf)    { buyRequired.push(mf.mfBullish);       sellRequired.push(mf.mfBearish); }
+
+    filterBlock.buy  = !buyRequired.every(Boolean);
+    filterBlock.sell = !sellRequired.every(Boolean);
+    if (filterBlock.buy)  signals.push("SP500 Filter: BUY blocked");
+    if (filterBlock.sell) signals.push("SP500 Filter: SELL blocked");
+  }
+
   return {
     results,
     scoreModifier,
-    signals
+    signals,
+    filterBlock
   };
 };
