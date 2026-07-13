@@ -3,7 +3,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/com
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Activity, BarChart2, TrendingUp, Zap, Waves, Signal, LineChart, ArrowUpDown, Sparkles, CandlestickChart, Cloud } from "lucide-react";
+import { Activity, BarChart2, TrendingUp, Zap, Waves, Signal, LineChart, ArrowUpDown, Sparkles, CandlestickChart, Cloud, Brain } from "lucide-react";
 
 export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUpdate }) {
   const handleToggle = (key) => {
@@ -106,6 +106,13 @@ export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUp
       description: 'Comprehensive indicator showing support/resistance, trend, and momentum.',
       icon: Cloud,
       color: 'text-violet-400'
+    },
+    {
+      id: 'sp500ai',
+      name: 'SP500 Full AI (HA + SSL + CMO + TMO)',
+      description: 'Multi-component AI indicator: Heikin Ashi candles, SSL Channel, Chande Momentum Oscillator, dual AI RSI, True Momentum Oscillator, and AI Money Flow. Acts as both a filter and confidence booster.',
+      icon: Brain,
+      color: 'text-rose-400'
     }
   ];
 

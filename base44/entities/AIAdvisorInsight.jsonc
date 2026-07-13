@@ -1,0 +1,177 @@
+{
+  "name": "AIAdvisorInsight",
+  "type": "object",
+  "properties": {
+    "insight_type": {
+      "type": "string",
+      "enum": [
+        "strategy_optimization",
+        "risk_adjustment",
+        "asset_recommendation",
+        "parameter_tuning",
+        "performance_alert",
+        "market_opportunity"
+      ],
+      "description": "Type of insight"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "default": "medium",
+      "description": "Priority level of the insight"
+    },
+    "title": {
+      "type": "string",
+      "description": "Insight title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the insight"
+    },
+    "current_performance": {
+      "type": "object",
+      "properties": {
+        "win_rate": {
+          "type": "number"
+        },
+        "profit_factor": {
+          "type": "number"
+        },
+        "total_trades": {
+          "type": "number"
+        },
+        "total_pnl": {
+          "type": "number"
+        },
+        "avg_win": {
+          "type": "number"
+        },
+        "avg_loss": {
+          "type": "number"
+        },
+        "max_drawdown": {
+          "type": "number"
+        }
+      },
+      "description": "Current performance metrics"
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "parameter": {
+            "type": "string"
+          },
+          "current_value": {
+            "type": "number"
+          },
+          "suggested_value": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "expected_improvement": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Specific parameter recommendations"
+    },
+    "asset_insights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "asset": {
+            "type": "string"
+          },
+          "performance": {
+            "type": "string"
+          },
+          "trades": {
+            "type": "number"
+          },
+          "pnl": {
+            "type": "number"
+          },
+          "recommendation": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Asset-specific insights"
+    },
+    "market_opportunities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "asset": {
+            "type": "string"
+          },
+          "opportunity_type": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "reasoning": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Identified market opportunities"
+    },
+    "is_applied": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether user applied this recommendation"
+    },
+    "is_dismissed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether user dismissed this insight"
+    },
+    "analysis_period": {
+      "type": "object",
+      "properties": {
+        "start_date": {
+          "type": "string"
+        },
+        "end_date": {
+          "type": "string"
+        },
+        "trades_analyzed": {
+          "type": "number"
+        }
+      },
+      "description": "Period analyzed for this insight"
+    }
+  },
+  "required": [
+    "insight_type",
+    "title",
+    "description"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

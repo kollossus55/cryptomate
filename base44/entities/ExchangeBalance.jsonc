@@ -1,0 +1,60 @@
+{
+  "name": "ExchangeBalance",
+  "type": "object",
+  "properties": {
+    "connection_id": {
+      "type": "string",
+      "description": "Reference to ExchangeConnection"
+    },
+    "exchange_name": {
+      "type": "string",
+      "description": "Exchange name"
+    },
+    "asset": {
+      "type": "string",
+      "description": "Asset symbol (BTC, ETH, USDT, etc)"
+    },
+    "free": {
+      "type": "number",
+      "default": 0,
+      "description": "Available balance"
+    },
+    "locked": {
+      "type": "number",
+      "default": 0,
+      "description": "Locked balance (in orders)"
+    },
+    "total": {
+      "type": "number",
+      "default": 0,
+      "description": "Total balance (free + locked)"
+    },
+    "usd_value": {
+      "type": "number",
+      "default": 0,
+      "description": "Value in USD"
+    },
+    "last_updated": {
+      "type": "string",
+      "description": "Last update timestamp"
+    }
+  },
+  "required": [
+    "connection_id",
+    "asset"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

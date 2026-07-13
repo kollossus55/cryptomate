@@ -1,5 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
-import { executeAutoTradingCheckAdvanced } from './autoTradingEngineBackend.js';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 
 /**
  * Technical Analysis - Server-Side Port
@@ -76,6 +75,100 @@ const calculateStochastic = (prices, period = 14) => {
   return { k: ((current - low) / (high - low)) * 100 };
 };
 
+// ============================================================================
+// SP500 Full AI Indicator (Server-Side Port)
+// ============================================================================
+const calculateSP500AIIndicator = (prices, options = {}) => {
+  const n = prices.length;
+  if (n < 34) return { longSignal: false, shortSignal: false, bullish: false, bearish: false, strength: 0, filter_pass: true };
+
+  const H = prices, L = prices;
+
+  // Heikin Ashi
+  const haClose = prices.map((c, i) => (H[i] + L[i] + c + c) / 4);
+  const haOpen = [prices[0]];
+  for (let i = 1; i < n; i++) haOpen.push((haOpen[i - 1] + haClose[i - 1]) / 2);
+  const haBullish = haClose[n - 1] > haOpen[n - 1];
+  const haBearish = haClose[n - 1] < haOpen[n - 1];
+
+  // CMO
+  const cmoLength = 14;
+  let momUpSum = 0, momDownSum = 0;
+  for (let i = n - cmoLength; i < n; i++) {
+    const change = prices[i] - prices[i - 1];
+    if (change > 0) momUpSum += change; else momDownSum += Math.abs(change);
+  }
+  const cmo = (momUpSum + momDownSum) === 0 ? 0 : ((momUpSum - momDownSum) / (momUpSum + momDownSum)) * 100;
+  const cmoOverboughtCond = cmo > 50;
+  const cmoOversoldCond = cmo < -50;
+
+  // SSL Channel
+  const sslLength = 9;
+  const smaHigh = H.slice(-sslLength).reduce((a, b) => a + b, 0) / sslLength;
+  const smaLow = L.slice(-sslLength).reduce((a, b) => a + b, 0) / sslLength;
+  const cp = prices[n - 1], pp = prices[n - 2];
+  const hlv = cp > smaHigh ? 1 : cp < smaLow ? -1 : (pp > smaHigh ? 1 : -1);
+  const sslBullish = hlv > 0;
+  const sslBearish = hlv < 0;
+
+  // AI RSI
+  const calcRSI = (p, period) => {
+    if (p.length < period + 1) return 50;
+    let g = 0, l = 0;
+    for (let i = p.length - period; i < p.length; i++) {
+      const d = p[i] - p[i - 1];
+      if (d >= 0) g += d; else l -= d;
+    }
+    const ag = g / period, al = l / period;
+    if (al === 0) return 100;
+    return 100 - (100 / (1 + ag / al));
+  };
+  const RSIshort = calcRSI(prices, 5);
+  const RSIlong = calcRSI(prices, 13);
+  const aiRSIValue = RSIshort - RSIlong;
+  const rsiSignalLen = 9;
+  const aiRSIValues = [];
+  for (let i = Math.max(1, n - rsiSignalLen); i < n; i++) {
+    aiRSIValues.push(calcRSI(prices.slice(0, i + 1), 5) - calcRSI(prices.slice(0, i + 1), 13));
+  }
+  const aiRSISignal = aiRSIValues.reduce((a, b) => a + b, 0) / aiRSIValues.length;
+  const totalRSI = RSIshort + RSIlong;
+  const aiRSIBullish = aiRSIValue > aiRSISignal && totalRSI > 100;
+  const aiRSIBearish = aiRSIValue < aiRSISignal && totalRSI <= 100;
+
+  // TMO
+  let tmoData = 0;
+  const tmoLength = 14;
+  for (let i = 0; i <= Math.min(tmoLength, n - 1); i++) {
+    const cmpIdx = Math.max(0, n - 1 - i);
+    tmoData += prices[n - 1] > prices[cmpIdx] ? 1 : prices[n - 1] < prices[cmpIdx] ? -1 : 0;
+  }
+  const tmoBullish = tmoData > 0;
+  const tmoBearish = tmoData < 0;
+
+  // Money Flow (simplified without volume)
+  const mfLength = 9;
+  let mfSum = 0;
+  for (let i = Math.max(1, n - mfLength); i < n; i++) {
+    const d = prices[i] - prices[i - 1];
+    mfSum += d > 0 ? 1 : d < 0 ? -1 : 0;
+  }
+  const mfBullish = mfSum > 0;
+  const mfBearish = mfSum < 0;
+
+  const longBasic = haBullish && sslBullish && !cmoOverboughtCond;
+  const longSignal = longBasic && aiRSIBullish && tmoBullish && mfBullish;
+  const shortBasic = haBearish && sslBearish && !cmoOversoldCond;
+  const shortSignal = shortBasic && aiRSIBearish && tmoBearish && mfBearish;
+
+  const strength = (sslBullish ? 1 : 0) + (!cmoOverboughtCond ? 1 : 0) +
+    (aiRSIBullish ? 1 : 0) + (tmoBullish ? 1 : 0) + (mfBullish ? 1 : 0) + (haBullish ? 1 : 0);
+  
+  const filter_pass = longSignal || shortSignal || strength >= 4;
+
+  return { longSignal, shortSignal, bullish: longSignal, bearish: shortSignal, strength, filter_pass };
+};
+
 const analyzeIndicators = (asset, enabledIndicators = { rsi: true, macd: true, bollinger: true, ema: true, stoch: true }) => {
   const prices = generateSyntheticHistory(asset.price, asset.change24h, 100);
   let scoreModifier = 0;
@@ -135,6 +228,25 @@ const analyzeIndicators = (asset, enabledIndicators = { rsi: true, macd: true, b
     } else if (k > 80) {
       scoreModifier -= 10;
       signals.push("Stoch Overbought");
+    }
+  }
+
+  if (enabledIndicators.sp500ai) {
+    const sp500 = calculateSP500AIIndicator(prices);
+    if (sp500.longSignal) {
+      scoreModifier += 10 + Math.round((sp500.strength / 6) * 12);
+      signals.push(`SP500 AI Long [${sp500.strength}/6]`);
+    } else if (sp500.shortSignal) {
+      scoreModifier -= 10 + Math.round((sp500.strength / 6) * 12);
+      signals.push(`SP500 AI Short [${sp500.strength}/6]`);
+    } else if (sp500.strength >= 4) {
+      scoreModifier += sp500.bullish ? 8 : -8;
+      signals.push(`SP500 AI Partial [${sp500.strength}/6]`);
+    }
+    // Filter: if signal doesn't pass, apply penalty to push below threshold
+    if (!sp500.filter_pass) {
+      scoreModifier -= 30;
+      signals.push('SP500 AI Filter: blocked');
     }
   }
 

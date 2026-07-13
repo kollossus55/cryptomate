@@ -115,6 +115,165 @@ export const calculateStochastic = (prices, period = 14) => {
   return { k, d };
 };
 
+// ============================================================================
+// SP500 Full AI Indicator (Ported from Pine Script)
+// Combines: Heikin Ashi + SSL Channel + CMO + AI RSI + AI Momentum (TMO) + AI Money Flow
+// Returns: { longSignal, shortSignal, bullish, bearish, strength, components }
+// ============================================================================
+
+export const calculateSP500AIIndicator = (prices, highs = null, lows = null, volumes = null, options = {}) => {
+  const n = prices.length;
+  if (n < 34) return { longSignal: false, shortSignal: false, bullish: false, bearish: false, strength: 0, components: {} };
+
+  // Use prices as both high/low when not provided (crypto OHLC simulation)
+  const H = highs || prices;
+  const L = lows || prices;
+  const V = volumes || prices.map(() => 1000000);
+
+  // --- Heikin Ashi ---
+  const haClose = prices.map((c, i) => (H[i] + L[i] + c + c) / 4);
+  const haOpen = [prices[0]];
+  for (let i = 1; i < n; i++) haOpen.push((haOpen[i - 1] + haClose[i - 1]) / 2);
+  const haBullish = haClose[n - 1] > haOpen[n - 1];
+  const haBearish = haClose[n - 1] < haOpen[n - 1];
+
+  // --- CMO (Chande Momentum Oscillator) ---
+  const cmoLength = options.cmoLength || 14;
+  const cmoOverboughtLevel = options.cmoOverbought || 50;
+  const cmoOversoldLevel = options.cmoOversold || -50;
+  let momUpSum = 0, momDownSum = 0;
+  for (let i = n - cmoLength; i < n; i++) {
+    const change = prices[i] - prices[i - 1];
+    if (change > 0) momUpSum += change;
+    else momDownSum += Math.abs(change);
+  }
+  const cmo = (momUpSum + momDownSum) === 0 ? 0 : ((momUpSum - momDownSum) / (momUpSum + momDownSum)) * 100;
+  const cmoOverboughtCond = cmo > cmoOverboughtLevel;
+  const cmoOversoldCond = cmo < cmoOversoldLevel;
+
+  // --- SSL Channel ---
+  const sslLength = options.sslLength || 9;
+  const sslSliceH = H.slice(-sslLength);
+  const sslSliceL = L.slice(-sslLength);
+  const smaHigh = sslSliceH.reduce((a, b) => a + b, 0) / sslLength;
+  const smaLow = sslSliceL.reduce((a, b) => a + b, 0) / sslLength;
+  const currentPrice = prices[n - 1];
+  const prevPrice = prices[n - 2];
+  // Derive hlv from last two candles
+  let hlv = currentPrice > smaHigh ? 1 : currentPrice < smaLow ? -1 : (prevPrice > smaHigh ? 1 : -1);
+  const sslBullish = hlv > 0;
+  const sslBearish = hlv < 0;
+
+  // --- AI RSI (Dual RSI Divergence) ---
+  const rsiShortLen = options.rsiShortLength || 5;
+  const rsiLongLen = options.rsiLongLength || 13;
+  const rsiSignalLen = options.rsiSignalLength || 9;
+
+  const calcRSI = (p, period) => {
+    if (p.length < period + 1) return 50;
+    let g = 0, l = 0;
+    for (let i = p.length - period; i < p.length; i++) {
+      const d = p[i] - p[i - 1];
+      if (d >= 0) g += d; else l -= d;
+    }
+    const ag = g / period, al = l / period;
+    if (al === 0) return 100;
+    return 100 - (100 / (1 + ag / al));
+  };
+
+  const RSIshort = calcRSI(prices, rsiShortLen);
+  const RSIlong = calcRSI(prices, rsiLongLen);
+  const aiRSIValue = RSIshort - RSIlong;
+  // Approximate signal as SMA of aiRSIValue over last rsiSignalLen bars
+  const aiRSIValues = [];
+  for (let i = Math.max(0, n - rsiSignalLen); i < n; i++) {
+    const rs = calcRSI(prices.slice(0, i + 1), rsiShortLen);
+    const rl = calcRSI(prices.slice(0, i + 1), rsiLongLen);
+    aiRSIValues.push(rs - rl);
+  }
+  const aiRSISignal = aiRSIValues.reduce((a, b) => a + b, 0) / aiRSIValues.length;
+  const totalRSI = RSIshort + RSIlong;
+  const aiRSIBullish = aiRSIValue > aiRSISignal && totalRSI > 100;
+  const aiRSIBearish = aiRSIValue < aiRSISignal && totalRSI <= 100;
+
+  // --- AI Momentum (TMO - True Momentum Oscillator) ---
+  const tmoLength = options.tmoLength || 14;
+  const tmoCalcLength = options.tmoCalcLength || 5;
+  const tmoSmoothLength = options.tmoSmoothLength || 3;
+  let tmoData = 0;
+  for (let i = 0; i <= Math.min(tmoLength, n - 1); i++) {
+    const idx = n - 1;
+    const cmpIdx = Math.max(0, idx - i);
+    tmoData += prices[idx] > prices[cmpIdx] ? 1 : prices[idx] < prices[cmpIdx] ? -1 : 0;
+  }
+  // Simple EMA chain approximation
+  const calcEMA = (arr, period) => {
+    if (arr.length === 0) return 0;
+    const k = 2 / (period + 1);
+    let e = arr[0];
+    for (let i = 1; i < arr.length; i++) e = arr[i] * k + e * (1 - k);
+    return e;
+  };
+  const tmoMain = calcEMA([tmoData], tmoCalcLength); // single-value approximation
+  const tmoSignalVal = tmoMain * 0.9; // simplified
+  const tmoBullish = tmoMain > tmoSignalVal && tmoMain > 0;
+  const tmoBearish = tmoMain < tmoSignalVal && tmoMain < 0;
+
+  // --- AI Money Flow ---
+  const mfLength = options.mfLength || 9;
+  let mfNumerator = 0, mfDenominator = 0;
+  for (let i = Math.max(1, n - mfLength); i < n; i++) {
+    const division = (H[i] - L[i - 1]) + (H[i - 1] - L[i]);
+    let multiplier = 0;
+    if (H[i] < L[i - 1]) multiplier = -1;
+    else if (L[i] > H[i - 1]) multiplier = 1;
+    else if (division !== 0) multiplier = ((H[i] - L[i - 1]) - (H[i - 1] - L[i])) / division;
+    mfNumerator += multiplier * V[i];
+    mfDenominator += V[i];
+  }
+  const moneyFlowOsc = mfDenominator === 0 ? 0 : mfNumerator / mfDenominator;
+  const mfBullish = moneyFlowOsc > 0;
+  const mfBearish = moneyFlowOsc < 0;
+
+  // --- Signal Strength (0-6) ---
+  const useAIRSI = options.useAIRSI !== false;
+  const useAIMomentum = options.useAIMomentum !== false;
+  const useAIMoneyFlow = options.useAIMoneyFlow !== false;
+
+  // Long signal: HA bullish + SSL bullish + CMO not overbought + (optional filters)
+  let longBasic = haBullish && sslBullish && !cmoOverboughtCond;
+  let longWithRSI = useAIRSI ? (longBasic && aiRSIBullish) : longBasic;
+  let longWithMomentum = useAIMomentum ? (longWithRSI && tmoBullish) : longWithRSI;
+  const longSignal = useAIMoneyFlow ? (longWithMomentum && mfBullish) : longWithMomentum;
+
+  let shortBasic = haBearish && sslBearish && !cmoOversoldCond;
+  let shortWithRSI = useAIRSI ? (shortBasic && aiRSIBearish) : shortBasic;
+  let shortWithMomentum = useAIMomentum ? (shortWithRSI && tmoBearish) : shortWithRSI;
+  const shortSignal = useAIMoneyFlow ? (shortWithMomentum && mfBearish) : shortWithMomentum;
+
+  // Strength score (how many sub-components confirm the direction)
+  const bullStrength = (sslBullish ? 1 : 0) + (!cmoOverboughtCond ? 1 : 0) +
+    (useAIRSI && aiRSIBullish ? 1 : 0) + (useAIMomentum && tmoBullish ? 1 : 0) +
+    (useAIMoneyFlow && mfBullish ? 1 : 0) + (haBullish ? 1 : 0);
+  const bearStrength = (sslBearish ? 1 : 0) + (!cmoOversoldCond ? 1 : 0) +
+    (useAIRSI && aiRSIBearish ? 1 : 0) + (useAIMomentum && tmoBearish ? 1 : 0) +
+    (useAIMoneyFlow && mfBearish ? 1 : 0) + (haBearish ? 1 : 0);
+
+  const bullish = longSignal;
+  const bearish = shortSignal;
+  const strength = bullish ? bullStrength : bearish ? bearStrength : Math.max(bullStrength, bearStrength);
+
+  return {
+    longSignal,
+    shortSignal,
+    bullish,
+    bearish,
+    strength,
+    maxStrength: 6,
+    components: { haBullish, haBearish, sslBullish, sslBearish, cmo, cmoOverboughtCond, cmoOversoldCond, aiRSIBullish, aiRSIBearish, tmoBullish, tmoBearish, mfBullish, mfBearish }
+  };
+};
+
 // 6. Average Directional Index (ADX)
 // Measures trend strength (0-100). >25 indicates strong trend.
 export const calculateADX = (prices, period = 14) => {
@@ -412,6 +571,39 @@ export const analyzeIndicators = (asset, enabledIndicators) => {
       scoreModifier -= 10;
       signals.push("Ichimoku Sell");
     }
+  }
+
+  if (enabledIndicators.sp500ai) {
+    const sp500 = calculateSP500AIIndicator(prices);
+    results.sp500ai = sp500;
+
+    // FILTER: if enabled and neither long nor short signal fires, block the trade
+    // This is communicated via a special flag on the result
+    results.sp500ai_filter_pass = sp500.longSignal || sp500.shortSignal || sp500.strength >= 4;
+
+    if (sp500.longSignal) {
+      // Full signal: add significant confidence boost proportional to strength
+      scoreModifier += 10 + Math.round((sp500.strength / sp500.maxStrength) * 12);
+      signals.push(`SP500 AI Long Signal [${sp500.strength}/${sp500.maxStrength}]`);
+    } else if (sp500.shortSignal) {
+      scoreModifier -= 10 + Math.round((sp500.strength / sp500.maxStrength) * 12);
+      signals.push(`SP500 AI Short Signal [${sp500.strength}/${sp500.maxStrength}]`);
+    } else if (sp500.strength >= 4) {
+      // Partial bullish confirmation even without full long/short
+      const partialBoost = sp500.components.sslBullish ? 8 : -8;
+      scoreModifier += partialBoost;
+      signals.push(`SP500 AI Partial [${sp500.strength}/${sp500.maxStrength}]`);
+    }
+  }
+
+  // Apply SP500 AI filter: if enabled and filter does NOT pass, hard-zero the score
+  if (enabledIndicators.sp500ai && results.sp500ai && results.sp500ai_filter_pass === false) {
+    return {
+      results,
+      scoreModifier: -30, // Penalty to push below confidence threshold
+      signals: [...signals, 'SP500 AI Filter: No valid signal — trade blocked'],
+      sp500ai_blocked: true
+    };
   }
 
   return {

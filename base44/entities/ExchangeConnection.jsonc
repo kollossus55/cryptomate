@@ -1,0 +1,89 @@
+{
+  "name": "ExchangeConnection",
+  "type": "object",
+  "properties": {
+    "exchange_name": {
+      "type": "string",
+      "enum": [
+        "binance",
+        "coinbase",
+        "kraken",
+        "bybit"
+      ],
+      "description": "Name of the exchange"
+    },
+    "api_key": {
+      "type": "string",
+      "description": "Exchange API key (encrypted client-side)"
+    },
+    "api_secret": {
+      "type": "string",
+      "description": "Exchange API secret (encrypted client-side)"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this connection is active"
+    },
+    "is_testnet": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this is a testnet connection"
+    },
+    "connection_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "connected",
+        "disconnected",
+        "error"
+      ],
+      "default": "pending",
+      "description": "Current connection status"
+    },
+    "last_sync": {
+      "type": "string",
+      "description": "Last successful sync timestamp"
+    },
+    "error_message": {
+      "type": "string",
+      "description": "Last error message if any"
+    },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "API key permissions (read, trade, withdraw)"
+    },
+    "trading_mode": {
+      "type": "string",
+      "enum": [
+        "simulated",
+        "ready_for_live"
+      ],
+      "default": "simulated",
+      "description": "Trading mode: simulated (paper) or ready for live trading"
+    }
+  },
+  "required": [
+    "exchange_name",
+    "api_key",
+    "api_secret"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

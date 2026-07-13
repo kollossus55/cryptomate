@@ -1,0 +1,89 @@
+{
+  "name": "Trade",
+  "type": "object",
+  "properties": {
+    "asset_symbol": {
+      "type": "string",
+      "description": "Trading pair symbol (e.g., BTC/USDT)"
+    },
+    "trade_type": {
+      "type": "string",
+      "enum": [
+        "buy",
+        "sell"
+      ],
+      "description": "Type of trade"
+    },
+    "quantity": {
+      "type": "number",
+      "description": "Quantity traded"
+    },
+    "price": {
+      "type": "number",
+      "description": "Price at execution"
+    },
+    "total_value": {
+      "type": "number",
+      "description": "Total value in USDT"
+    },
+    "exchange": {
+      "type": "string",
+      "description": "Exchange where trade was executed"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "default": "pending",
+      "description": "Status of the trade"
+    },
+    "ai_signal": {
+      "type": "object",
+      "properties": {
+        "confidence": {
+          "type": "number"
+        },
+        "reasoning": {
+          "type": "string"
+        },
+        "indicators": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "AI analysis that led to this trade"
+    },
+    "profit_loss": {
+      "type": "number",
+      "description": "Profit or loss after closing position"
+    }
+  },
+  "required": [
+    "asset_symbol",
+    "trade_type",
+    "quantity",
+    "price",
+    "total_value",
+    "exchange"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
