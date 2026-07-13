@@ -430,23 +430,116 @@ Deno.serve(async (req) => {
       console.log(`⚠️ NO assets meet ${minConfidence}% confidence threshold`);
     }
 
-    // 4. Execute Auto-Trading Check (using ported Engine)
-    const result = await executeAutoTradingCheckAdvanced(
-      marketAssets,
-      assetConfidence,
-      settings,
-      portfolio,
-      // Callback for Trade Execution
-      async (opportunity) => {
-        console.log(`💰 EXECUTING TRADE: ${opportunity.action.toUpperCase()} ${opportunity.asset.symbol}`);
-        return await executeTrade(base44, user_email, portfolio, settings, opportunity);
-      },
-      // Callback for Position Updates (Trailing Stop / Breakeven)
-      async (update) => {
-        console.log(`📝 UPDATING POSITION: ${update.asset.symbol} - ${update.reason}`);
-        return await updatePosition(base44, portfolio, update);
+    // 4. Execute Auto-Trading Check (inlined engine)
+    const tradesExecuted = [];
+    const positionsUpdated = [];
+    const openPositions = portfolio.positions || [];
+    const maxPositions = settings.max_open_positions || 5;
+    const minConf = settings.min_confidence || 70;
+    const stopLossPct = (settings.stop_loss_percent || 3) / 100;
+    const takeProfitPct = (settings.take_profit_percent || 8) / 100;
+
+    // A) Manage existing positions (stop-loss / take-profit / trailing)
+    for (const pos of openPositions) {
+      const symbol = pos.asset_symbol.replace('/USDT', '');
+      const asset = marketAssets.find(a => a.symbol === symbol);
+      if (!asset) continue;
+      const currentPrice = asset.price;
+      const entryPrice = pos.avg_entry_price;
+      const profitPct = (currentPrice - entryPrice) / entryPrice;
+
+      // Stop loss
+      if (profitPct <= -stopLossPct) {
+        console.log(`🛑 Stop-loss hit for ${symbol}: ${(profitPct * 100).toFixed(2)}%`);
+        await executeTrade(base44, user_email, portfolio, settings, {
+          asset, action: 'sell', quantity: pos.quantity,
+          reason: `Stop-loss triggered at ${(profitPct * 100).toFixed(2)}%`,
+          confidence: assetConfidence[symbol] || 0,
+          value: pos.quantity * currentPrice,
+          profitPercent: profitPct * 100
+        });
+        tradesExecuted.push({ symbol, action: 'sell', reason: 'stop_loss' });
+        continue;
       }
+
+      // Take profit
+      if (profitPct >= takeProfitPct) {
+        console.log(`✅ Take-profit hit for ${symbol}: ${(profitPct * 100).toFixed(2)}%`);
+        await executeTrade(base44, user_email, portfolio, settings, {
+          asset, action: 'sell', quantity: pos.quantity,
+          reason: `Take-profit triggered at ${(profitPct * 100).toFixed(2)}%`,
+          confidence: assetConfidence[symbol] || 0,
+          value: pos.quantity * currentPrice,
+          profitPercent: profitPct * 100
+        });
+        tradesExecuted.push({ symbol, action: 'sell', reason: 'take_profit' });
+        continue;
+      }
+
+      // Trailing stop update
+      if (settings.use_trailing_stop) {
+        const newHigh = Math.max(pos.highest_price || entryPrice, currentPrice);
+        const trailPct = (settings.trailing_stop_percent || 2) / 100;
+        const newTrail = newHigh * (1 - trailPct);
+        if (newHigh > (pos.highest_price || entryPrice)) {
+          await updatePosition(base44, portfolio, {
+            asset, action: 'update_trailing',
+            details: { highestPrice: newHigh, trailingStopPrice: newTrail }
+          });
+          positionsUpdated.push({ symbol, action: 'trailing_updated' });
+        }
+        if (pos.trailing_stop_price && currentPrice <= pos.trailing_stop_price) {
+          console.log(`🔄 Trailing stop hit for ${symbol}`);
+          await executeTrade(base44, user_email, portfolio, settings, {
+            asset, action: 'sell', quantity: pos.quantity,
+            reason: 'Trailing stop triggered',
+            confidence: assetConfidence[symbol] || 0,
+            value: pos.quantity * currentPrice,
+            profitPercent: profitPct * 100
+          });
+          tradesExecuted.push({ symbol, action: 'sell', reason: 'trailing_stop' });
+        }
+      }
+    }
+
+    // Reload portfolio state after position management
+    const remainingPositions = (portfolio.positions || []).filter(
+      p => !tradesExecuted.find(t => t.symbol === p.asset_symbol.replace('/USDT', '') && t.action === 'sell')
     );
+
+    // B) Find new buy opportunities
+    const alreadyHeld = remainingPositions.map(p => p.asset_symbol.replace('/USDT', ''));
+    const assetsTraded = settings.assets_traded_today || [];
+    const openCount = remainingPositions.length;
+
+    if (openCount < maxPositions) {
+      const candidates = marketAssets
+        .filter(a => !alreadyHeld.includes(a.symbol) && !assetsTraded.includes(a.symbol))
+        .filter(a => (assetConfidence[a.symbol] || 0) >= minConf)
+        .sort((a, b) => (assetConfidence[b.symbol] || 0) - (assetConfidence[a.symbol] || 0))
+        .slice(0, maxPositions - openCount);
+
+      for (const asset of candidates) {
+        const posSize = Math.min(
+          portfolio.available_balance * ((settings.max_position_size_percent || 10) / 100),
+          portfolio.available_balance * 0.25
+        );
+        if (posSize < 10) break; // Not enough balance
+        const quantity = posSize / asset.price;
+        console.log(`🟢 BUY opportunity: ${asset.symbol} @ $${asset.price} (${assetConfidence[asset.symbol]}% conf)`);
+        await executeTrade(base44, user_email, portfolio, settings, {
+          asset, action: 'buy', quantity,
+          reason: `AI confidence ${assetConfidence[asset.symbol]}%`,
+          confidence: assetConfidence[asset.symbol],
+          value: posSize,
+          profitPercent: 0
+        });
+        tradesExecuted.push({ symbol: asset.symbol, action: 'buy', confidence: assetConfidence[asset.symbol] });
+        portfolio.available_balance -= posSize; // local update for subsequent iterations
+      }
+    }
+
+    const result = { tradesExecuted, positionsUpdated };
 
     return Response.json({ success: true, data: result });
 
