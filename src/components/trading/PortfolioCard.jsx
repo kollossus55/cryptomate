@@ -1,20 +1,62 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Wallet, PieChart, Target, Award, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function PortfolioCard({ portfolio, onClosePosition, assets = [], livePrices = {} }) {
+  const [extraPrices, setExtraPrices] = useState({});
+
+  // Fetch prices for held positions whose symbols aren't in the assets list
+  // (server-side worker buys from top 250, frontend only tracks ~49)
+  useEffect(() => {
+    const positions = portfolio?.positions || [];
+    if (positions.length === 0) return;
+
+    const missingSymbols = positions
+      .map(p => p.asset_symbol.replace('/USDT', ''))
+      .filter(sym => !assets.find(a => a.symbol === sym) && !extraPrices[sym]);
+
+    if (missingSymbols.length === 0) return;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    fetch(
+      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=false`,
+      { signal: controller.signal, headers: { Accept: 'application/json' } }
+    )
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`Status ${r.status}`)))
+      .then(data => {
+        const priceMap = {};
+        data.forEach(coin => {
+          const sym = coin.symbol.toUpperCase();
+          if (missingSymbols.includes(sym) && coin.current_price) {
+            priceMap[sym] = coin.current_price;
+          }
+        });
+        setExtraPrices(prev => ({ ...prev, ...priceMap }));
+      })
+      .catch(err => console.warn('PortfolioCard: failed to fetch extra position prices', err.message))
+      .finally(() => clearTimeout(timeoutId));
+
+    return () => clearTimeout(timeoutId);
+  }, [portfolio?.positions, assets]);
+
   if (!portfolio) return null;
-  
+
   // Create a map of current prices for quick lookup, prioritizing live socket data
   const currentPrices = {};
   assets.forEach(asset => {
-    // If we have a live WebSocket price, use it. Otherwise fall back to asset list price.
     const livePrice = livePrices[asset.symbol];
     currentPrices[`${asset.symbol}/USDT`] = livePrice || asset.price;
   });
-  
+  // Merge in any prices we fetched for server-bought positions not in the asset list
+  Object.entries(extraPrices).forEach(([symbol, price]) => {
+    const key = symbol.includes('/USDT') ? symbol : `${symbol}/USDT`;
+    if (!currentPrices[key]) currentPrices[key] = price;
+  });
+
   console.log('📊 PortfolioCard Price Debug:', {
     websocketConnected: Object.keys(livePrices).length > 0,
     assetsCount: assets.length,
