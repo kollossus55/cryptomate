@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Activity, BarChart2, TrendingUp, Zap, Waves, Signal, LineChart, ArrowUpDown, Sparkles, CandlestickChart, Cloud, Brain } from "lucide-react";
 
-export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUpdate }) {
+export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUpdate, onSave }) {
   const handleToggle = (key) => {
     onUpdate({
       ...settings,
@@ -178,7 +178,7 @@ export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUp
         </div>
 
         <SheetFooter className="mt-6">
-          <Button onClick={onClose} className="w-full bg-indigo-600 hover:bg-indigo-700">
+          <Button onClick={() => onSave ? onSave() : onClose()} className="w-full bg-indigo-600 hover:bg-indigo-700">
             Save Configuration
           </Button>
         </SheetFooter>

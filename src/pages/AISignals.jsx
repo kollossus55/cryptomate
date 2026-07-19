@@ -47,8 +47,16 @@ export default function AISignals() {
     ao: true,
     aroon: true,
     candlestick: true,
-    ichimoku: true
+    ichimoku: true,
+    sp500ai: true
   });
+
+  // Load indicator settings from active config
+  useEffect(() => {
+    if (activeConfig?.indicator_settings) {
+      setIndicatorSettings(prev => ({ ...prev, ...activeConfig.indicator_settings }));
+    }
+  }, [activeConfig?.id]);
 
   // Fetch AI signal config
   const { data: configs } = useQuery({
@@ -586,6 +594,15 @@ export default function AISignals() {
           onClose={() => setShowIndicatorSettings(false)}
           settings={indicatorSettings}
           onUpdate={setIndicatorSettings}
+          onSave={() => {
+            if (activeConfig) {
+              updateConfigMutation.mutate({
+                id: activeConfig.id,
+                data: { ...activeConfig, indicator_settings: indicatorSettings }
+              });
+            }
+            setShowIndicatorSettings(false);
+          }}
         />
       )}
 

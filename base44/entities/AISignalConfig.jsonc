@@ -236,6 +236,60 @@
       },
       "description": "Confidence thresholds for different signals"
     },
+    "indicator_settings": {
+      "type": "object",
+      "description": "Enabled technical indicators for signal generation",
+      "properties": {
+        "rsi": {
+          "type": "boolean",
+          "default": true
+        },
+        "macd": {
+          "type": "boolean",
+          "default": true
+        },
+        "bollinger": {
+          "type": "boolean",
+          "default": true
+        },
+        "ema": {
+          "type": "boolean",
+          "default": true
+        },
+        "stoch": {
+          "type": "boolean",
+          "default": true
+        },
+        "adx": {
+          "type": "boolean",
+          "default": true
+        },
+        "sma": {
+          "type": "boolean",
+          "default": true
+        },
+        "ao": {
+          "type": "boolean",
+          "default": true
+        },
+        "aroon": {
+          "type": "boolean",
+          "default": true
+        },
+        "candlestick": {
+          "type": "boolean",
+          "default": true
+        },
+        "ichimoku": {
+          "type": "boolean",
+          "default": true
+        },
+        "sp500ai": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
     "refresh_interval_minutes": {
       "type": "number",
       "default": 5,
