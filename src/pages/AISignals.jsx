@@ -51,13 +51,6 @@ export default function AISignals() {
     sp500ai: true
   });
 
-  // Load indicator settings from active config
-  useEffect(() => {
-    if (activeConfig?.indicator_settings) {
-      setIndicatorSettings(prev => ({ ...prev, ...activeConfig.indicator_settings }));
-    }
-  }, [activeConfig?.id]);
-
   // Fetch AI signal config
   const { data: configs } = useQuery({
     queryKey: ['ai-signal-configs'],
@@ -65,6 +58,13 @@ export default function AISignals() {
   });
 
   const activeConfig = configs?.find(c => c.is_active) || null;
+
+  // Load indicator settings from active config
+  useEffect(() => {
+    if (activeConfig?.indicator_settings) {
+      setIndicatorSettings(prev => ({ ...prev, ...activeConfig.indicator_settings }));
+    }
+  }, [activeConfig?.id]);
 
   // Fetch assets for analysis
   const { data: assets = [] } = useQuery({
