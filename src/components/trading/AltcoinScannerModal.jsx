@@ -176,7 +176,7 @@ export default function AltcoinScannerModal({ onClose, onTradeAsset }) {
                         
                         <div className="text-right">
                           <div className="text-2xl font-bold text-cyan-400">
-                            {opp.confidence}%
+                            {opp.confidence}/100
                           </div>
                         </div>
                       </div>

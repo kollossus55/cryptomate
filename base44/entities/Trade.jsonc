@@ -62,6 +62,20 @@
     "profit_loss": {
       "type": "number",
       "description": "Profit or loss after closing position"
+    },
+    "fee": {
+      "type": "number",
+      "default": 0,
+      "description": "Exchange fee paid on this fill."
+    },
+    "slippage_percent": {
+      "type": "number",
+      "default": 0,
+      "description": "Realised slippage vs intended price."
+    },
+    "gross_profit_loss": {
+      "type": "number",
+      "description": "P&L before fees. profit_loss is net."
     }
   },
   "required": [

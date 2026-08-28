@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { runBacktest } from '@shared/trading/backtest.js';
+import { fetchHistoricalCandles } from '@shared/trading/marketData.js';
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,8 +50,7 @@ export default function Backtesting() {
 
   const handleRunBacktest = async (config) => {
     setShowNewBacktest(false);
-    
-    // Create initial backtest record
+
     const backtest = await createBacktestMutation.mutateAsync({
       name: config.name,
       strategy_config: config.strategy,
@@ -58,208 +59,142 @@ export default function Backtesting() {
       status: 'running'
     });
 
-    // Run the backtest simulation
-    setTimeout(async () => {
+    // Previously wrapped in a cosmetic 2s setTimeout and hardcoded
+    // status: 'completed' regardless of outcome, so a failed run still
+    // displayed as a finished backtest. Real work, real status.
+    try {
       const results = await runBacktestSimulation(config);
-      
-      // Update with results
+
       await base44.entities.BacktestResult.update(backtest.id, {
         ...backtest,
         ...results,
-        status: 'completed'
+        status: results.status || 'completed'
       });
-      
+
       queryClient.invalidateQueries({ queryKey: ['backtests'] });
-      setActiveBacktest(results);
-    }, 2000);
+      if (results.status !== 'failed') {
+        setActiveBacktest(results);
+      }
+    } catch (error) {
+      await base44.entities.BacktestResult.update(backtest.id, {
+        ...backtest,
+        status: 'failed',
+        error_message: error.message || 'Backtest failed'
+      });
+      queryClient.invalidateQueries({ queryKey: ['backtests'] });
+    }
   };
 
+  /**
+   * Run a backtest on REAL historical candles.
+   *
+   * The previous implementation drew every price from Math.random(), including
+   * entry and exit independently — so a "trade" was two unrelated random
+   * numbers subtracted from each other, and the results were uncorrelated with
+   * the live strategy or with the market. This fetches real OHLCV from Binance
+   * and replays it bar by bar through the SAME scoreAsset() the live worker
+   * uses, with fees, slippage, and no look-ahead.
+   */
   const runBacktestSimulation = async (config) => {
     const startTime = Date.now();
-    
-    // Simulate historical price data and trading
     const { strategy, period, initialCapital } = config;
-    const durationDays = Math.floor((new Date(period.endDate) - new Date(period.startDate)) / (1000 * 60 * 60 * 24));
-    
-    let capital = initialCapital;
-    let equity = initialCapital;
-    let maxEquity = initialCapital;
-    let maxDrawdown = 0;
-    let positions = {};
-    let trades = [];
-    let equityCurve = [];
-    let returns = [];
-    
-    // Generate realistic market data with sentiment
-    for (let day = 0; day < durationDays; day++) {
-      const currentDate = new Date(new Date(period.startDate).getTime() + day * 24 * 60 * 60 * 1000);
-      
-      // Simulate market analysis with AI + Sentiment
-      for (const asset of strategy.assets) {
-        const basePrice = 40000 + Math.random() * 10000; // Simplified
-        const priceChange = (Math.random() - 0.5) * 0.05;
-        const currentPrice = basePrice * (1 + priceChange);
-        
-        // AI Confidence (60-95%)
-        const technicalScore = 50 + Math.random() * 45;
-        
-        // Sentiment Analysis (-1 to 1)
-        const sentimentScore = strategy.useSentiment 
-          ? (Math.random() * 2 - 1) 
-          : 0;
-        
-        // Combined confidence
-        const sentimentBoost = strategy.useSentiment ? sentimentScore * 10 : 0;
-        const confidence = Math.min(95, Math.max(30, technicalScore + sentimentBoost));
-        
-        // Trading decision
-        if (confidence >= strategy.minConfidence) {
-          const action = confidence > 75 && priceChange > 0 ? 'buy' : confidence > 70 && priceChange < -0.02 ? 'sell' : null;
-          
-          if (action === 'buy' && capital > 0) {
-            const positionSize = Math.min(
-              capital * (strategy.maxPositionSize / 100),
-              capital * 0.5
-            );
-            const quantity = positionSize / currentPrice;
-            
-            positions[asset] = {
-              quantity,
-              entryPrice: currentPrice,
-              entryDate: currentDate.toISOString()
-            };
-            
-            capital -= positionSize;
-            
-            trades.push({
-              date: currentDate.toISOString(),
-              asset,
-              action: 'buy',
-              price: currentPrice,
-              quantity,
-              profit_loss: 0,
-              confidence,
-              sentiment_score: sentimentScore
-            });
-          } else if (action === 'sell' && positions[asset]) {
-            const position = positions[asset];
-            const exitPrice = currentPrice;
-            const profitLoss = (exitPrice - position.entryPrice) * position.quantity;
-            
-            // Apply stop loss / take profit
-            const returnPct = ((exitPrice - position.entryPrice) / position.entryPrice) * 100;
-            if (returnPct <= -strategy.stopLoss || returnPct >= strategy.takeProfit || day === durationDays - 1) {
-              capital += position.quantity * exitPrice;
-              
-              trades.push({
-                date: currentDate.toISOString(),
-                asset,
-                action: 'sell',
-                price: exitPrice,
-                quantity: position.quantity,
-                profit_loss: profitLoss,
-                confidence,
-                sentiment_score: sentimentScore
-              });
-              
-              delete positions[asset];
-            }
-          }
-        }
-      }
-      
-      // Calculate equity
-      let positionsValue = 0;
-      for (const [asset, position] of Object.entries(positions)) {
-        const currentPrice = 40000 + Math.random() * 10000;
-        positionsValue += position.quantity * currentPrice;
-      }
-      equity = capital + positionsValue;
-      
-      // Track drawdown
-      if (equity > maxEquity) {
-        maxEquity = equity;
-      }
-      const drawdown = ((maxEquity - equity) / maxEquity) * 100;
-      maxDrawdown = Math.max(maxDrawdown, drawdown);
-      
-      // Track equity curve
-      equityCurve.push({
-        date: currentDate.toISOString(),
-        equity: Math.round(equity * 100) / 100,
-        drawdown: Math.round(drawdown * 100) / 100
-      });
-      
-      // Calculate daily return
-      if (equityCurve.length > 1) {
-        const prevEquity = equityCurve[equityCurve.length - 2].equity;
-        returns.push((equity - prevEquity) / prevEquity);
-      }
+
+    const startMs = new Date(period.startDate).getTime();
+    const endMs = new Date(period.endDate).getTime();
+
+    if (!(startMs < endMs)) {
+      return { status: 'failed', error_message: 'End date must be after start date' };
     }
-    
-    // Close all remaining positions
-    for (const [asset, position] of Object.entries(positions)) {
-      const exitPrice = 40000 + Math.random() * 10000;
-      const profitLoss = (exitPrice - position.entryPrice) * position.quantity;
-      capital += position.quantity * exitPrice;
-      
-      trades.push({
-        date: period.endDate,
-        asset,
-        action: 'sell',
-        price: exitPrice,
-        quantity: position.quantity,
-        profit_loss: profitLoss,
-        confidence: 0,
-        sentiment_score: 0
-      });
-    }
-    
-    const finalCapital = capital;
-    const totalReturn = ((finalCapital - initialCapital) / initialCapital) * 100;
-    
-    // Calculate metrics
-    const winningTrades = trades.filter(t => t.profit_loss > 0);
-    const losingTrades = trades.filter(t => t.profit_loss < 0);
-    const totalTrades = trades.filter(t => t.action === 'sell').length;
-    const winRate = totalTrades > 0 ? (winningTrades.length / totalTrades) * 100 : 0;
-    
-    const grossProfit = winningTrades.reduce((sum, t) => sum + t.profit_loss, 0);
-    const grossLoss = Math.abs(losingTrades.reduce((sum, t) => sum + t.profit_loss, 0));
-    const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? 999 : 0;
-    
-    const avgWin = winningTrades.length > 0 ? grossProfit / winningTrades.length : 0;
-    const avgLoss = losingTrades.length > 0 ? grossLoss / losingTrades.length : 0;
-    
-    const largestWin = Math.max(...winningTrades.map(t => t.profit_loss), 0);
-    const largestLoss = Math.min(...losingTrades.map(t => t.profit_loss), 0);
-    
-    // Sharpe Ratio
-    const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-    const stdDev = Math.sqrt(
-      returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length
+
+    // Map display symbols (BTC, BTC/USDT) onto Binance pairs.
+    const symbols = strategy.assets.map((a) =>
+      a.includes('USDT') ? a.replace('/', '') : `${a.replace('/', '')}USDT`
     );
-    const sharpeRatio = stdDev > 0 ? (avgReturn / stdDev) * Math.sqrt(252) : 0;
-    
+
+    const candlesBySymbol = new Map();
+    const failures = [];
+
+    for (const symbol of symbols) {
+      try {
+        const candles = await fetchHistoricalCandles(symbol, '1h', startMs, endMs);
+        if (candles.length > 0) {
+          candlesBySymbol.set(symbol, candles);
+        } else {
+          failures.push(symbol);
+        }
+      } catch (err) {
+        failures.push(symbol);
+      }
+    }
+
+    // No synthetic fallback. A backtest on invented data is worse than no
+    // backtest, because it produces a number people act on.
+    if (candlesBySymbol.size === 0) {
+      return {
+        status: 'failed',
+        error_message: `Could not fetch historical data for any of: ${symbols.join(', ')}. ` +
+          `Check the symbols are valid Binance USDT pairs and that the date range is not in the future.`,
+      };
+    }
+
+    const result = runBacktest(candlesBySymbol, {
+      initialCapital,
+      minStrength: strategy.minConfidence,
+      stopLossPercent: strategy.stopLoss,
+      takeProfitPercent: strategy.takeProfit,
+      maxPositions: strategy.maxPositions ?? 5,
+      maxPositionPercent: strategy.maxPositionSize,
+      useTrailingStop: strategy.useTrailingStop ?? false,
+      trailingStopPercent: strategy.trailingStopPercent ?? 2,
+      exchange: 'binance',
+    });
+
+    if (result.error) {
+      return {
+        status: 'failed',
+        error_message: result.error === 'insufficient_history'
+          ? `Not enough history in that window (${result.barsAvailable} bars). Widen the date range.`
+          : result.error,
+      };
+    }
+
+    const m = result.metrics;
     const durationSeconds = (Date.now() - startTime) / 1000;
-    
+
     return {
-      final_capital: Math.round(finalCapital * 100) / 100,
-      total_return: Math.round(totalReturn * 100) / 100,
-      total_trades: totalTrades,
-      winning_trades: winningTrades.length,
-      losing_trades: losingTrades.length,
-      win_rate: Math.round(winRate * 100) / 100,
-      profit_factor: Math.round(profitFactor * 100) / 100,
-      max_drawdown: Math.round(maxDrawdown * 100) / 100,
-      sharpe_ratio: Math.round(sharpeRatio * 100) / 100,
-      avg_win: Math.round(avgWin * 100) / 100,
-      avg_loss: Math.round(avgLoss * 100) / 100,
-      largest_win: Math.round(largestWin * 100) / 100,
-      largest_loss: Math.round(largestLoss * 100) / 100,
-      trades_detail: trades,
-      equity_curve: equityCurve,
-      duration_seconds: Math.round(durationSeconds * 100) / 100
+      status: 'completed',
+      final_capital: m.finalCapital,
+      total_return: Math.round(m.totalReturn * 100) / 100,
+      total_trades: m.totalTrades,
+      winning_trades: m.winningTrades,
+      losing_trades: m.losingTrades,
+      win_rate: Math.round(m.winRate * 100) / 100,
+      profit_factor: Number.isFinite(m.profitFactor) ? Math.round(m.profitFactor * 100) / 100 : null,
+      max_drawdown: m.maxDrawdown,
+      sharpe_ratio: m.sharpeRatio,
+      sortino_ratio: m.sortinoRatio,
+      avg_win: m.avgWin,
+      avg_loss: m.avgLoss,
+      expectancy: m.expectancy,
+      total_fees: m.totalFees,
+      fee_drag_percent: m.feeDragPercent,
+      exit_breakdown: m.exitBreakdown,
+      // Surfaced deliberately: under ~100 trades these numbers are noise.
+      statistically_meaningful: m.statisticallyMeaningful,
+      sample_warning: m.sampleWarning,
+      // The honest comparison. Beating cash is easy in a bull market; beating
+      // an equal-weight hold of the same assets over the same window is the bar.
+      benchmark_return: result.benchmark?.totalReturn ?? null,
+      beat_benchmark: result.benchmark
+        ? m.totalReturn > result.benchmark.totalReturn
+        : null,
+      data_source: 'binance_1h_ohlcv',
+      assets_tested: [...candlesBySymbol.keys()],
+      assets_unavailable: failures,
+      bars_simulated: result.barsSimulated,
+      trades_detail: result.trades,
+      equity_curve: result.equityCurve,
+      duration_seconds: Math.round(durationSeconds * 100) / 100,
     };
   };
 
@@ -304,8 +239,10 @@ export default function Backtesting() {
               <div>
                 <h3 className="font-semibold text-blue-200 mb-2">Advanced Backtesting Engine</h3>
                 <p className="text-blue-200/80 text-sm leading-relaxed">
-                  <strong>Sophisticated AI Models:</strong> Test strategies with technical analysis + sentiment analysis from simulated news/social media data. 
-                  Includes realistic market simulation with slippage, stop loss, take profit, and risk management. 
+                  <strong>Real historical data:</strong> Strategies are replayed bar by bar against actual Binance 1h OHLCV,
+                  using the same signal engine the live bot runs. Exchange fees and order-size slippage are applied to every fill,
+                  entries fill at the next bar's open (no look-ahead), and results are compared against buy-and-hold on the same assets.
+                  Sentiment is not included — no sentiment data source is wired up. 
                   Performance metrics: Sharpe ratio, max drawdown, profit factor, and detailed trade logs.
                 </p>
               </div>

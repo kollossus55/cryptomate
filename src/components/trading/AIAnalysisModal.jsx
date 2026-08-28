@@ -271,7 +271,7 @@ Provide detailed trading recommendations with confidence scores.`;
                       <span className="text-slate-400 text-sm">Confidence</span>
                     </div>
                     <div className="text-xl font-bold text-white">
-                      {analysis.confidence}%
+                      {analysis.confidence}/100
                     </div>
                   </div>
                 </div>

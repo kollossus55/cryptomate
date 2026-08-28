@@ -1,26 +1,40 @@
 /**
  * Technical Analysis Engine
  * Calculates key technical indicators for trading signals.
- * Generates synthetic price history for demo purposes if real history is unavailable.
+ * Operates on REAL OHLCV candles only. There is no synthetic fallback:
+ * no data means no signal, not a made-up one.
  */
+
+import { fetchCandles } from '@shared/trading/marketData.js';
 
 // Generate synthetic price history based on current price and 24h change
 // to allow calculation of indicators without heavy API historical data calls
-export const generateSyntheticHistory = (currentPrice, change24h, points = 100) => {
-  const history = [];
-  let price = currentPrice * (1 - (change24h / 100)); // Start roughly where 24h ago was
-  const volatility = Math.abs(change24h / 100) / Math.sqrt(points); // Estimate volatility
-
-  for (let i = 0; i < points; i++) {
-    // Random walk with drift towards current price
-    const drift = (currentPrice - price) / (points - i);
-    const shock = (Math.random() - 0.5) * volatility * price;
-    price += drift + shock;
-    history.push(price);
-  }
-  // Ensure last point is exactly current price
-  history[history.length - 1] = currentPrice;
-  return history;
+/**
+ * REMOVED: generateSyntheticHistory()
+ *
+ * This function fabricated 100 points of price history with Math.random()
+ * between "price 24h ago" and "price now", and every indicator in this app was
+ * computed on its output. That made "RSI oversold" a coin flip and made the
+ * whole analysis layer non-reproducible — the same market data produced a
+ * different answer on every call.
+ *
+ * Use real candles instead:
+ *   import { fetchCandles } from '@shared/trading/marketData.js';
+ *   const candles = await fetchCandles('BTCUSDT', '1h', 200);
+ *   if (!candles) return null;  // no data means no opinion — do NOT trade
+ *
+ * Then feed those candles to @shared/trading/indicators.js or scoreAsset().
+ *
+ * The throwing stub below is deliberate: a silent no-op would let call sites
+ * keep working and quietly produce garbage. Failing loudly forces each one to
+ * be migrated.
+ */
+export const generateSyntheticHistory = () => {
+  throw new Error(
+    'generateSyntheticHistory has been removed. It invented price data with ' +
+    'Math.random(), which made every indicator meaningless. Use fetchCandles() ' +
+    'from @shared/trading/marketData.js and pass real OHLCV to the indicators.'
+  );
 };
 
 // 1. Relative Strength Index (RSI)
@@ -423,9 +437,35 @@ export const calculateIchimoku = (prices) => {
   return { signal, cloud, tenkanSen, kijunSen, senkouA, senkouB };
 };
 
-export const analyzeIndicators = (asset, enabledIndicators) => {
-  // Generate synthetic history based on asset's current state
-  const prices = generateSyntheticHistory(asset.price, asset.change24h, 100);
+/**
+ * Analyse an asset's indicators.
+ *
+ * MIGRATED: this used to call generateSyntheticHistory(), so every indicator
+ * below was computed on a Math.random() walk. It now requires real candles.
+ *
+ * This function is ASYNC now, because fetching real data is I/O. Callers must
+ * await it and handle the null return — null means "no data, therefore no
+ * opinion", which is different from a neutral score and must never be treated
+ * as one.
+ *
+ * @param asset   { symbol, price, change24h, ... }
+ * @param enabledIndicators
+ * @param candles Optional pre-fetched OHLCV. Pass this when scoring many
+ *                assets so you are not re-fetching per call.
+ */
+export const analyzeIndicators = async (asset, enabledIndicators, candles = null) => {
+  const ohlcv = candles || await fetchCandles(
+    asset.symbol?.includes('USDT') ? asset.symbol.replace('/', '') : `${asset.symbol}USDT`,
+    '1h',
+    200
+  );
+
+  if (!ohlcv || ohlcv.length < 60) {
+    return null;
+  }
+
+  // Legacy helpers below expect a bare close array.
+  const prices = ohlcv.map((c) => c.close);
   
   const results = {};
   let scoreModifier = 0;

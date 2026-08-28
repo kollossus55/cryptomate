@@ -74,59 +74,74 @@ export default function ExchangeSettings() {
     });
   };
 
+  const [credentialError, setCredentialError] = useState(null);
+
+  /**
+   * Send credentials to the server function, which validates them against the
+   * exchange, rejects keys with withdrawal rights, encrypts with AES-GCM and
+   * stores only ciphertext.
+   *
+   * REPLACES the previous btoa() "encryption". Base64 is an encoding, not
+   * encryption — the secret was recoverable by anyone who could read the
+   * entity. Secrets no longer touch the entity or persist in client state.
+   */
   const handleAddConnection = async () => {
+    setCredentialError(null);
+
     if (!newConnection.api_key || !newConnection.api_secret) {
-      alert("Please enter both API Key and API Secret");
+      setCredentialError("Please enter both API Key and API Secret");
       return;
     }
 
-    // Simple client-side "encryption" (base64) - in production with backend, use real encryption
-    const encodedKey = btoa(newConnection.api_key);
-    const encodedSecret = btoa(newConnection.api_secret);
+    try {
+      const response = await base44.functions.invoke('exchangeCredentials', {
+        action: 'store',
+        exchange_name: newConnection.exchange_name,
+        api_key: newConnection.api_key,
+        api_secret: newConnection.api_secret,
+        is_testnet: newConnection.is_testnet,
+      });
 
-    await createConnectionMutation.mutateAsync({
-      ...newConnection,
-      api_key: encodedKey,
-      api_secret: encodedSecret
-    });
+      if (!response.data?.success) {
+        setCredentialError(response.data?.error || 'Failed to store credentials');
+        return;
+      }
+
+      // Clear the plaintext from component state immediately on success, so it
+      // does not linger in memory or in a React DevTools snapshot.
+      resetForm();
+      queryClient.invalidateQueries({ queryKey: ['exchange-connections'] });
+    } catch (error) {
+      setCredentialError(error.message || 'Failed to store credentials');
+    }
   };
 
+  /**
+   * Test a stored connection with a REAL signed call to the exchange.
+   *
+   * The previous version fetched a PUBLIC ticker endpoint and, if it returned
+   * 200, recorded permissions as ['read', 'trade'] — which tested nothing
+   * about the key. A completely invalid key "passed", and the recorded
+   * permissions were a guess, not a fact.
+   *
+   * The signed call happens server-side because signing it here would require
+   * the secret in the browser.
+   */
   const handleTestConnection = async (connection) => {
     setTestingConnectionId(connection.id);
 
     try {
-      // Simulate connection test using public API
-      const testSymbol = 'BTCUSDT';
-      const baseUrl = connection.is_testnet 
-        ? 'https://testnet.binance.vision' 
-        : 'https://api.binance.com';
-
-      // Attempt to fetch public market data as a basic connectivity test
-      const response = await fetch(`${baseUrl}/api/v3/ticker/24hr?symbol=${testSymbol}`);
-
-      if (response.ok) {
-        await updateConnectionMutation.mutateAsync({
-          id: connection.id,
-          data: {
-            ...connection,
-            connection_status: 'connected',
-            last_sync: new Date().toISOString(),
-            permissions: ['read', 'trade'], // Assuming trade permission if connected
-            error_message: null
-          }
-        });
-      } else {
-        throw new Error(`Failed to fetch public data: ${response.status} ${response.statusText}`);
-      }
-    } catch (error) {
-      await updateConnectionMutation.mutateAsync({
-        id: connection.id,
-        data: {
-          ...connection,
-          connection_status: 'error',
-          error_message: error.message || 'Failed to connect to exchange'
-        }
+      const response = await base44.functions.invoke('exchangeCredentials', {
+        action: 'test',
+        connection_id: connection.id,
       });
+
+      if (!response.data?.success) {
+        setCredentialError(response.data?.error || 'Connection test failed');
+      }
+      queryClient.invalidateQueries({ queryKey: ['exchange-connections'] });
+    } catch (error) {
+      setCredentialError(error.message || 'Connection test failed');
     } finally {
       setTestingConnectionId(null);
     }
@@ -207,7 +222,8 @@ export default function ExchangeSettings() {
                       <li>• Never enable <strong className="text-red-300">withdrawal permissions</strong> on API keys</li>
                       <li>• Enable <strong className="text-green-300">IP whitelist</strong> on your exchange account</li>
                       <li>• Use <strong className="text-blue-300">2FA</strong> for all exchange accounts</li>
-                      <li>• Keys are base64-encoded (upgrade to AES-256 with backend functions)</li>
+                      <li>• Keys with <strong className="text-red-300">withdrawal permission are rejected</strong> at setup</li>
+                      <li>• Secrets are AES-GCM encrypted server-side and never sent back to the browser</li>
                     </ul>
                   </div>
                 </div>
@@ -323,8 +339,14 @@ export default function ExchangeSettings() {
 
                   <div className="bg-slate-900 border-2 border-blue-500/40 rounded-xl p-4">
                     <p className="text-white leading-relaxed">
-                      <strong className="text-blue-300">Note:</strong> Your credentials are stored encoded. With backend functions enabled, 
-                      they would be encrypted with AES-256 and used to execute real trades. Currently all trading is simulated.
+                      <strong className="text-blue-300">How your keys are handled:</strong> Credentials are sent directly to a
+                      server function, validated against the exchange with a signed request, then encrypted with AES-GCM using a key
+                      held only on the server. The plaintext secret is never stored and is never returned to this browser.
+                      Keys with withdrawal permission are rejected outright.
+                    </p>
+                    <p className="text-white leading-relaxed mt-3">
+                      <strong className="text-amber-300">All trading is currently simulated.</strong> No real orders are placed
+                      anywhere in this app. Adding a connection does not put real money at risk.
                     </p>
                   </div>
 

@@ -434,7 +434,7 @@ export default function TradeHistory() {
                               <div className="flex items-center gap-2 mb-2">
                                 <h4 className="text-indigo-300 font-semibold">AI Trading Signal</h4>
                                 <Badge className="bg-indigo-500/20 text-indigo-400 border-indigo-500/50">
-                                  {trade.ai_signal.confidence}% confidence
+                                  {trade.ai_signal.signal_strength ?? trade.ai_signal.confidence}/100 strength
                                 </Badge>
                               </div>
                               <p className="text-sm text-slate-300 mb-2">

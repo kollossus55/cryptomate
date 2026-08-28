@@ -12,14 +12,6 @@
       ],
       "description": "Name of the exchange"
     },
-    "api_key": {
-      "type": "string",
-      "description": "Exchange API key (encrypted client-side)"
-    },
-    "api_secret": {
-      "type": "string",
-      "description": "Exchange API secret (encrypted client-side)"
-    },
     "is_active": {
       "type": "boolean",
       "default": true,
@@ -65,12 +57,22 @@
       ],
       "default": "simulated",
       "description": "Trading mode: simulated (paper) or ready for live trading"
+    },
+    "api_key_fingerprint": {
+      "type": "string",
+      "description": "First/last 4 chars of the API key, for display only. Not sensitive."
+    },
+    "encrypted_api_key": {
+      "type": "string",
+      "description": "AES-GCM ciphertext (IV prepended, base64). Written and read ONLY by the exchangeCredentials server function."
+    },
+    "encrypted_api_secret": {
+      "type": "string",
+      "description": "AES-GCM ciphertext (IV prepended, base64). Written and read ONLY by the exchangeCredentials server function."
     }
   },
   "required": [
-    "exchange_name",
-    "api_key",
-    "api_secret"
+    "exchange_name"
   ],
   "rls": {
     "create": {

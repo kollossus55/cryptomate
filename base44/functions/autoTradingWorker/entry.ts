@@ -1,709 +1,500 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.43';
+
+import { fetchUniverse, fetchCandlesBatch, fetchOrderBook } from './shared/marketData.js';
+import { scoreAsset, MIN_CANDLES } from './shared/signalEngine.js';
+import { applyCosts, roundTripCostPercent, isEdgeSufficient } from './shared/costs.js';
+import { calculatePositionSize, checkCorrelation, buildReturnsMap, checkPortfolioExposure } from './shared/sizing.js';
+import { rollDailyCounters, evaluateAllGuards, utcDayKey } from './shared/risk.js';
+import {
+  createPortfolioState, calculateEquity, positionPnL, applyBuy, applySell,
+  markToMarket, updateTrailingStop, activateBreakeven,
+  toPersistablePortfolio, pendingTrades,
+} from './shared/portfolio.js';
+import { logReturns } from './shared/indicators.js';
 
 /**
- * Technical Analysis - Server-Side Port
- */
-const generateSyntheticHistory = (currentPrice, change24h, points = 100) => {
-  const history = [];
-  let price = currentPrice * (1 - (change24h / 100));
-  const volatility = Math.abs(change24h / 100) / Math.sqrt(points);
-
-  for (let i = 0; i < points; i++) {
-    const drift = (currentPrice - price) / (points - i);
-    const shock = (Math.random() - 0.5) * volatility * price;
-    price += drift + shock;
-    history.push(price);
-  }
-  history[history.length - 1] = currentPrice;
-  return history;
-};
-
-const calculateRSI = (prices, period = 14) => {
-  if (prices.length < period + 1) return 50;
-  let gains = 0, losses = 0;
-  for (let i = 1; i <= period; i++) {
-    const diff = prices[prices.length - i] - prices[prices.length - i - 1];
-    if (diff >= 0) gains += diff;
-    else losses -= diff;
-  }
-  const avgGain = gains / period;
-  const avgLoss = losses / period;
-  if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - (100 / (1 + rs));
-};
-
-const calculateEMA = (prices, period) => {
-  if (prices.length < period) return prices[prices.length - 1];
-  const k = 2 / (period + 1);
-  let ema = prices[0];
-  for (let i = 1; i < prices.length; i++) {
-    ema = (prices[i] * k) + (ema * (1 - k));
-  }
-  return ema;
-};
-
-const calculateMACD = (prices) => {
-  if (prices.length < 26) return { histogram: 0 };
-  const emaFast = calculateEMA(prices, 12);
-  const emaSlow = calculateEMA(prices, 26);
-  const macdLine = emaFast - emaSlow;
-  const signalLine = macdLine * 0.9;
-  return { histogram: macdLine - signalLine };
-};
-
-const calculateBollingerBands = (prices, period = 20, multiplier = 2) => {
-  if (prices.length < period) return { upper: 0, middle: 0, lower: 0 };
-  const slice = prices.slice(-period);
-  const middle = slice.reduce((a, b) => a + b, 0) / period;
-  const variance = slice.map(p => Math.pow(p - middle, 2)).reduce((a, b) => a + b, 0) / period;
-  const stdDev = Math.sqrt(variance);
-  return {
-    upper: middle + (stdDev * multiplier),
-    middle: middle,
-    lower: middle - (stdDev * multiplier)
-  };
-};
-
-const calculateStochastic = (prices, period = 14) => {
-  if (prices.length < period) return { k: 50 };
-  const current = prices[prices.length - 1];
-  const slice = prices.slice(-period);
-  const low = Math.min(...slice);
-  const high = Math.max(...slice);
-  if (high === low) return { k: 50 };
-  return { k: ((current - low) / (high - low)) * 100 };
-};
-
-// ============================================================================
-// SP500 Full AI Indicator (Server-Side Port)
-// ============================================================================
-const calculateSP500AIIndicator = (prices, options = {}) => {
-  const n = prices.length;
-  if (n < 34) return { longSignal: false, shortSignal: false, bullish: false, bearish: false, strength: 0, filter_pass: true };
-
-  const H = prices, L = prices;
-
-  // Heikin Ashi
-  const haClose = prices.map((c, i) => (H[i] + L[i] + c + c) / 4);
-  const haOpen = [prices[0]];
-  for (let i = 1; i < n; i++) haOpen.push((haOpen[i - 1] + haClose[i - 1]) / 2);
-  const haBullish = haClose[n - 1] > haOpen[n - 1];
-  const haBearish = haClose[n - 1] < haOpen[n - 1];
-
-  // CMO
-  const cmoLength = 14;
-  let momUpSum = 0, momDownSum = 0;
-  for (let i = n - cmoLength; i < n; i++) {
-    const change = prices[i] - prices[i - 1];
-    if (change > 0) momUpSum += change; else momDownSum += Math.abs(change);
-  }
-  const cmo = (momUpSum + momDownSum) === 0 ? 0 : ((momUpSum - momDownSum) / (momUpSum + momDownSum)) * 100;
-  const cmoOverboughtCond = cmo > 50;
-  const cmoOversoldCond = cmo < -50;
-
-  // SSL Channel
-  const sslLength = 9;
-  const smaHigh = H.slice(-sslLength).reduce((a, b) => a + b, 0) / sslLength;
-  const smaLow = L.slice(-sslLength).reduce((a, b) => a + b, 0) / sslLength;
-  const cp = prices[n - 1], pp = prices[n - 2];
-  const hlv = cp > smaHigh ? 1 : cp < smaLow ? -1 : (pp > smaHigh ? 1 : -1);
-  const sslBullish = hlv > 0;
-  const sslBearish = hlv < 0;
-
-  // AI RSI
-  const calcRSI = (p, period) => {
-    if (p.length < period + 1) return 50;
-    let g = 0, l = 0;
-    for (let i = p.length - period; i < p.length; i++) {
-      const d = p[i] - p[i - 1];
-      if (d >= 0) g += d; else l -= d;
-    }
-    const ag = g / period, al = l / period;
-    if (al === 0) return 100;
-    return 100 - (100 / (1 + ag / al));
-  };
-  const RSIshort = calcRSI(prices, 5);
-  const RSIlong = calcRSI(prices, 13);
-  const aiRSIValue = RSIshort - RSIlong;
-  const rsiSignalLen = 9;
-  const aiRSIValues = [];
-  for (let i = Math.max(1, n - rsiSignalLen); i < n; i++) {
-    aiRSIValues.push(calcRSI(prices.slice(0, i + 1), 5) - calcRSI(prices.slice(0, i + 1), 13));
-  }
-  const aiRSISignal = aiRSIValues.reduce((a, b) => a + b, 0) / aiRSIValues.length;
-  const totalRSI = RSIshort + RSIlong;
-  const aiRSIBullish = aiRSIValue > aiRSISignal && totalRSI > 100;
-  const aiRSIBearish = aiRSIValue < aiRSISignal && totalRSI <= 100;
-
-  // TMO
-  let tmoData = 0;
-  const tmoLength = 14;
-  for (let i = 0; i <= Math.min(tmoLength, n - 1); i++) {
-    const cmpIdx = Math.max(0, n - 1 - i);
-    tmoData += prices[n - 1] > prices[cmpIdx] ? 1 : prices[n - 1] < prices[cmpIdx] ? -1 : 0;
-  }
-  const tmoBullish = tmoData > 0;
-  const tmoBearish = tmoData < 0;
-
-  // Money Flow (simplified without volume)
-  const mfLength = 9;
-  let mfSum = 0;
-  for (let i = Math.max(1, n - mfLength); i < n; i++) {
-    const d = prices[i] - prices[i - 1];
-    mfSum += d > 0 ? 1 : d < 0 ? -1 : 0;
-  }
-  const mfBullish = mfSum > 0;
-  const mfBearish = mfSum < 0;
-
-  const longBasic = haBullish && sslBullish && !cmoOverboughtCond;
-  const longSignal = longBasic && aiRSIBullish && tmoBullish && mfBullish;
-  const shortBasic = haBearish && sslBearish && !cmoOversoldCond;
-  const shortSignal = shortBasic && aiRSIBearish && tmoBearish && mfBearish;
-
-  const strength = (sslBullish ? 1 : 0) + (!cmoOverboughtCond ? 1 : 0) +
-    (aiRSIBullish ? 1 : 0) + (tmoBullish ? 1 : 0) + (mfBullish ? 1 : 0) + (haBullish ? 1 : 0);
-  
-  const filter_pass = longSignal || shortSignal || strength >= 4;
-
-  return { longSignal, shortSignal, bullish: longSignal, bearish: shortSignal, strength, filter_pass };
-};
-
-const analyzeIndicators = (asset, enabledIndicators = { rsi: true, macd: true, bollinger: true, ema: true, stoch: true }) => {
-  const prices = generateSyntheticHistory(asset.price, asset.change24h, 100);
-  let scoreModifier = 0;
-  const signals = [];
-
-  if (enabledIndicators.rsi) {
-    const rsi = calculateRSI(prices);
-    if (rsi < 30) {
-      scoreModifier += 15;
-      signals.push("RSI Oversold (Bullish)");
-    } else if (rsi > 70) {
-      scoreModifier -= 15;
-      signals.push("RSI Overbought (Bearish)");
-    }
-  }
-
-  if (enabledIndicators.macd) {
-    const { histogram } = calculateMACD(prices);
-    if (histogram > 0) {
-      scoreModifier += 10;
-      signals.push("MACD Bullish");
-    } else {
-      scoreModifier -= 10;
-      signals.push("MACD Bearish");
-    }
-  }
-
-  if (enabledIndicators.bollinger) {
-    const { upper, lower } = calculateBollingerBands(prices);
-    const current = prices[prices.length - 1];
-    if (current < lower) {
-      scoreModifier += 15;
-      signals.push("BB Lower Bounce");
-    } else if (current > upper) {
-      scoreModifier -= 15;
-      signals.push("BB Upper Pullback");
-    }
-  }
-
-  if (enabledIndicators.ema) {
-    const emaShort = calculateEMA(prices, 12);
-    const emaLong = calculateEMA(prices, 50);
-    if (emaShort > emaLong) {
-      scoreModifier += 10;
-      signals.push("EMA Golden Trend");
-    } else {
-      scoreModifier -= 10;
-      signals.push("EMA Death Trend");
-    }
-  }
-
-  if (enabledIndicators.stoch) {
-    const { k } = calculateStochastic(prices);
-    if (k < 20) {
-      scoreModifier += 10;
-      signals.push("Stoch Oversold");
-    } else if (k > 80) {
-      scoreModifier -= 10;
-      signals.push("Stoch Overbought");
-    }
-  }
-
-  if (enabledIndicators.sp500ai) {
-    const sp500 = calculateSP500AIIndicator(prices);
-    if (sp500.longSignal) {
-      scoreModifier += 10 + Math.round((sp500.strength / 6) * 12);
-      signals.push(`SP500 AI Long [${sp500.strength}/6]`);
-    } else if (sp500.shortSignal) {
-      scoreModifier -= 10 + Math.round((sp500.strength / 6) * 12);
-      signals.push(`SP500 AI Short [${sp500.strength}/6]`);
-    } else if (sp500.strength >= 4) {
-      scoreModifier += sp500.bullish ? 8 : -8;
-      signals.push(`SP500 AI Partial [${sp500.strength}/6]`);
-    }
-    // Filter: if signal doesn't pass, apply penalty to push below threshold
-    if (!sp500.filter_pass) {
-      scoreModifier -= 30;
-      signals.push('SP500 AI Filter: blocked');
-    }
-  }
-
-  return { scoreModifier, signals };
-};
-
-/**
- * Auto-Trading Worker V4 (Rebuilt)
- * 
- * Uses the exact same core logic as the browser-based engine
- * via the ported autoTradingEngineBackend.js module.
+ * Auto-Trading Worker V5
+ *
+ * Rewritten from V4. The substantive changes:
+ *
+ *  - Signals come from real Binance OHLCV. generateSyntheticHistory() is gone
+ *    with no fallback: if candles are unavailable we skip the asset, because
+ *    trading on invented data is worse than not trading.
+ *  - Risk limits (daily loss, daily trade count) are enforced HERE, before any
+ *    market data is fetched. V4 only incremented the counters.
+ *  - Daily counters roll over at UTC midnight. V4 never reset them.
+ *  - Portfolio mutations happen against one in-memory object with a single
+ *    write at the end. V4 read-modify-wrote inside a loop and lost proceeds
+ *    whenever two positions closed in the same run.
+ *  - Every fill goes through the fee and slippage model.
+ *  - Position sizing is ATR-based, with correlation and gross exposure caps.
+ *  - "confidence" is now "signal strength" — a 0-100 score, not a probability.
+ *  - Exits are always processed, even when entry limits are hit. A stop-loss
+ *    must be able to fire on trade number 11.
  */
 
-// Dynamic list - fetching top 250 by market cap
-const TOP_ASSETS_COUNT = 250;
-
-/**
- * Generate simulated news sentiment (matching browser logic)
- */
-function generateNewsSentiment(asset) {
-  const priceChange = asset.change24h || 0;
-  let sentimentValue = (Math.random() * 1.2) - 0.6;
-  
-  if (priceChange > 5) sentimentValue += 0.3;
-  else if (priceChange > 2) sentimentValue += 0.15;
-  else if (priceChange < -5) sentimentValue -= 0.3;
-  else if (priceChange < -2) sentimentValue -= 0.15;
-  
-  sentimentValue = Math.max(-1, Math.min(1, sentimentValue));
-  return sentimentValue;
-}
-
-/**
- * Calculate ADVANCED confidence score (matching browser's generateAdvancedSignal)
- */
-function calculateConfidence(asset, enabledIndicators = { rsi: true, macd: true, bollinger: true, ema: true, stoch: true }) {
-  // Base technical score (matching browser)
-  let technicalScore = 60;
-
-  // Price momentum (matching browser V4 logic exactly)
-  const change = asset.change24h || 0;
-  if (change > 2 && change <= 10) technicalScore += 20;
-  else if (change > 10) technicalScore += 5;
-  else if (change > 0) technicalScore += 10;
-  else if (change > -3) technicalScore += 5;
-  else if (change > -8) technicalScore -= 5;
-  else technicalScore -= 20;
-
-  // Volume
-  const avgVolume = 1500000000;
-  if (asset.volume24h > avgVolume * 2) technicalScore += 15;
-  else if (asset.volume24h > avgVolume) technicalScore += 10;
-  else if (asset.volume24h < avgVolume / 2) technicalScore -= 10;
-
-  // Market Cap
-  if (asset.marketCap > 100000000000) technicalScore += 10;
-  else if (asset.marketCap > 10000000000) technicalScore += 5;
-
-  // Volatility
-  const volatility = Math.abs(change);
-  if (volatility > 10) technicalScore -= 10;
-  else if (volatility < 2) technicalScore += 5;
-
-  // APPLY TECHNICAL INDICATORS
-  const { scoreModifier, signals } = analyzeIndicators(asset, enabledIndicators);
-  technicalScore = Math.max(0, Math.min(100, technicalScore + scoreModifier));
-
-  // NEWS SENTIMENT (70% Technical + 30% News = matching browser default weights)
-  const newsSentiment = generateNewsSentiment(asset);
-  const newsScore = (newsSentiment + 1) * 50; // Convert -1 to 1 into 0-100
-
-  // COMPOSITE SCORE (matching browser's 70/30 split)
-  const compositeScore = (technicalScore * 0.7) + (newsScore * 0.3);
-  
-  const finalScore = Math.max(30, Math.min(95, Math.round(compositeScore)));
-  
-  if (signals.length > 0 && finalScore >= 65) {
-    console.log(`  📊 ${asset.symbol}: Tech=${technicalScore}%, News=${newsScore.toFixed(0)}%, Composite=${finalScore}% | ${signals.join(', ')}`);
-  }
-
-  return finalScore;
-}
+const CANDLE_INTERVAL = '1h';
+const CANDLE_LIMIT = 200;
+const UNIVERSE_SIZE = 60;
+const MAX_SCAN_CANDIDATES = 25;
+const LOCK_DURATION_MS = 5 * 60 * 1000;
 
 Deno.serve(async (req) => {
+  const runId = crypto.randomUUID().slice(0, 8);
+  const log = (msg: string) => console.log(`[${runId}] ${msg}`);
+
   try {
     const base44 = createClientFromRequest(req);
-    const { settings, portfolio, user_email, indicator_settings } = await req.json();
+    const { settings, portfolio, user_email } = await req.json();
 
-    if (!settings || !portfolio) {
-      return Response.json({ success: false, error: 'Missing parameters' }, { status: 400 });
+    if (!settings?.id || !portfolio?.id || !user_email) {
+      return Response.json({ success: false, error: 'Missing required parameters' }, { status: 400 });
     }
 
-    console.log(`\n🔄 SERVER-SIDE AUTO-TRADING V4 (${user_email})`);
+    log(`Run start for ${user_email}`);
 
-    // 1. Schedule Check
-    if (settings.trading_schedule?.enabled) {
-      const now = new Date();
-      const currentHour = now.getUTCHours();
-      const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-      const currentDay = days[now.getUTCDay()];
-
-      if (!settings.trading_schedule.days.includes(currentDay)) {
-        console.log(`🛑 Trading paused: ${currentDay} not in schedule`);
-        return Response.json({ success: true, reason: 'schedule_day_paused' });
-      }
-
-      if (currentHour < settings.trading_schedule.start_hour || currentHour >= settings.trading_schedule.end_hour) {
-        console.log(`🛑 Trading paused: Outside hours (${currentHour} UTC)`);
-        return Response.json({ success: true, reason: 'schedule_hour_paused' });
-      }
+    // -----------------------------------------------------------------------
+    // 0. Concurrency lease
+    //
+    // The scheduler fires every 2 minutes; a slow run can still be working when
+    // the next one starts, and two concurrent runs on the same portfolio will
+    // double-spend. This is a best-effort lease, not a true mutex — Base44 has
+    // no compare-and-swap, so there is a small window between read and write.
+    // Narrow it further by keeping runs short. See the notes file.
+    // -----------------------------------------------------------------------
+    const now = new Date();
+    if (settings.run_lock_until && new Date(settings.run_lock_until) > now) {
+      log('Skipped: another run holds the lease');
+      return Response.json({ success: true, skipped: true, reason: 'run_in_progress' });
     }
 
-    // 2. Fetch Market Data (Top 250)
-    let marketAssets = [];
-    
-    try {
-      console.log(`🔍 Fetching top ${TOP_ASSETS_COUNT} crypto assets...`);
-      const resp = await fetch(
-        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${TOP_ASSETS_COUNT}&page=1&sparkline=false`,
-        { headers: { 'Accept': 'application/json' } }
-      );
-      
-      if (resp.ok) {
-        const rawData = await resp.json();
-        marketAssets = rawData.map(coin => ({
-          symbol: coin.symbol.toUpperCase(),
-          name: coin.name,
-          price: coin.current_price,
-          change24h: coin.price_change_percentage_24h || 0,
-          volume24h: coin.total_volume || 0,
-          marketCap: coin.market_cap || 0,
-          id: coin.id
-        }));
-        console.log(`✅ Successfully fetched ${marketAssets.length} assets`);
-      } else {
-        throw new Error(`CoinGecko API error: ${resp.status}`);
-      }
-    } catch (e) {
-      console.warn('⚠️ Live data failed, using simulation fallback:', e.message);
-      // Fallback: Generate basic top coins
-      ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'DOGE', 'AVAX', 'DOT', 'MATIC'].forEach(sym => {
-        marketAssets.push({
-          symbol: sym,
-          name: sym,
-          price: 100 + Math.random() * 1000,
-          change24h: (Math.random() * 10) - 4,
-          volume24h: 500000000,
-          marketCap: 10000000000,
-          id: sym.toLowerCase()
-        });
-      });
-    }
-
-    // 3. Generate ADVANCED Confidence Scores (70% Technical + 30% News Sentiment)
-    // Use user's indicator preferences or default to all enabled
-    const enabledIndicators = indicator_settings || { rsi: true, macd: true, bollinger: true, ema: true, stoch: true };
-    const assetConfidence = {};
-    const activeIndicators = Object.entries(enabledIndicators).filter(([_, enabled]) => enabled).map(([name]) => name);
-    console.log(`📊 Calculating ADVANCED AI signals with indicators: ${activeIndicators.join(', ')}...`);
-    marketAssets.forEach(asset => {
-      assetConfidence[asset.symbol] = calculateConfidence(asset, enabledIndicators);
+    await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
+      run_lock_until: new Date(now.getTime() + LOCK_DURATION_MS).toISOString(),
     });
-    
-    const minConfidence = settings.min_confidence || 70;
-    const highConfidenceCount = Object.values(assetConfidence).filter(c => c >= minConfidence).length;
-    console.log(`✅ Generated signals for ${marketAssets.length} assets (${highConfidenceCount} with ${minConfidence}%+ confidence)`);
-    
-    // Log top 10 opportunities for debugging
-    const topOpps = Object.entries(assetConfidence)
-      .map(([symbol, conf]) => ({ symbol, conf, asset: marketAssets.find(a => a.symbol === symbol) }))
-      .filter(o => o.conf >= minConfidence)
-      .sort((a, b) => b.conf - a.conf)
-      .slice(0, 10);
-    
-    if (topOpps.length > 0) {
-      console.log(`🎯 Top ${topOpps.length} opportunities:`);
-      topOpps.forEach(o => {
-        console.log(`   ${o.symbol}: ${o.conf}% confidence, ${o.asset?.change24h?.toFixed(2)}% 24h change`);
-      });
-    } else {
-      console.log(`⚠️ NO assets meet ${minConfidence}% confidence threshold`);
+
+    try {
+      const result = await runTradingCycle({ base44, settings, portfolio, user_email, log, now });
+      return Response.json({ success: true, ...result });
+    } finally {
+      // Always release, even on error — a stuck lease silently halts trading.
+      await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
+        run_lock_until: null,
+      }).catch((e) => log(`Lease release failed: ${e.message}`));
     }
-
-    // 4. Execute Auto-Trading Check (inlined engine)
-    const tradesExecuted = [];
-    const positionsUpdated = [];
-    const openPositions = portfolio.positions || [];
-    const maxPositions = settings.max_open_positions || 5;
-    const minConf = settings.min_confidence || 70;
-    const stopLossPct = (settings.stop_loss_percent || 3) / 100;
-    const takeProfitPct = (settings.take_profit_percent || 8) / 100;
-
-    // A) Manage existing positions (stop-loss / take-profit / trailing)
-    for (const pos of openPositions) {
-      const symbol = pos.asset_symbol.replace('/USDT', '');
-      const asset = marketAssets.find(a => a.symbol === symbol);
-      if (!asset) continue;
-      const currentPrice = asset.price;
-      const entryPrice = pos.avg_entry_price;
-      const profitPct = (currentPrice - entryPrice) / entryPrice;
-
-      // Stop loss
-      if (profitPct <= -stopLossPct) {
-        console.log(`🛑 Stop-loss hit for ${symbol}: ${(profitPct * 100).toFixed(2)}%`);
-        await executeTrade(base44, user_email, portfolio, settings, {
-          asset, action: 'sell', quantity: pos.quantity,
-          reason: `Stop-loss triggered at ${(profitPct * 100).toFixed(2)}%`,
-          confidence: assetConfidence[symbol] || 0,
-          value: pos.quantity * currentPrice,
-          profitPercent: profitPct * 100
-        });
-        tradesExecuted.push({ symbol, action: 'sell', reason: 'stop_loss' });
-        continue;
-      }
-
-      // Take profit
-      if (profitPct >= takeProfitPct) {
-        console.log(`✅ Take-profit hit for ${symbol}: ${(profitPct * 100).toFixed(2)}%`);
-        await executeTrade(base44, user_email, portfolio, settings, {
-          asset, action: 'sell', quantity: pos.quantity,
-          reason: `Take-profit triggered at ${(profitPct * 100).toFixed(2)}%`,
-          confidence: assetConfidence[symbol] || 0,
-          value: pos.quantity * currentPrice,
-          profitPercent: profitPct * 100
-        });
-        tradesExecuted.push({ symbol, action: 'sell', reason: 'take_profit' });
-        continue;
-      }
-
-      // Trailing stop update
-      if (settings.use_trailing_stop) {
-        const newHigh = Math.max(pos.highest_price || entryPrice, currentPrice);
-        const trailPct = (settings.trailing_stop_percent || 2) / 100;
-        const newTrail = newHigh * (1 - trailPct);
-        if (newHigh > (pos.highest_price || entryPrice)) {
-          await updatePosition(base44, portfolio, {
-            asset, action: 'update_trailing',
-            details: { highestPrice: newHigh, trailingStopPrice: newTrail }
-          });
-          positionsUpdated.push({ symbol, action: 'trailing_updated' });
-        }
-        if (pos.trailing_stop_price && currentPrice <= pos.trailing_stop_price) {
-          console.log(`🔄 Trailing stop hit for ${symbol}`);
-          await executeTrade(base44, user_email, portfolio, settings, {
-            asset, action: 'sell', quantity: pos.quantity,
-            reason: 'Trailing stop triggered',
-            confidence: assetConfidence[symbol] || 0,
-            value: pos.quantity * currentPrice,
-            profitPercent: profitPct * 100
-          });
-          tradesExecuted.push({ symbol, action: 'sell', reason: 'trailing_stop' });
-        }
-      }
-    }
-
-    // Reload portfolio state after position management
-    const remainingPositions = (portfolio.positions || []).filter(
-      p => !tradesExecuted.find(t => t.symbol === p.asset_symbol.replace('/USDT', '') && t.action === 'sell')
-    );
-
-    // B) Find new buy opportunities
-    const alreadyHeld = remainingPositions.map(p => p.asset_symbol.replace('/USDT', ''));
-    const assetsTraded = settings.assets_traded_today || [];
-    const openCount = remainingPositions.length;
-
-    if (openCount < maxPositions) {
-      const candidates = marketAssets
-        .filter(a => !alreadyHeld.includes(a.symbol) && !assetsTraded.includes(a.symbol))
-        .filter(a => (assetConfidence[a.symbol] || 0) >= minConf)
-        .sort((a, b) => (assetConfidence[b.symbol] || 0) - (assetConfidence[a.symbol] || 0))
-        .slice(0, maxPositions - openCount);
-
-      for (const asset of candidates) {
-        const posSize = Math.min(
-          portfolio.available_balance * ((settings.max_position_size_percent || 10) / 100),
-          portfolio.available_balance * 0.25
-        );
-        if (posSize < 10) break; // Not enough balance
-        const quantity = posSize / asset.price;
-        console.log(`🟢 BUY opportunity: ${asset.symbol} @ $${asset.price} (${assetConfidence[asset.symbol]}% conf)`);
-        await executeTrade(base44, user_email, portfolio, settings, {
-          asset, action: 'buy', quantity,
-          reason: `AI confidence ${assetConfidence[asset.symbol]}%`,
-          confidence: assetConfidence[asset.symbol],
-          value: posSize,
-          profitPercent: 0
-        });
-        tradesExecuted.push({ symbol: asset.symbol, action: 'buy', confidence: assetConfidence[asset.symbol] });
-        portfolio.available_balance -= posSize; // local update for subsequent iterations
-      }
-    }
-
-    const result = { tradesExecuted, positionsUpdated };
-
-    return Response.json({ success: true, data: result });
-
   } catch (error) {
-    console.error('❌ Worker Error:', error);
+    console.error(`[${runId}] Worker error:`, error);
     return Response.json({ success: false, error: error.message }, { status: 500 });
   }
 });
 
-// Helper to Execute Trade & Update DB
-async function executeTrade(base44, user_email, portfolio, settings, opportunity) {
-  const { asset, action, quantity, reason, confidence, value, details } = opportunity;
-  const price = asset.price;
-  // Use value if provided (for buys), otherwise calc from quantity
-  const totalValue = value || (quantity * price);
-  const assetSymbol = `${asset.symbol}/USDT`;
-  
-  // 1. Create Trade Record
-  const tradeData = {
-    asset_symbol: assetSymbol,
-    trade_type: action === 'partial_sell' ? 'sell' : action,
-    quantity: quantity,
-    price: price,
-    total_value: totalValue,
-    exchange: 'Paper Trading (Server)',
-    status: 'completed',
-    profit_loss: (action === 'sell' || action === 'partial_sell') ? (totalValue * (opportunity.profitPercent / 100)) : 0,
-    ai_signal: {
-      confidence: confidence || 0,
-      reasoning: reason + (details ? ` (${JSON.stringify(details)})` : ''),
-      indicators: ['Server-Side Engine V4']
-    },
-    created_by: user_email
-  };
-  
-  await base44.asServiceRole.entities.Trade.create(tradeData);
-  
-  // 2. Update Portfolio
-  let positions = [...(portfolio.positions || [])];
-  
-  if (action === 'buy') {
-    const existingIndex = positions.findIndex(p => p.asset_symbol === assetSymbol);
-    if (existingIndex >= 0) {
-      // DCA / Add to position
-      const existing = positions[existingIndex];
-      const newQuantity = existing.quantity + quantity;
-      const newCostBasis = (existing.quantity * existing.avg_entry_price) + totalValue;
-      const newAvgPrice = newCostBasis / newQuantity;
-      
-      positions[existingIndex] = {
-        ...existing,
-        quantity: newQuantity,
-        avg_entry_price: newAvgPrice,
-        current_value: newQuantity * price,
-        highest_price: Math.max(existing.highest_price || 0, price),
-        dca_count: (existing.dca_count || 0) + 1
-      };
-    } else {
-      // New Position
-      positions.push({
-        asset_symbol: assetSymbol,
-        quantity,
-        avg_entry_price: price,
-        current_value: totalValue,
-        profit_loss: 0,
-        highest_price: price,
-        dca_count: 0,
-        breakeven_activated: false,
-        trailing_stop_price: null,
-        partial_profits_taken: []
+async function runTradingCycle({ base44, settings, portfolio, user_email, log, now }) {
+  // -------------------------------------------------------------------------
+  // 1. Daily counter rollover
+  // -------------------------------------------------------------------------
+  const roll = rollDailyCounters(settings, now);
+  const counters = roll.state;
+
+  const state = createPortfolioState(portfolio);
+  const priceMap = new Map();
+  for (const pos of state.positions) {
+    priceMap.set(pos.asset_symbol, pos.last_known_price ?? pos.avg_entry_price);
+  }
+  const startingEquity = calculateEquity(state, priceMap).equity;
+
+  if (roll.needsReset) {
+    log(`Rolling daily counters into ${utcDayKey(now)}`);
+    counters.daily_start_equity = startingEquity;
+    await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
+      ...roll.resetFields,
+      daily_start_equity: startingEquity,
+    });
+  } else if (!counters.daily_start_equity) {
+    counters.daily_start_equity = startingEquity;
+    await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
+      daily_start_equity: startingEquity,
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // 2. Risk guards — BEFORE fetching market data
+  // -------------------------------------------------------------------------
+  const preGuards = evaluateAllGuards({ settings, counters, equity: startingEquity, universe: null, now });
+
+  if (!preGuards.allowed) {
+    log(`Halted: ${preGuards.reason}`);
+    if (preGuards.tripBreaker && !settings.circuit_breaker_triggered_at) {
+      await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
+        circuit_breaker_triggered_at: now.toISOString(),
+      });
+      await notify(base44, user_email, {
+        type: 'risk_alert',
+        priority: 'high',
+        title: 'Circuit breaker tripped',
+        message: `Trading halted: ${preGuards.reason}. ` +
+          `Daily loss ${preGuards.detail?.lossPercent?.toFixed(2)}% vs limit ${preGuards.detail?.limit}%.`,
       });
     }
-  } else if (action === 'sell') {
-    // Full sell
-    positions = positions.filter(p => p.asset_symbol !== assetSymbol);
-  } else if (action === 'partial_sell') {
-    // Partial sell
-    const existingIndex = positions.findIndex(p => p.asset_symbol === assetSymbol);
-    if (existingIndex >= 0) {
-      const existing = positions[existingIndex];
-      const remainingQty = existing.quantity - quantity;
-      
-      // Record that we took this profit target
-      const partialsTaken = [...(existing.partial_profits_taken || [])];
-      if (details?.targetIndex !== undefined && !partialsTaken.includes(details.targetIndex)) {
-        partialsTaken.push(details.targetIndex);
+    return { halted: true, reason: preGuards.reason, detail: preGuards.detail ?? null };
+  }
+
+  // -------------------------------------------------------------------------
+  // 3. Market data — real, or we do not trade
+  // -------------------------------------------------------------------------
+  let universe;
+  try {
+    universe = await fetchUniverse({ topN: UNIVERSE_SIZE });
+    log(`Universe: ${universe.length} liquid USDT pairs`);
+  } catch (err) {
+    // NO synthetic fallback. V4 generated ten fake coins with Math.random()
+    // prices here and traded them.
+    log(`Market data unavailable: ${err.message} — aborting run`);
+    return { halted: true, reason: 'market_data_unavailable', error: err.message };
+  }
+
+  if (universe.length === 0) {
+    return { halted: true, reason: 'empty_universe' };
+  }
+
+  const universeBySymbol = new Map(universe.map((u) => [u.symbol, u]));
+
+  // Live prices for held positions, so exits use current marks.
+  for (const pos of state.positions) {
+    const ticker = universeBySymbol.get(pos.asset_symbol);
+    if (ticker) priceMap.set(pos.asset_symbol, ticker.price);
+  }
+
+  // Held symbols outside the top-N still need candles for exit decisions.
+  const heldSymbols = state.positions.map((p) => p.asset_symbol);
+  const scanSymbols = universe.slice(0, MAX_SCAN_CANDIDATES).map((u) => u.symbol);
+  const symbolsNeedingCandles = [...new Set([...heldSymbols, ...scanSymbols])];
+
+  log(`Fetching ${CANDLE_INTERVAL} candles for ${symbolsNeedingCandles.length} symbols`);
+  const candlesBySymbol = await fetchCandlesBatch(
+    symbolsNeedingCandles, CANDLE_INTERVAL, CANDLE_LIMIT, 8
+  );
+  log(`Candles retrieved for ${candlesBySymbol.size} symbols`);
+
+  // Re-check market-wide conditions now that we have breadth data.
+  const guards = evaluateAllGuards({ settings, counters, equity: startingEquity, universe, now });
+  const newEntriesAllowed = guards.allowed && guards.newEntriesAllowed !== false;
+  if (!newEntriesAllowed) {
+    log(`New entries blocked: ${guards.reason} — managing exits only`);
+  }
+
+  markToMarket(state, priceMap);
+
+  // -------------------------------------------------------------------------
+  // 4. Manage open positions (always runs, regardless of entry limits)
+  // -------------------------------------------------------------------------
+  const exchange = settings.exchange || 'binance';
+  const actions = [];
+
+  for (const position of [...state.positions]) {
+    const symbol = position.asset_symbol;
+    const currentPrice = priceMap.get(symbol);
+    if (currentPrice === undefined) {
+      log(`No price for held ${symbol} — skipping management this cycle`);
+      continue;
+    }
+
+    const pnl = positionPnL(position, currentPrice);
+    const ticker = universeBySymbol.get(symbol);
+
+    const stopLossPercent = settings.stop_loss_percent ?? 3;
+    const takeProfitPercent = settings.take_profit_percent ?? 8;
+
+    let exitReason = null;
+
+    // Compare NET percent — the number after costs is what you actually keep.
+    if (pnl.netPercent <= -stopLossPercent) {
+      exitReason = `Stop-loss at ${pnl.netPercent.toFixed(2)}% net`;
+    } else if (position.breakeven_activated && currentPrice <= position.breakeven_price) {
+      exitReason = 'Breakeven stop';
+    } else if (position.trailing_stop_price && currentPrice <= position.trailing_stop_price) {
+      exitReason = `Trailing stop at ${pnl.netPercent.toFixed(2)}% net`;
+    } else if (pnl.netPercent >= takeProfitPercent) {
+      exitReason = `Take-profit at ${pnl.netPercent.toFixed(2)}% net`;
+    }
+
+    if (exitReason) {
+      const notional = position.quantity * currentPrice;
+      const book = await fetchOrderBook(symbol, 100);
+      const costs = applyCosts({
+        side: 'sell',
+        intendedPrice: currentPrice,
+        quoteAmount: notional,
+        exchange,
+        book,
+        quoteVolume24h: ticker?.quoteVolume24h,
+      });
+
+      const sell = applySell(state, {
+        symbol,
+        quantity: position.quantity,
+        costs,
+        strength: null,
+        reason: exitReason,
+        timestamp: now.toISOString(),
+      });
+
+      if (sell.ok) {
+        log(`SELL ${symbol}: ${exitReason} | net P&L ${sell.netPnL.toFixed(2)}`);
+        actions.push({ symbol, action: 'sell', reason: exitReason, netPnL: sell.netPnL });
+        if (sell.netPnL < 0) counters.daily_loss += Math.abs(sell.netPnL);
+        counters.trades_today += 1;
       }
-      
-      positions[existingIndex] = {
-        ...existing,
-        quantity: remainingQty,
-        current_value: remainingQty * price,
-        partial_profits_taken: partialsTaken
-      };
+      continue;
+    }
+
+    // Breakeven protection
+    if (settings.use_breakeven_protection && !position.breakeven_activated) {
+      const trigger = settings.breakeven_trigger_percent ?? 2;
+      if (pnl.netPercent >= trigger) {
+        const r = activateBreakeven(state, symbol, {
+          offsetPercent: settings.breakeven_offset_percent ?? 0.2,
+        });
+        if (r.updated) actions.push({ symbol, action: 'breakeven_activated', price: r.breakevenPrice });
+      }
+    }
+
+    // Trailing stop
+    if (settings.use_trailing_stop) {
+      const activation = settings.trailing_stop_activation ?? 3;
+      if (pnl.netPercent >= activation) {
+        const r = updateTrailingStop(state, symbol, {
+          trailingStopPercent: settings.trailing_stop_percent ?? 2,
+        });
+        if (r.updated) actions.push({ symbol, action: 'trailing_updated', price: r.trailingStopPrice });
+      }
     }
   }
-  
-  const newBalance = action === 'buy' 
-    ? portfolio.available_balance - totalValue 
-    : portfolio.available_balance + totalValue;
-    
-  await base44.asServiceRole.entities.Portfolio.update(portfolio.id, {
-    available_balance: newBalance,
-    total_balance: portfolio.total_balance + (tradeData.profit_loss || 0),
-    positions,
-    total_trades: (portfolio.total_trades || 0) + 1,
-    total_profit_loss: (portfolio.total_profit_loss || 0) + (tradeData.profit_loss || 0)
-  });
-  
-  // 3. Update Settings (Counters)
-  const newAssetsTraded = [...(settings.assets_traded_today || [])];
-  if (action === 'buy' && !newAssetsTraded.includes(asset.symbol)) {
-    newAssetsTraded.push(asset.symbol);
+
+  // -------------------------------------------------------------------------
+  // 5. Scan for entries
+  // -------------------------------------------------------------------------
+  // Field name min_confidence kept for schema compatibility; it is a 0-100
+  // strength threshold, not a probability.
+  const minStrength = settings.min_confidence ?? 70;
+  const scanned = [];
+
+  if (newEntriesAllowed) {
+    // Cost sanity check: does the configured TP/SL clear its own round trip?
+    const costPercent = roundTripCostPercent({ exchange, estimatedSlippagePercent: 0.001 });
+    const edge = isEdgeSufficient({
+      takeProfitPercent: settings.take_profit_percent ?? 8,
+      stopLossPercent: settings.stop_loss_percent ?? 3,
+      assumedWinRate: 0.5,
+      costPercent,
+    });
+
+    if (!edge.sufficient) {
+      log(`Entry targets too tight for costs: gross edge ${edge.grossEdge.toFixed(2)}% vs round-trip ${costPercent.toFixed(2)}%`);
+      await notify(base44, user_email, {
+        type: 'risk_alert',
+        priority: 'medium',
+        title: 'Profit targets too tight',
+        message: `Take-profit ${settings.take_profit_percent}% / stop ${settings.stop_loss_percent}% ` +
+          `leaves ${edge.netEdge.toFixed(2)}% after ${costPercent.toFixed(2)}% round-trip costs. Widen targets.`,
+      });
+    } else {
+      const heldNow = state.positions.map((p) => p.asset_symbol);
+      const heldCandles = new Map();
+      for (const s of heldNow) {
+        const c = candlesBySymbol.get(s);
+        if (c) heldCandles.set(s, c);
+      }
+      const heldReturns = buildReturnsMap(heldCandles);
+
+      const candidates = [];
+      for (const ticker of universe.slice(0, MAX_SCAN_CANDIDATES)) {
+        if (heldNow.includes(ticker.symbol)) continue;
+        if (counters.assets_traded_today.includes(ticker.symbol)) continue;
+
+        const candles = candlesBySymbol.get(ticker.symbol);
+        if (!candles || candles.length < MIN_CANDLES) continue;
+
+        const signal = scoreAsset(candles, {
+          indicators: settings.indicator_settings || undefined,
+          // No sentiment provider wired up, so sentiment contributes nothing.
+          // See signalEngine.js — a random number is not sentiment analysis.
+        });
+
+        if (!signal) continue;
+        scanned.push({ symbol: ticker.symbol, strength: signal.strength });
+
+        if (signal.strength >= minStrength && signal.direction === 'bullish') {
+          candidates.push({ ticker, candles, signal });
+        }
+      }
+
+      candidates.sort((a, b) => b.signal.strength - a.signal.strength);
+      log(`${scanned.length} scanned, ${candidates.length} above strength ${minStrength}`);
+
+      const equityNow = calculateEquity(state, priceMap).equity;
+
+      for (const { ticker, candles, signal } of candidates) {
+        if (counters.trades_today >= (settings.max_trades_per_day ?? 10)) {
+          log('Daily trade limit reached mid-scan — stopping entries');
+          break;
+        }
+
+        const sizing = calculatePositionSize({
+          equity: equityNow,
+          availableBalance: state.available_balance,
+          price: ticker.price,
+          candles,
+          riskPerTradePercent: settings.risk_per_trade_percent ?? 1,
+          atrMultiplier: settings.atr_stop_multiplier ?? 2,
+          maxPositionPercent: settings.max_position_size_percent ?? 10,
+        });
+
+        if (sizing.quoteAmount <= 0) {
+          log(`Skip ${ticker.symbol}: ${sizing.reason}`);
+          continue;
+        }
+
+        const exposure = checkPortfolioExposure({
+          positions: state.positions,
+          equity: equityNow,
+          newPositionValue: sizing.quoteAmount,
+          maxGrossExposurePercent: settings.max_gross_exposure_percent ?? 60,
+          maxPositions: settings.max_open_positions ?? 5,
+        });
+        if (!exposure.allowed) {
+          log(`Skip ${ticker.symbol}: ${exposure.reason}`);
+          if (exposure.reason === 'max_positions_reached') break;
+          continue;
+        }
+
+        const corr = checkCorrelation(logReturns(candles), heldReturns, {
+          maxCorrelation: settings.max_correlation ?? 0.8,
+        });
+        if (!corr.allowed) {
+          log(`Skip ${ticker.symbol}: ${corr.reason}`);
+          continue;
+        }
+
+        const book = await fetchOrderBook(ticker.symbol, 100);
+        const costs = applyCosts({
+          side: 'buy',
+          intendedPrice: ticker.price,
+          quoteAmount: sizing.quoteAmount,
+          exchange,
+          book,
+          quoteVolume24h: ticker.quoteVolume24h,
+          atrPercent: signal.atrPercent ?? 0.02,
+        });
+
+        if (costs.insufficientLiquidity) {
+          log(`Skip ${ticker.symbol}: order book too thin for ${sizing.quoteAmount.toFixed(0)} USDT`);
+          continue;
+        }
+
+        const maxSlippage = (settings.max_slippage_percent ?? 0.5) / 100;
+        if (costs.slippagePercent > maxSlippage) {
+          log(`Skip ${ticker.symbol}: slippage ${(costs.slippagePercent * 100).toFixed(2)}% over limit`);
+          continue;
+        }
+
+        const quantity = sizing.quoteAmount / costs.fillPrice;
+        const buy = applyBuy(state, {
+          symbol: ticker.symbol,
+          quantity,
+          costs,
+          strength: signal.strength,
+          reason: `Strength ${signal.strength}/100 — ${signal.reasons.slice(0, 3).join('; ')}`,
+          timestamp: now.toISOString(),
+        });
+
+        if (buy.ok) {
+          log(`BUY ${ticker.symbol} @ ${costs.fillPrice.toFixed(6)} | strength ${signal.strength} | fee ${costs.fee.toFixed(2)}`);
+          actions.push({ symbol: ticker.symbol, action: 'buy', strength: signal.strength });
+          counters.trades_today += 1;
+          counters.assets_traded_today.push(ticker.symbol);
+          priceMap.set(ticker.symbol, costs.fillPrice);
+          heldReturns.set(ticker.symbol, logReturns(candles));
+        } else {
+          log(`Buy rejected for ${ticker.symbol}: ${buy.reason}`);
+        }
+      }
+    }
   }
-  
-  await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
-    trades_today: (settings.trades_today || 0) + 1,
-    last_trade_date: new Date().toISOString(),
-    assets_traded_today: newAssetsTraded,
-    daily_loss: (settings.daily_loss || 0) + (tradeData.profit_loss < 0 ? Math.abs(tradeData.profit_loss) : 0)
-  });
-  
-  // 4. Create Notification
-  await base44.asServiceRole.entities.Notification.create({
-    notification_type: 'order_filled',
-    priority: 'medium',
-    title: `Auto-Trade: ${action.toUpperCase()} ${asset.symbol}`,
-    message: `Server executed ${action} for ${quantity.toFixed(4)} ${asset.symbol} @ $${price.toFixed(2)}. Reason: ${reason}`,
-    created_by: user_email
-  });
-  
+
+  // -------------------------------------------------------------------------
+  // 6. Persist — ONE portfolio write for the whole run
+  // -------------------------------------------------------------------------
+  const trades = pendingTrades(state);
+
+  if (state._dirty) {
+    markToMarket(state, priceMap);
+    const persistable = toPersistablePortfolio(state, priceMap);
+    await base44.asServiceRole.entities.Portfolio.update(portfolio.id, persistable);
+
+    for (const trade of trades) {
+      await base44.asServiceRole.entities.Trade.create({
+        asset_symbol: trade.asset_symbol,
+        trade_type: trade.trade_type,
+        quantity: trade.quantity,
+        price: trade.price,
+        total_value: trade.total_value,
+        fee: trade.fee,
+        slippage_percent: trade.slippage_percent,
+        exchange: 'Paper Trading (Server V5)',
+        status: 'completed',
+        profit_loss: trade.profit_loss,
+        ai_signal: {
+          signal_strength: trade.signal_strength,
+          reasoning: trade.reason,
+          indicators: ['Signal Engine V5 (real OHLCV)'],
+        },
+        created_by: user_email,
+      });
+    }
+
+    await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
+      trades_today: counters.trades_today,
+      daily_loss: counters.daily_loss,
+      assets_traded_today: counters.assets_traded_today,
+      daily_counters_date: utcDayKey(now),
+      last_trade_date: trades.length ? now.toISOString() : settings.last_trade_date,
+    });
+
+    for (const trade of trades) {
+      await notify(base44, user_email, {
+        type: 'order_filled',
+        priority: 'medium',
+        title: `${trade.trade_type.toUpperCase()} ${trade.asset_symbol}`,
+        message: `${trade.quantity.toFixed(6)} @ $${trade.price.toFixed(6)} ` +
+          `(fee $${trade.fee.toFixed(2)}, slippage ${trade.slippage_percent.toFixed(3)}%). ${trade.reason}`,
+      });
+    }
+  }
+
+  const finalEquity = calculateEquity(state, priceMap).equity;
+
   return {
-    executed: true,
-    price,
-    quantity,
-    action
+    trades: actions,
+    scanned: scanned.length,
+    equity: finalEquity,
+    equityChange: finalEquity - startingEquity,
+    realizedPnL: state.realized_pnl_this_run,
+    feesPaid: state.fees_paid_this_run,
+    openPositions: state.positions.length,
+    newEntriesAllowed,
+    dataSource: 'binance_ohlcv',
   };
 }
 
-// Helper to Update Position (Non-Trade)
-async function updatePosition(base44, portfolio, update) {
-  const { asset, action, details, position } = update;
-  const assetSymbol = `${asset.symbol}/USDT`;
-  
-  let positions = [...(portfolio.positions || [])];
-  const index = positions.findIndex(p => p.asset_symbol === assetSymbol);
-  
-  if (index >= 0) {
-    if (action === 'update_trailing') {
-      positions[index] = {
-        ...positions[index],
-        highest_price: details.highestPrice,
-        trailing_stop_price: details.trailingStopPrice
-      };
-    } else if (action === 'update_breakeven') {
-      positions[index] = {
-        ...positions[index],
-        breakeven_activated: true,
-        breakeven_price: details.breakevenPrice
-      };
-    }
-    
-    await base44.asServiceRole.entities.Portfolio.update(portfolio.id, {
-      positions
+async function notify(base44, user_email, { type, priority, title, message }) {
+  try {
+    await base44.asServiceRole.entities.Notification.create({
+      notification_type: type,
+      priority,
+      title,
+      message,
+      created_by: user_email,
     });
+  } catch (err) {
+    console.warn(`Notification failed: ${err.message}`);
   }
 }

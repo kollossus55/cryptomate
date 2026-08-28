@@ -339,7 +339,7 @@ export default function AISignals() {
                       {marketRegime.regime.toUpperCase()}
                     </Badge>
                     <Badge variant="outline" className="border-indigo-400 text-indigo-300">
-                      {marketRegime.confidence}% Confidence
+                      {marketRegime.confidence}/100 Strength
                     </Badge>
                   </div>
                   <p className="text-slate-300 text-sm">{marketRegime.description}</p>
@@ -516,7 +516,7 @@ export default function AISignals() {
                               <div className="flex items-center justify-between">
                                 <span className="text-slate-400">Confidence:</span>
                                 <span className="text-white font-bold">
-                                  {signalResults.predictive.confidence?.toFixed(0)}%
+                                  {signalResults.predictive.confidence?.toFixed(0)}/100
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
@@ -568,7 +568,7 @@ export default function AISignals() {
                                     </Badge>
                                     {anomaly.confidence && (
                                       <span className="text-sm text-slate-400">
-                                        {anomaly.confidence}% confidence
+                                        {anomaly.confidence}/100 strength
                                       </span>
                                     )}
                                   </div>
