@@ -695,7 +695,7 @@ export default function AutoTradingDebugPanel({
                             ? 'bg-green-500/20 text-green-400 border-green-500/30' 
                             : 'bg-red-500/20 text-red-400 border-red-500/30'
                           }>
-                            {confidence}%
+                            {confidence}/100
                             {meetsThreshold && <CheckCircle2 className="w-3 h-3 ml-1" />}
                           </Badge>
                         </div>

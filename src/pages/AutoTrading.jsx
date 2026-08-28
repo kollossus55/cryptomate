@@ -429,7 +429,7 @@ export default function AutoTrading() {
             <CardContent className="space-y-6">
               <div>
                 <Label className="text-indigo-200 mb-3 block font-medium">
-                  Minimum Confidence: <span className="text-indigo-400 font-bold">{settings.min_confidence}%</span>
+                  Minimum Signal Strength: <span className="text-indigo-400 font-bold">{settings.min_confidence}/100</span>
                 </Label>
                 <Slider
                   value={[settings.min_confidence]}

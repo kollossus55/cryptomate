@@ -356,6 +356,48 @@
         }
       },
       "description": "Schedule for server-side auto-trading"
+    },
+    "kill_switch_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Master halt. Overrides every other setting, no deploy needed."
+    },
+    "daily_counters_date": {
+      "type": "string",
+      "description": "UTC date (YYYY-MM-DD) the daily counters belong to. Drives midnight rollover."
+    },
+    "daily_start_equity": {
+      "type": "number",
+      "description": "Equity at the start of the UTC day. Denominator for max_daily_loss_percent."
+    },
+    "run_lock_until": {
+      "type": "string",
+      "description": "Best-effort concurrency lease. Blocks overlapping worker runs on one portfolio."
+    },
+    "risk_per_trade_percent": {
+      "type": "number",
+      "default": 1,
+      "description": "Percent of equity risked if the stop is hit. Drives ATR-based sizing."
+    },
+    "atr_stop_multiplier": {
+      "type": "number",
+      "default": 2,
+      "description": "Stop distance in ATR multiples. Volatility-scaled, not a flat percent."
+    },
+    "max_gross_exposure_percent": {
+      "type": "number",
+      "default": 60,
+      "description": "Cap on total invested capital. Position count alone does not bound market risk."
+    },
+    "max_correlation": {
+      "type": "number",
+      "default": 0.8,
+      "description": "Reject a candidate whose returns correlate above this with an open position."
+    },
+    "indicator_settings": {
+      "type": "object",
+      "default": {},
+      "description": "Which indicator families the signal engine uses."
     }
   },
   "required": [

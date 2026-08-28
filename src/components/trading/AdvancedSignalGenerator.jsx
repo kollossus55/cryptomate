@@ -163,12 +163,25 @@ export const generateAdvancedSignal = async (asset, signalConfig = null, indicat
     // Generate predictive analysis
     const prediction = predictPriceMovement(asset);
 
-    // Advanced Technical Analysis (using the new Engine)
-    const technicalAnalysis = analyzeIndicators(asset, indicatorSettings);
+    // Advanced Technical Analysis on REAL candles.
+    // Now async, and returns null when candle data is unavailable.
+    const technicalAnalysis = await analyzeIndicators(asset, indicatorSettings);
+
+    // No candles means no technical opinion. Returning null here is deliberate:
+    // the previous behaviour was to score on invented data, which produced a
+    // confident-looking signal built on nothing. An absent signal is correct.
+    if (!technicalAnalysis) {
+      return {
+        symbol: asset.symbol,
+        available: false,
+        reason: 'no_market_data',
+        message: `No candle data available for ${asset.symbol}. No signal generated.`,
+      };
+    }
 
     // Technical indicators (from asset data + advanced indicators)
     let technicalScore = calculateTechnicalScore(asset);
-    
+
     // Apply modifier from advanced indicators
     technicalScore = Math.max(0, Math.min(100, technicalScore + technicalAnalysis.scoreModifier));
 

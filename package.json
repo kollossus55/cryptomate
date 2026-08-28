@@ -9,11 +9,14 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sync:functions": "node scripts/sync-shared.mjs",
+    "test": "node tests/run-tests.mjs",
+    "prebuild": "node scripts/sync-shared.mjs"
   },
   "dependencies": {
-    "@base44/sdk": "^0.8.44",
-    "@base44/vite-plugin": "^1.0.32",
+    "@base44/sdk": "^0.8.43",
+    "@base44/vite-plugin": "^1.0.30",
     "@hello-pangea/dnd": "^17.0.0",
     "@hookform/resolvers": "^4.1.2",
     "@radix-ui/react-accordion": "^1.2.3",

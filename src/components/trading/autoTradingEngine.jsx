@@ -1,25 +1,61 @@
 /**
  * Auto-Trading Engine Core Logic
- * 
- * This module contains the core auto-trading logic that can be used both:
- * 1. Client-side (current browser-based implementation)
- * 2. Server-side (future backend functions implementation)
- * 
- * The logic is platform-agnostic and can be executed anywhere.
+ *
+ * Risk checks now delegate to @shared/trading/risk.js, which is the SAME code
+ * the server worker runs. Previously the browser enforced limits the server
+ * ignored, and enforced one of them with a unit bug — so the two execution
+ * paths behaved differently on the checks that matter most.
  */
 
+import { checkDailyLossLimit, checkTradeLimit } from '@shared/trading/risk.js';
+
 /**
- * Check if circuit breaker should halt trading
+ * Check if circuit breaker should halt trading.
+ *
+ * FIXED (was a unit mismatch): the previous version compared
+ *   settings.daily_loss        -- accumulated DOLLARS
+ * against
+ *   settings.max_daily_loss_percent  -- a PERCENTAGE
+ * so a 5% limit tripped at $5 of loss. It also defaulted the limit to 0 via
+ * `|| 0`, meaning an unset limit halted trading immediately.
+ *
+ * Now delegates to the shared guard, which converts the dollar loss into a
+ * percentage of start-of-day equity before comparing.
+ *
+ * @param settings          AutoTradingSettings record
+ * @param dailyStartEquity  equity at the start of the UTC day
  */
-export function isCircuitBreakerTriggered(settings) {
-  return (settings.daily_loss || 0) >= (settings.max_daily_loss_percent || 0);
+export function isCircuitBreakerTriggered(settings, dailyStartEquity) {
+  const result = checkDailyLossLimit({
+    dailyLoss: settings.daily_loss || 0,
+    dailyStartEquity: dailyStartEquity ?? settings.daily_start_equity,
+    maxDailyLossPercent: settings.max_daily_loss_percent,
+  });
+  return result.breached;
 }
 
 /**
- * Check if daily trade limit has been reached
+ * Same check, but returns the detail for display rather than a bare boolean.
+ */
+export function getCircuitBreakerStatus(settings, dailyStartEquity) {
+  return checkDailyLossLimit({
+    dailyLoss: settings.daily_loss || 0,
+    dailyStartEquity: dailyStartEquity ?? settings.daily_start_equity,
+    maxDailyLossPercent: settings.max_daily_loss_percent,
+  });
+}
+
+/**
+ * Check if daily trade limit has been reached.
+ *
+ * Note: this blocks NEW ENTRIES only. Exits (stop-loss, take-profit, trailing)
+ * must always be allowed to fire — a stop has to work on trade number 11.
  */
 export function hasReachedTradeLimit(settings) {
-  return (settings.trades_today || 0) >= (settings.max_trades_per_day || 10);
+  return checkTradeLimit({
+    tradesToday: settings.trades_today,
+    maxTradesPerDay: settings.max_trades_per_day,
+  }).breached;
 }
 
 /**
@@ -265,13 +301,19 @@ export function checkCircuitBreaker(settings, assets) {
     }
   }
   
-  // Check daily loss limit
-  const dailyLoss = settings.daily_loss || 0;
-  const maxDailyLoss = settings.max_daily_loss_percent || 5;
-  
-  if (dailyLoss >= maxDailyLoss) {
+  // Check daily loss limit.
+  // FIXED: this compared dollars to a percentage, same bug as above.
+  const lossCheck = checkDailyLossLimit({
+    dailyLoss: settings.daily_loss || 0,
+    dailyStartEquity: settings.daily_start_equity,
+    maxDailyLossPercent: settings.max_daily_loss_percent,
+  });
+
+  if (lossCheck.breached) {
     results.triggered = true;
-    results.reason = 'daily_loss_limit';
+    results.reason = lossCheck.reason;
+    results.lossPercent = lossCheck.lossPercent;
+    results.limit = lossCheck.limit;
     return results;
   }
   

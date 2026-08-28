@@ -67,7 +67,9 @@ export default function ConnectionStatusCard({ connection, onTest, onManage, isT
                 )}
               </CardTitle>
               <p className="text-sm text-slate-400 mt-1">
-                API Key: {connection.api_key.substring(0, 12)}...
+                {/* Fingerprint only. The plaintext key is not stored and the
+                    ciphertext is never sent to the browser. */}
+                API Key: {connection.api_key_fingerprint || '••••••••'}
               </p>
             </div>
           </div>
