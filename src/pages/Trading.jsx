@@ -750,9 +750,12 @@ export default function Trading() {
       // Determine if we should run browser-side trading
       const executionMode = autoTradingSettings.execution_mode || 'auto';
       
-      // If backend functions are available AND we are not forcing browser mode, browser-based trading is just for monitoring
-      if (hasBackendFunctions && executionMode !== 'browser') {
-        console.log('✅ Server-side auto-trading active - browser provides monitoring only');
+      // Defer ALL trade execution to the V5 server worker unless the user
+      // explicitly chose browser-only mode. The browser loop was trading on
+      // the altcoin scanner's synthetic `simulated_price` values, which are
+      // not real market data. The server worker fetches real Binance OHLCV.
+      if (executionMode !== 'browser') {
+        console.log('✅ Server-side auto-trading active (V5 worker) - browser provides monitoring only');
         return;
       }
 
