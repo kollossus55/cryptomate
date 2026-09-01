@@ -234,7 +234,14 @@ export default function AutoTrading() {
     }
   };
 
-  const isCircuitBreakerTriggered = settings.daily_loss >= (settings.max_daily_loss_percent || 0);
+  // daily_loss is accumulated DOLLARS; max_daily_loss_percent is a PERCENTAGE of
+  // the day's starting equity. Convert before comparing — same fix the server
+  // worker made in risk.js, so the UI matches what's actually enforced.
+  const dailyStartEquity = settings.daily_start_equity || settings.total_balance || 10000;
+  const dailyLossPercent = settings.daily_start_equity
+    ? (settings.daily_loss / dailyStartEquity) * 100
+    : 0;
+  const isCircuitBreakerTriggered = dailyLossPercent >= (settings.max_daily_loss_percent || 0);
   const tradesLimitReached = settings.trades_today >= settings.max_trades_per_day;
 
   return (
@@ -384,7 +391,7 @@ export default function AutoTrading() {
                 <div className="bg-slate-800 rounded-lg p-4">
                   <p className="text-slate-400 text-sm mb-1">Daily Loss</p>
                   <p className={`text-2xl font-bold ${isCircuitBreakerTriggered ? 'text-red-400' : 'text-white'}`}>
-                    {settings.daily_loss.toFixed(1)}%
+                    {dailyLossPercent.toFixed(1)}%
                   </p>
                 </div>
                 <div className="bg-slate-800 rounded-lg p-4">
