@@ -410,41 +410,16 @@ export default function Trading() {
       console.log('📥 Auto-trading state restored from previous session');
     }
 
-    // Scan altcoins every 5 minutes for auto-trading opportunities
-    const scanAltcoinsForTrading = async () => {
-      try {
-        // Scan for top 50 opportunities from the top 250 assets
-        const opportunities = await scanAltcoins(50);
-        setAltcoinOpportunities(opportunities);
-        
-        // Store in global scope for auto-trading access
-        window.altcoinOpportunities = opportunities;
-        
-        // Add to assetSignalData for unified processing
-        opportunities.forEach(opp => {
-          if (!window.assetSignalData) window.assetSignalData = {};
-          window.assetSignalData[opp.symbol] = {
-            confidence: opp.confidence,
-            recommendation: opp.signal === 'strong_buy' || opp.signal === 'buy' ? 'buy' : 
-                          opp.signal === 'strong_sell' || opp.signal === 'sell' ? 'sell' : 'hold',
-            timestamp: Date.now(),
-            source: 'altcoin_scanner'
-          };
-        });
-        
-        console.log(`✅ Altcoin scanner: Found ${opportunities.length} opportunities for auto-trading`);
-      } catch (error) {
-        console.error('Failed to scan altcoins:', error);
-      }
-    };
-
-    scanAltcoinsForTrading();
-    const altcoinInterval = setInterval(scanAltcoinsForTrading, 5 * 60 * 1000); // Every 5 minutes
+    // NOTE: The background altcoin scanner was removed. It generated
+    // `simulated_price` values (fake prices) and injected them into the
+    // trading pool and window.assetSignalData, which produced fake trades
+    // with inflated profits. Only the V5 server worker executes trades now,
+    // using real Binance OHLCV data. The AltcoinScannerModal remains
+    // available as a manual, on-demand UI feature.
 
     return () => {
       clearInterval(priceInterval);
       clearInterval(timeInterval);
-      clearInterval(altcoinInterval);
       clearTimeout(timer);
     };
   }, []);
