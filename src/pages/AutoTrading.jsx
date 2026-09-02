@@ -256,23 +256,23 @@ export default function AutoTrading() {
           <p className="text-slate-400">Configure AI-powered automated trading with risk management</p>
         </div>
 
-        {/* Browser-Assisted Mode Notice */}
-        <Card className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 border-indigo-500/40 mb-8">
+        {/* Server-Side Mode Notice */}
+        <Card className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 border-green-500/40 mb-8">
           <CardContent className="pt-6">
             <div className="flex gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
-                <Sparkles className="w-5 h-5 text-white animate-pulse" />
+              <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
+                <Server className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="font-semibold text-indigo-300 mb-2">Browser-Assisted Auto-Trading</h3>
+                <h3 className="font-semibold text-green-300 mb-2">Server-Side Auto-Trading</h3>
                 <p className="text-slate-300 text-sm leading-relaxed mb-3">
-                  <strong className="text-indigo-200">How it works:</strong> When enabled, the AI monitors markets <strong className="text-white">while your browser tab is open</strong> and automatically executes trades 
-                  based on your settings. Trades are executed with paper trading funds following your risk parameters.
+                  <strong className="text-green-200">How it works:</strong> When enabled, the V5 server worker monitors markets and executes trades <strong className="text-white">24/7 from the server</strong> —
+                  no browser or open tab required. Trades run with paper trading funds following your risk parameters, and the browser steps in only as a fallback if the server is unavailable.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                   <div className="flex items-center gap-2 text-slate-300">
                     <CheckCircle className="w-4 h-4 text-green-400" />
-                    <span>✅ Monitors every 45 seconds</span>
+                    <span>✅ Runs 24/7, even when you're offline</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-300">
                     <CheckCircle className="w-4 h-4 text-green-400" />
@@ -283,8 +283,8 @@ export default function AutoTrading() {
                     <span>✅ Stop loss & take profit</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-300">
-                    <AlertTriangle className="w-4 h-4 text-red-400" />
-                    <span>⚠️ Browser must stay open</span>
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span>✅ Browser fallback if server is down</span>
                   </div>
                 </div>
               </div>
@@ -300,11 +300,10 @@ export default function AutoTrading() {
                 <AlertTriangle className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="font-semibold text-blue-300 mb-2">Paper Trading with Browser-Assisted Execution</h3>
+                <h3 className="font-semibold text-blue-300 mb-2">Paper Trading with Server-Side Execution</h3>
                 <p className="text-slate-300 text-sm leading-relaxed">
-                  This implements <strong className="text-blue-200">assisted auto-trading</strong> that runs in your browser. When enabled, trades are automatically executed 
-                  using paper trading funds while you have the Trading page open. For true 24/7 auto-trading, you would need external backend infrastructure 
-                  running independently of the browser.
+                  This implements <strong className="text-blue-200">server-assisted auto-trading</strong> that runs from the V5 server worker. When enabled, trades are automatically executed
+                  using paper trading funds on a fixed schedule — no browser required. The browser acts only as a fallback to keep trading running temporarily if the server worker is unavailable.
                 </p>
               </div>
             </div>
@@ -376,9 +375,9 @@ export default function AutoTrading() {
             </button>
           </div>
           <p className="text-xs text-slate-400 mt-3">
-            {settings.execution_mode === 'auto' && "Automatically uses server-side trading if available, falls back to browser."}
-            {settings.execution_mode === 'browser' && "Forces trading to run in your browser tab. Must keep tab open."}
-            {settings.execution_mode === 'server' && "Forces server-side trading. Requires backend functions to be enabled."}
+            {settings.execution_mode === 'auto' && "Server-side trading is the primary executor; the browser takes over only if the server is unavailable."}
+            {settings.execution_mode === 'browser' && "Forces trading to run in your browser tab only. Use only as a manual fallback — the server worker is paused."}
+            {settings.execution_mode === 'server' && "Forces server-side trading only. This is the recommended 24/7 mode (no browser required)."}
           </p>
         </div>
 
@@ -412,10 +411,10 @@ export default function AutoTrading() {
               <div className="flex gap-3">
                 <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-yellow-200 mb-2">Auto-Trading Enabled (Browser-Assisted)</h3>
+                  <h3 className="font-semibold text-yellow-200 mb-2">Auto-Trading Enabled (Server-Side)</h3>
                   <p className="text-yellow-200/80 text-sm">
-                    Your settings are active for browser-assisted auto-trading. The AI will execute paper trades 
-                    automatically while this tab is open and the Trading page is active.
+                    Your settings are active for server-side auto-trading. The V5 server worker will execute paper trades
+                    automatically on schedule — no browser required. The browser will step in as a fallback only if the server worker is unavailable.
                   </p>
                 </div>
               </div>
@@ -1270,10 +1269,10 @@ export default function AutoTrading() {
               <h2 className="text-2xl font-bold text-white">Live Monitoring & Testing</h2>
             </div>
             <p className="text-slate-400 mb-6">
-              Monitor your auto-trading activity in real-time. 
+              Monitor your auto-trading activity in real-time. The server worker runs on schedule regardless of this page.
               {settings.execution_mode === 'browser' && (
                 <span className="text-yellow-400 ml-1">
-                  Note: For browser-based trading to execute, you must keep the <strong>Trading Dashboard</strong> open.
+                  Note: Browser-only mode requires you to keep the <strong>Trading Dashboard</strong> open for trades to execute.
                 </span>
               )}
             </p>
