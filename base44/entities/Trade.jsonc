@@ -76,6 +76,10 @@
     "gross_profit_loss": {
       "type": "number",
       "description": "P&L before fees. profit_loss is net."
+    },
+    "owner_email": {
+      "type": "string",
+      "description": "Email of the user this trade belongs to. Set by the server worker (which runs as the service role) so RLS can attribute the trade to the owning user."
     }
   },
   "required": [
@@ -88,16 +92,37 @@
   ],
   "rls": {
     "create": {
-      "created_by": "{{user.email}}"
+      "created_by_id": "{{user.id}}"
     },
     "read": {
-      "created_by": "{{user.email}}"
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        }
+      ]
     },
     "update": {
-      "created_by": "{{user.email}}"
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        }
+      ]
     },
     "delete": {
-      "created_by": "{{user.email}}"
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        }
+      ]
     }
   }
 }
