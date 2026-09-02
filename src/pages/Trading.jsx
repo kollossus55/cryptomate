@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, TrendingUp, Sparkles, RefreshCw, AlertCircle, Settings, Eye, EyeOff, Newspaper, Scan, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 
 import AssetCard from "../components/trading/AssetCard";
 import TradeModal from "../components/trading/TradeModal";
@@ -43,6 +44,7 @@ export default function Trading() {
   const [analysisAsset, setAnalysisAsset] = useState(null);
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [showAltcoinScanner, setShowAltcoinScanner] = useState(false);
+  const [altcoinScannerEnabled, setAltcoinScannerEnabled] = useState(false);
   const [isPriceLoading, setIsPriceLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [assetConfidence, setAssetConfidence] = useState({});
@@ -1462,14 +1464,26 @@ export default function Trading() {
                 <Settings className="w-5 h-5" />
               </Button>
             </div>
-            <Button
-              onClick={() => setShowAltcoinScanner(true)}
-              size="lg"
-              className="bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold"
-            >
-              <Scan className="w-5 h-5 mr-2" />
-              Altcoin Scanner
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setShowAltcoinScanner(true)}
+                size="lg"
+                disabled={!altcoinScannerEnabled}
+                className={`font-bold ${altcoinScannerEnabled ? "bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white" : "bg-slate-700 text-slate-500 cursor-not-allowed"}`}
+              >
+                <Scan className="w-5 h-5 mr-2" />
+                Altcoin Scanner
+              </Button>
+              <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 rounded-xl border border-slate-700">
+                <Switch
+                  checked={altcoinScannerEnabled}
+                  onCheckedChange={setAltcoinScannerEnabled}
+                />
+                <span className="text-xs text-slate-400 font-medium">
+                  {altcoinScannerEnabled ? "Enabled" : "Disabled"}
+                </span>
+              </div>
+            </div>
             <Button
               onClick={() => setShowWatchlistModal(true)}
               size="lg"
