@@ -225,6 +225,11 @@
         }
       },
       "description": "Trading goals and targets"
+    },
+    "altcoin_scanner_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the Altcoin Scanner toggle is enabled on the Trading page"
     }
   },
   "required": [

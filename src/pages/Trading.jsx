@@ -48,6 +48,7 @@ export default function Trading() {
     const saved = localStorage.getItem('altcoin_scanner_enabled');
     return saved === 'true';
   });
+  const [altcoinPrefSynced, setAltcoinPrefSynced] = useState(false);
   const [isPriceLoading, setIsPriceLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [assetConfidence, setAssetConfidence] = useState({});
@@ -93,10 +94,31 @@ export default function Trading() {
     console.log('💾 Saved indicator settings:', indicatorSettings);
   }, [indicatorSettings]);
 
-  // Persist altcoin scanner toggle so it survives page reloads
+  // Persist altcoin scanner toggle to localStorage AND backend so it survives reloads
   useEffect(() => {
     localStorage.setItem('altcoin_scanner_enabled', String(altcoinScannerEnabled));
   }, [altcoinScannerEnabled]);
+
+  const toggleAltcoinScanner = async (enabled) => {
+    setAltcoinScannerEnabled(enabled);
+    localStorage.setItem('altcoin_scanner_enabled', String(enabled));
+    try {
+      if (preferences?.id) {
+        await base44.entities.TradingPreferences.update(preferences.id, {
+          altcoin_scanner_enabled: enabled
+        });
+      } else {
+        await base44.entities.TradingPreferences.create({
+          trading_style: 'balanced',
+          risk_tolerance: 'moderate',
+          altcoin_scanner_enabled: enabled
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ['trading-preferences'] });
+    } catch (error) {
+      console.error('Failed to persist altcoin scanner toggle:', error);
+    }
+  };
 
   // Fetch user preferences
   const { data: preferences } = useQuery({
@@ -111,8 +133,14 @@ export default function Trading() {
   useEffect(() => {
     if (preferences) {
       setUserPreferences(preferences);
+      // Sync altcoin scanner toggle from backend (authoritative) once on load
+      if (!altcoinPrefSynced && typeof preferences.altcoin_scanner_enabled === 'boolean') {
+        setAltcoinScannerEnabled(preferences.altcoin_scanner_enabled);
+        localStorage.setItem('altcoin_scanner_enabled', String(preferences.altcoin_scanner_enabled));
+        setAltcoinPrefSynced(true);
+      }
     }
-  }, [preferences]);
+  }, [preferences, altcoinPrefSynced]);
 
   const coinGeckoIds = {
     BTC: "bitcoin",
@@ -1485,7 +1513,7 @@ export default function Trading() {
               <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 rounded-xl border border-slate-700">
                 <Switch
                   checked={altcoinScannerEnabled}
-                  onCheckedChange={setAltcoinScannerEnabled}
+                  onCheckedChange={toggleAltcoinScanner}
                 />
                 <span className="text-xs text-slate-400 font-medium">
                   {altcoinScannerEnabled ? "Enabled" : "Disabled"}
