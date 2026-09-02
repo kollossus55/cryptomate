@@ -111,13 +111,13 @@ export default function BackendMigrationGuide({ isActive }) {
             </div>
             <div>
               <CardTitle className="text-white flex items-center gap-2">
-                Backend Migration Ready
-                <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30">
-                  Future Enhancement
+                Server-Side Trading Active
+                <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
+                  Backend Enhanced
                 </Badge>
               </CardTitle>
               <p className="text-xs text-slate-400 mt-1">
-                Architecture prepared for 24/7 server-side trading
+                24/7 server-side execution is live — browser runs only as a fallback
               </p>
             </div>
           </div>
@@ -141,54 +141,54 @@ export default function BackendMigrationGuide({ isActive }) {
           >
             <CardContent className="space-y-6">
               
-              {/* Current vs Future */}
+              {/* Primary vs Fallback */}
               <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-slate-800 rounded-lg p-4 border border-orange-500/30">
+                <div className="bg-slate-800 rounded-lg p-4 border border-green-500/30">
                   <div className="flex items-center gap-2 mb-3">
-                    <AlertCircle className="w-5 h-5 text-orange-400" />
-                    <h4 className="font-semibold text-white">Current: Browser-Based</h4>
+                    <CheckCircle2 className="w-5 h-5 text-green-400" />
+                    <h4 className="font-semibold text-white">Primary: Server-Side</h4>
                   </div>
                   <ul className="space-y-2 text-sm text-slate-300">
                     <li className="flex items-start gap-2">
-                      <span className="text-orange-400 mt-1">⚠️</span>
-                      <span>Requires page to stay open</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-orange-400 mt-1">⚠️</span>
-                      <span>Stops when browser closes</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-orange-400 mt-1">⚠️</span>
-                      <span>Throttled in background tabs</span>
+                      <span className="text-green-400 mt-1">✓</span>
+                      <span>24/7 trading, even when you're offline</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="text-green-400 mt-1">✓</span>
-                      <span>Works now, no setup needed</span>
+                      <span>No browser or open tab required</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-green-400 mt-1">✓</span>
+                      <span>Reliable scheduled execution</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-green-400 mt-1">✓</span>
+                      <span>Server-grade performance & security</span>
                     </li>
                   </ul>
                 </div>
 
-                <div className="bg-slate-800 rounded-lg p-4 border border-green-500/30">
+                <div className="bg-slate-800 rounded-lg p-4 border border-orange-500/30">
                   <div className="flex items-center gap-2 mb-3">
-                    <CheckCircle2 className="w-5 h-5 text-green-400" />
-                    <h4 className="font-semibold text-white">Future: Backend Functions</h4>
+                    <AlertCircle className="w-5 h-5 text-orange-400" />
+                    <h4 className="font-semibold text-white">Fallback: Browser</h4>
                   </div>
                   <ul className="space-y-2 text-sm text-slate-300">
                     <li className="flex items-start gap-2">
-                      <span className="text-green-400 mt-1">✓</span>
-                      <span>24/7 trading, even offline</span>
+                      <span className="text-orange-400 mt-1">⚠️</span>
+                      <span>Only used if server-side is unavailable</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-orange-400 mt-1">⚠️</span>
+                      <span>Requires the page to stay open</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-orange-400 mt-1">⚠️</span>
+                      <span>Stops when the browser closes</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="text-green-400 mt-1">✓</span>
-                      <span>No browser required</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-green-400 mt-1">✓</span>
-                      <span>Reliable scheduling</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-green-400 mt-1">✓</span>
-                      <span>Server-grade performance</span>
+                      <span>Keeps trading running during outages</span>
                     </li>
                   </ul>
                 </div>
@@ -198,129 +198,63 @@ export default function BackendMigrationGuide({ isActive }) {
               <div className="bg-slate-800 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Code className="w-5 h-5 text-indigo-400" />
-                  <h4 className="font-semibold text-white">Ready-to-Deploy Architecture</h4>
+                  <h4 className="font-semibold text-white">Deployed Architecture</h4>
                 </div>
                 <p className="text-sm text-slate-300 mb-4">
-                  The core trading logic is already extracted into platform-agnostic modules 
-                  that can run on any backend:
+                  The core trading logic is shared between the browser and the server worker,
+                  so both use the same signal, risk, and execution modules:
                 </p>
                 <div className="bg-slate-900 rounded-lg p-4 font-mono text-xs text-slate-300 space-y-2">
-                  <div className="text-green-400">// Core engine (platform-agnostic)</div>
-                  <div>components/trading/autoTradingEngine.js</div>
-                  <div className="mt-3 text-green-400">// Functions you'd create on backend:</div>
-                  <div className="text-purple-400">backend/functions/autoTradingWorker.js</div>
-                  <div className="text-purple-400">backend/functions/priceMonitor.js</div>
-                  <div className="text-purple-400">backend/functions/portfolioSync.js</div>
+                  <div className="text-green-400">// Server-side (primary executor)</div>
+                  <div className="text-purple-400">base44/functions/autoTradingWorker</div>
+                  <div className="text-purple-400">base44/functions/tradingScheduler</div>
+                  <div className="mt-3 text-green-400">// Shared engine (used by both server & browser)</div>
+                  <div>shared/trading/signalEngine.js</div>
+                  <div>shared/trading/risk.js</div>
+                  <div>shared/trading/portfolio.js</div>
                 </div>
               </div>
 
-              {/* Migration Steps */}
+              {/* How It Works */}
               <div className="bg-slate-800 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Zap className="w-5 h-5 text-yellow-400" />
-                  <h4 className="font-semibold text-white">Migration Steps (When Backend Support Added)</h4>
+                  <h4 className="font-semibold text-white">How It Works</h4>
                 </div>
                 <div className="space-y-3">
                   <div className="flex gap-3">
-                    <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center flex-shrink-0 text-white text-xs font-bold">
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 text-white text-xs font-bold">
                       1
                     </div>
                     <div>
-                      <p className="text-white font-medium">Create Backend Function</p>
+                      <p className="text-white font-medium">Server Worker Runs</p>
                       <p className="text-sm text-slate-400">
-                        Copy autoTradingEngine.js logic to a scheduled backend function
+                        The V5 server worker executes trades on schedule for every user with auto-trading enabled
                       </p>
                     </div>
                   </div>
                   <div className="flex gap-3">
-                    <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center flex-shrink-0 text-white text-xs font-bold">
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 text-white text-xs font-bold">
                       2
                     </div>
                     <div>
-                      <p className="text-white font-medium">Set Schedule</p>
+                      <p className="text-white font-medium">Browser Monitors</p>
                       <p className="text-sm text-slate-400">
-                        Configure cron job: */45 * * * * (every 45 seconds)
+                        The page watches trade activity and updates your view in real time
                       </p>
                     </div>
                   </div>
                   <div className="flex gap-3">
-                    <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center flex-shrink-0 text-white text-xs font-bold">
+                    <div className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0 text-white text-xs font-bold">
                       3
                     </div>
                     <div>
-                      <p className="text-white font-medium">Update Settings Entity</p>
+                      <p className="text-white font-medium">Fallback Engages If Needed</p>
                       <p className="text-sm text-slate-400">
-                        Add execution_mode: "backend" field to AutoTradingSettings
+                        If the server-side worker is unavailable, the browser takes over temporarily until it recovers
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-3">
-                    <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center flex-shrink-0 text-white text-xs font-bold">
-                      4
-                    </div>
-                    <div>
-                      <p className="text-white font-medium">Test & Deploy</p>
-                      <p className="text-sm text-slate-400">
-                        Verify trades execute server-side, then remove browser logic
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Backend Function Example */}
-              <div className="bg-slate-800 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Server className="w-5 h-5 text-purple-400" />
-                  <h4 className="font-semibold text-white">Example Backend Function</h4>
-                </div>
-                <div className="bg-slate-900 rounded-lg p-4 overflow-x-auto">
-                  <pre className="text-xs text-slate-300 font-mono">
-{`// backend/functions/autoTradingWorker.js
-import { executeAutoTradingCheck } from './autoTradingEngine.js';
-import { fetchAssets, fetchConfidence } from './marketData.js';
-import { executeTrade } from './tradeExecutor.js';
-
-export async function handler(event, context) {
-  // Fetch all users with auto-trading enabled
-  const users = await db.query(
-    'SELECT * FROM auto_trading_settings WHERE is_enabled = true'
-  );
-  
-  for (const user of users) {
-    try {
-      // Get user's portfolio and settings
-      const portfolio = await getPortfolio(user.id);
-      const settings = user.settings;
-      
-      // Fetch latest market data
-      const assets = await fetchAssets();
-      const confidence = await fetchConfidence(assets);
-      
-      // Execute trading check (uses same logic!)
-      const result = await executeAutoTradingCheck(
-        assets,
-        confidence,
-        settings,
-        portfolio,
-        async (opportunity) => {
-          // Execute actual trade
-          await executeTrade(user.id, opportunity);
-        }
-      );
-      
-      console.log(\`User \${user.id}: \${result.reason}\`);
-    } catch (error) {
-      console.error(\`Error for user \${user.id}:\`, error);
-    }
-  }
-  
-  return { success: true };
-}
-
-// Schedule: Every 45 seconds
-// Cron: */45 * * * * *`}
-                  </pre>
                 </div>
               </div>
 
@@ -363,20 +297,20 @@ export async function handler(event, context) {
 
               {/* Current State */}
               <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-green-300 mb-2">✅ Backend Functions Ready to Deploy</h4>
+                <h4 className="text-sm font-semibold text-green-300 mb-2">✅ Backend Functions Deployed & Running</h4>
                 <p className="text-xs text-green-200/90 mb-3">
-                  Server-side trading functions have been created and are ready for deployment:
+                  Server-side trading is already live and processing every user with auto-trading enabled:
                 </p>
                 <div className="bg-slate-800/50 rounded-lg p-3 mb-3">
                   <ul className="text-xs text-slate-300 space-y-1">
-                    <li>✅ <code className="text-green-400">functions/autoTradingWorker.js</code> - Executes trades server-side</li>
-                    <li>✅ <code className="text-green-400">functions/tradingScheduler.js</code> - Runs every 2 minutes</li>
-                    <li>✅ <code className="text-green-400">functions/config.json</code> - Function configuration</li>
+                    <li>✅ <code className="text-green-400">autoTradingWorker</code> — Executes trades server-side</li>
+                    <li>✅ <code className="text-green-400">tradingScheduler</code> — Runs on a fixed schedule</li>
+                    <li>✅ <code className="text-green-400">technicalAnalysis</code> — Signal & indicator engine</li>
                   </ul>
                 </div>
                 <p className="text-xs text-green-200/80">
-                  <strong>To activate 24/7 trading:</strong> Enable backend functions in your Base44 dashboard settings. 
-                  The scheduler will automatically process all users with auto-trading enabled every 2 minutes.
+                  <strong>Browser fallback:</strong> If the server worker is ever unavailable, the browser
+                  keeps trading running temporarily and resumes server-side execution automatically once it recovers.
                 </p>
               </div>
 
