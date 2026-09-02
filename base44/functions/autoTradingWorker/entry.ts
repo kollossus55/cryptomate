@@ -45,10 +45,42 @@ Deno.serve(async (req) => {
 
   try {
     const base44 = createClientFromRequest(req);
-    const { settings, portfolio, user_email } = await req.json();
+    const { settings_id, user_email } = await req.json();
 
-    if (!settings?.id || !portfolio?.id || !user_email) {
+    if (!settings_id || !user_email) {
       return Response.json({ success: false, error: 'Missing required parameters' }, { status: 400 });
+    }
+
+    // If a user token is present, the caller may only act on their own settings.
+    // Service-role internal calls from the scheduler have no user token and fall
+    // through to the DB verification below.
+    try {
+      const caller = await base44.auth.me();
+      if (caller && caller.email !== user_email) {
+        return Response.json({ success: false, error: 'Forbidden: settings do not belong to caller' }, { status: 403 });
+      }
+    } catch {
+      // No user token — service-role internal call. Proceed with DB verification.
+    }
+
+    // NEVER trust caller-supplied settings/portfolio. Fetch the real records
+    // from the DB so an attacker cannot inject crafted risk limits or a fake
+    // portfolio for another user.
+    const settings = await base44.asServiceRole.entities.AutoTradingSettings.get(settings_id);
+    if (!settings) {
+      return Response.json({ success: false, error: 'Settings not found' }, { status: 404 });
+    }
+    if (settings.created_by !== user_email) {
+      return Response.json({ success: false, error: 'Forbidden: settings owner mismatch' }, { status: 403 });
+    }
+    if (!settings.is_enabled || settings.execution_mode === 'browser') {
+      return Response.json({ success: true, skipped: true, reason: 'server_trading_not_enabled' });
+    }
+
+    const portfolios = await base44.asServiceRole.entities.Portfolio.filter({ created_by: user_email });
+    const portfolio = portfolios?.[0];
+    if (!portfolio) {
+      return Response.json({ success: false, error: 'Portfolio not found' }, { status: 404 });
     }
 
     log(`Run start for ${user_email}`);
