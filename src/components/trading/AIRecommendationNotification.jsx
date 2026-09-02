@@ -681,15 +681,21 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
                 )}
                 <Button
                   variant="ghost"
-                  size="icon"
+                  size="sm"
                   onClick={toggleMinimize}
-                  className="text-white/70 hover:text-white hover:bg-white/10"
-                  title={isMinimized ? "Expand" : "Minimize"}
+                  className="text-white/80 hover:text-white hover:bg-white/15 gap-1.5 font-medium"
+                  title={isMinimized ? "Expand signals" : "Minimize"}
                 >
                   {isMinimized ? (
-                    <Maximize2 className="w-4 h-4" />
+                    <>
+                      <Maximize2 className="w-4 h-4" />
+                      <span className="text-xs">Expand</span>
+                    </>
                   ) : (
-                    <Minimize2 className="w-4 h-4" />
+                    <>
+                      <Minimize2 className="w-4 h-4" />
+                      <span className="text-xs">Minimize</span>
+                    </>
                   )}
                 </Button>
                 <Button
