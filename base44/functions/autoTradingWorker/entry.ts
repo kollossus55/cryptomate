@@ -66,7 +66,12 @@ Deno.serve(async (req) => {
     // NEVER trust caller-supplied settings/portfolio. Fetch the real records
     // from the DB so an attacker cannot inject crafted risk limits or a fake
     // portfolio for another user.
-    const settings = await base44.asServiceRole.entities.AutoTradingSettings.get(settings_id);
+    let settings;
+    try {
+      settings = await base44.asServiceRole.entities.AutoTradingSettings.get(settings_id);
+    } catch {
+      settings = null;
+    }
     if (!settings) {
       return Response.json({ success: false, error: 'Settings not found' }, { status: 404 });
     }

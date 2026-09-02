@@ -45,20 +45,13 @@ Deno.serve(async (req) => {
         
         const portfolio = portfolios[0];
         
-        // Fetch user's indicator settings (if they exist)
-        const userPreferences = await base44.asServiceRole.entities.TradingPreferences.filter({
-          created_by: settings.created_by
-        });
-        const indicatorSettings = userPreferences?.[0]?.signal_alert_thresholds?.indicator_settings || 
-          { rsi: true, macd: true, bollinger: true, ema: true, stoch: true };
-
-        // Invoke auto-trading worker for this user with indicator settings
+        // Invoke auto-trading worker for this user. The worker fetches settings
+        // and portfolio from the DB by ID — we only pass identifiers, never the
+        // records themselves, so the worker cannot be fed crafted data.
         console.log(`⏳ Invoking worker for ${settings.created_by}...`);
         const result = await base44.asServiceRole.functions.invoke('autoTradingWorker', {
-          settings,
-          portfolio,
-          user_email: settings.created_by,
-          indicator_settings: indicatorSettings
+          settings_id: settings.id,
+          user_email: settings.created_by
         });
         
         processed++;
