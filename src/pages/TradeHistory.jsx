@@ -33,10 +33,13 @@ export default function TradeHistory() {
   const resetPortfolioMutation = useMutation({
     mutationFn: async () => {
       if (portfolio?.id) {
-        // First, delete all existing trades for a clean reset
-        const allTrades = await base44.entities.Trade.list();
-        for (const trade of allTrades) {
-          await base44.entities.Trade.delete(trade.id);
+        // Fetch ALL trades (the default list() page size would leave some behind)
+        const allTrades = await base44.entities.Trade.list('-created_date', 1000);
+        // Bulk-delete every trade in one call so the history fully clears
+        if (allTrades.length > 0) {
+          await base44.entities.Trade.deleteMany({
+            id: { $in: allTrades.map(t => t.id) }
+          });
         }
 
         // Then, update the portfolio to its initial state
@@ -52,6 +55,10 @@ export default function TradeHistory() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['portfolio'] });
       queryClient.invalidateQueries({ queryKey: ['trades'] });
+    },
+    onError: (error) => {
+      console.error('Reset failed:', error);
+      alert('Reset failed: ' + (error?.message || 'Unknown error'));
     },
   });
 
