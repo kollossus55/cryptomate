@@ -77,7 +77,7 @@ export default function SystemHealthMonitor({
             <div className="mt-4 pt-3 border-t border-slate-800">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500">Logic Core</span>
-                <span className="text-indigo-400">V4.2 (Smart Dip Buy)</span>
+                <span className="text-indigo-400">V5 (Real-Data Engine)</span>
               </div>
             </div>
           </div>

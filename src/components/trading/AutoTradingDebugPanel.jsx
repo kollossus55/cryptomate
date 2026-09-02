@@ -339,9 +339,15 @@ export default function AutoTradingDebugPanel({
     .sort(([, a], [, b]) => b - a)
     .slice(0, 5);
 
-  // Check circuit breaker status
-  const isCircuitBreakerTriggered = 
-    (autoTradingSettings?.daily_loss || 0) >= (autoTradingSettings?.max_daily_loss_percent || 0);
+  // Circuit breaker — daily loss as a PERCENT of start-of-day equity, not raw
+  // dollars vs a percent limit (the old comparison tripped a 5% limit at $5).
+  // Matches the server-side checkDailyLossLimit in shared/trading/risk.js.
+  const _dailyLoss = autoTradingSettings?.daily_loss || 0;
+  const _dailyStartEquity = autoTradingSettings?.daily_start_equity
+    || portfolio?.total_balance || 0;
+  const _maxDailyLossPercent = autoTradingSettings?.max_daily_loss_percent || 5;
+  const _lossPercent = _dailyStartEquity > 0 ? (_dailyLoss / _dailyStartEquity) * 100 : 0;
+  const isCircuitBreakerTriggered = _lossPercent >= _maxDailyLossPercent;
   
   const tradesLimitReached = 
     (autoTradingSettings?.trades_today || 0) >= (autoTradingSettings?.max_trades_per_day || 10);
