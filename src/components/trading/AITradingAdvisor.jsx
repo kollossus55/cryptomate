@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { base44 } from "@/api/base44Client";
@@ -73,9 +72,23 @@ export default function AITradingAdvisor({
     },
   });
 
-  // Auto-analyze on mount and when trades change
+  // Recompute performance metrics whenever trades/portfolio/settings change
+  // so the displayed figures always reflect the latest trading data, not a
+  // snapshot frozen after the first analysis.
   useEffect(() => {
-    if (trades && trades.length >= 5 && !performanceMetrics) {
+    if (trades && trades.length > 0) {
+      const metrics = analyzePerformance(trades, portfolio, autoTradingSettings);
+      setPerformanceMetrics(metrics);
+    } else {
+      setPerformanceMetrics(null);
+    }
+  }, [trades, portfolio, autoTradingSettings]);
+
+  // Run the full AI narrative analysis (LLM) once per mount/reset when enough
+  // trades exist. This refreshes the AI insights every time the app is reset,
+  // without re-running the expensive LLM call on every individual trade change.
+  useEffect(() => {
+    if (trades && trades.length >= 5 && !aiInsights) {
       handleAnalyze();
     }
   }, [trades]);
