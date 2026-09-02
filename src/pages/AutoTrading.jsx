@@ -57,6 +57,12 @@ export default function AutoTrading() {
     dca_multiplier: 1.5,
     dca_dip_threshold: 5,
     max_dca_buys: 3,
+    // NEW: Dynamic Risk Management
+    use_dynamic_risk: false,
+    volatility_lookback_periods: 20,
+    high_volatility_threshold: 5,
+    extreme_volatility_threshold: 10,
+    volatility_position_reduction: 50,
     // NEW: Trading Schedule
     trading_schedule: {
       enabled: false,
@@ -138,6 +144,12 @@ export default function AutoTrading() {
         dca_multiplier: savedSettings.dca_multiplier ?? 1.5,
         dca_dip_threshold: savedSettings.dca_dip_threshold ?? 5,
         max_dca_buys: savedSettings.max_dca_buys ?? 3,
+        // NEW: Dynamic Risk Management
+        use_dynamic_risk: savedSettings.use_dynamic_risk ?? false,
+        volatility_lookback_periods: savedSettings.volatility_lookback_periods ?? 20,
+        high_volatility_threshold: savedSettings.high_volatility_threshold ?? 5,
+        extreme_volatility_threshold: savedSettings.extreme_volatility_threshold ?? 10,
+        volatility_position_reduction: savedSettings.volatility_position_reduction ?? 50,
         // NEW: Trading Schedule
         trading_schedule: savedSettings.trading_schedule || {
           enabled: false,
@@ -785,6 +797,91 @@ export default function AutoTrading() {
               )}
             </div>
 
+            {/* Dynamic Risk Management */}
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-emerald-500/30">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="text-emerald-100 font-semibold flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-emerald-400" />
+                    Dynamic Risk Management
+                  </h4>
+                  <p className="text-xs text-emerald-400/60 mt-1">
+                    Auto-adjust position sizing based on market volatility
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.use_dynamic_risk}
+                  onCheckedChange={(checked) => setSettings({...settings, use_dynamic_risk: checked})}
+                  className="data-[state=checked]:bg-emerald-500"
+                />
+              </div>
+              
+              {settings.use_dynamic_risk && (
+                <div className="space-y-4 pt-4 border-t border-emerald-500/20">
+                  <div>
+                    <Label className="text-emerald-200 mb-2 block">
+                      Volatility Lookback: <span className="text-emerald-400 font-bold">{settings.volatility_lookback_periods ?? 20} periods</span>
+                    </Label>
+                    <Slider
+                      value={[settings.volatility_lookback_periods ?? 20]}
+                      onValueChange={(value) => setSettings({...settings, volatility_lookback_periods: value[0]})}
+                      min={5}
+                      max={50}
+                      step={5}
+                      className="mb-2 [&>.relative>.bg-primary]:bg-emerald-500 [&>.block]:border-emerald-500"
+                    />
+                    <p className="text-xs text-emerald-400/60">Periods used to calculate volatility</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-emerald-200 mb-2 block">
+                        High Volatility: <span className="text-emerald-400 font-bold">{settings.high_volatility_threshold ?? 5}%</span>
+                      </Label>
+                      <Slider
+                        value={[settings.high_volatility_threshold ?? 5]}
+                        onValueChange={(value) => setSettings({...settings, high_volatility_threshold: value[0]})}
+                        min={2}
+                        max={10}
+                        step={0.5}
+                        className="mb-2 [&>.relative>.bg-primary]:bg-emerald-500 [&>.block]:border-emerald-500"
+                      />
+                      <p className="text-xs text-emerald-400/60">Threshold for high volatility</p>
+                    </div>
+                    <div>
+                      <Label className="text-emerald-200 mb-2 block">
+                        Extreme Volatility: <span className="text-emerald-400 font-bold">{settings.extreme_volatility_threshold ?? 10}%</span>
+                      </Label>
+                      <Slider
+                        value={[settings.extreme_volatility_threshold ?? 10]}
+                        onValueChange={(value) => setSettings({...settings, extreme_volatility_threshold: value[0]})}
+                        min={5}
+                        max={20}
+                        step={1}
+                        className="mb-2 [&>.relative>.bg-primary]:bg-emerald-500 [&>.block]:border-emerald-500"
+                      />
+                      <p className="text-xs text-emerald-400/60">Threshold for extreme conditions</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-emerald-200 mb-2 block">
+                      Position Reduction: <span className="text-emerald-400 font-bold">{settings.volatility_position_reduction ?? 50}%</span>
+                    </Label>
+                    <Slider
+                      value={[settings.volatility_position_reduction ?? 50]}
+                      onValueChange={(value) => setSettings({...settings, volatility_position_reduction: value[0]})}
+                      min={10}
+                      max={80}
+                      step={5}
+                      className="mb-2 [&>.relative>.bg-primary]:bg-emerald-500 [&>.block]:border-emerald-500"
+                    />
+                    <p className="text-xs text-emerald-400/60">Reduce position size by this % in high volatility</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Feature Summary */}
             <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-4">
               <h4 className="text-sm font-semibold text-indigo-300 mb-3">🎯 Active Features Summary</h4>
@@ -807,7 +904,13 @@ export default function AutoTrading() {
                     <span>Partial Profits: {settings.partial_profit_targets?.length || 0} targets configured</span>
                   </div>
                 )}
-                {!settings.use_trailing_stop && !settings.use_breakeven_protection && !settings.use_partial_profits && (
+                {settings.use_dynamic_risk && (
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Dynamic Risk: Reduces positions {settings.volatility_position_reduction}% above {settings.high_volatility_threshold}% volatility</span>
+                  </div>
+                )}
+                {!settings.use_trailing_stop && !settings.use_breakeven_protection && !settings.use_partial_profits && !settings.use_dynamic_risk && (
                   <p className="text-slate-400">No advanced features enabled. Using standard stop loss and take profit.</p>
                 )}
               </div>
