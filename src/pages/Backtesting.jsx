@@ -226,7 +226,7 @@ export default function Backtesting() {
               <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
                 Strategy Backtesting
               </h1>
-              <p className="text-slate-400">Test AI strategies on historical data with sentiment analysis</p>
+              <p className="text-slate-400">Replay AI strategies on real Binance OHLCV — same signal engine as the live bot</p>
             </div>
           </div>
         </div>
@@ -299,12 +299,10 @@ export default function Backtesting() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm mb-1">AI + Sentiment</p>
-                  <p className="text-3xl font-bold text-pink-400">
-                    <Sparkles className="w-8 h-8" />
-                  </p>
+                  <p className="text-slate-400 text-sm mb-1">Data Source</p>
+                  <p className="text-lg font-bold text-cyan-400">Binance 1h</p>
                 </div>
-                <Badge className="bg-pink-500/20 text-pink-400">Active</Badge>
+                <Badge className="bg-cyan-500/20 text-cyan-400">Real OHLCV</Badge>
               </div>
             </CardContent>
           </Card>
