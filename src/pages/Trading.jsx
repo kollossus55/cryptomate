@@ -44,7 +44,10 @@ export default function Trading() {
   const [analysisAsset, setAnalysisAsset] = useState(null);
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [showAltcoinScanner, setShowAltcoinScanner] = useState(false);
-  const [altcoinScannerEnabled, setAltcoinScannerEnabled] = useState(false);
+  const [altcoinScannerEnabled, setAltcoinScannerEnabled] = useState(() => {
+    const saved = localStorage.getItem('altcoin_scanner_enabled');
+    return saved === 'true';
+  });
   const [isPriceLoading, setIsPriceLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [assetConfidence, setAssetConfidence] = useState({});
@@ -89,6 +92,11 @@ export default function Trading() {
     localStorage.setItem('indicator_settings', JSON.stringify(indicatorSettings));
     console.log('💾 Saved indicator settings:', indicatorSettings);
   }, [indicatorSettings]);
+
+  // Persist altcoin scanner toggle so it survives page reloads
+  useEffect(() => {
+    localStorage.setItem('altcoin_scanner_enabled', String(altcoinScannerEnabled));
+  }, [altcoinScannerEnabled]);
 
   // Fetch user preferences
   const { data: preferences } = useQuery({
