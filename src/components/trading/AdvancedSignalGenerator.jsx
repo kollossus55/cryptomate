@@ -67,18 +67,47 @@ export const analyzeNewsSentiment = async (asset) => {
   const cached = getCached('news', asset.symbol);
   if (cached) return cached;
 
-  // Check rate limit before any API calls
+  // Respect rate limit to control LLM/web-search credit usage
   if (!checkRateLimit()) {
-    // Return cached or simulated data if rate limited
     const result = generateSimulatedNewsSentiment(asset);
     setCache('news', asset.symbol, result);
     return result;
   }
 
-  // ALWAYS use simulated data to avoid rate limits
-  const result = generateSimulatedNewsSentiment(asset);
-  setCache('news', asset.symbol, result);
-  return result;
+  try {
+    const response = await base44.integrations.Core.InvokeLLM({
+      prompt: `Search the web for the latest real news about the cryptocurrency ${asset.name} (${asset.symbol}) from the last 24 hours. Return 3 actual recent headlines, an overall sentiment score from -1 (very bearish) to 1 (very bullish), a sentiment label, the impact level, a brief summary, and the source name for each headline.`,
+      add_context_from_internet: true,
+      model: "gemini_3_flash",
+      response_json_schema: {
+        type: "object",
+        properties: {
+          sentiment_score: { type: "number" },
+          sentiment_label: { type: "string", enum: ["very_bearish", "bearish", "neutral", "bullish", "very_bullish"] },
+          key_headlines: { type: "array", items: { type: "string" } },
+          impact_level: { type: "string", enum: ["low", "medium", "high"] },
+          summary: { type: "string" },
+          sources: { type: "array", items: { type: "string" } }
+        }
+      }
+    });
+
+    const result = {
+      sentiment_score: Math.max(-1, Math.min(1, response.sentiment_score || 0)),
+      sentiment_label: response.sentiment_label || 'neutral',
+      key_headlines: (response.key_headlines || []).slice(0, 3),
+      impact_level: response.impact_level || 'medium',
+      summary: response.summary || '',
+      sources: response.sources || []
+    };
+    setCache('news', asset.symbol, result);
+    return result;
+  } catch (error) {
+    console.error("Real news fetch failed, using simulated fallback:", error);
+    const result = generateSimulatedNewsSentiment(asset);
+    setCache('news', asset.symbol, result);
+    return result;
+  }
 };
 
 // Simulate social media trends analysis

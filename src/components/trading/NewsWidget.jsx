@@ -63,7 +63,7 @@ export default function NewsWidget({ assets, onNewsAlert, isCompact = false }) {
               sentiment_score: newsData.sentiment_score,
               impact: newsData.impact_level,
               timestamp: new Date(Date.now() - Math.random() * 3600000 * 24).toISOString(), // Random within last 24h
-              source: "AI Analysis",
+              source: newsData.sources?.[idx] || "Web Search",
               summary: idx === 0 ? newsData.summary : null
             });
           });
