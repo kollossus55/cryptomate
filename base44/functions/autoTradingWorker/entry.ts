@@ -447,6 +447,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
           reasoning: trade.reason,
           indicators: ['Signal Engine V5 (real OHLCV)'],
         },
+        owner_email: user_email,
         created_by: user_email,
       });
     }
