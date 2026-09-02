@@ -185,10 +185,12 @@ export const generateAdvancedSignal = async (asset, signalConfig = null, indicat
     // Apply modifier from advanced indicators
     technicalScore = Math.max(0, Math.min(100, technicalScore + technicalAnalysis.scoreModifier));
 
-    // Default to 70% Technical + 30% AI Sentiment (new standard)
+    // Pure technicals. News/social/on-chain are simulated (Math.random),
+    // so weighting them fabricates confidence. Technicals come from real
+    // Binance candles via analyzeIndicators.
     const defaultWeights = {
-      technical: 70,
-      news: 30,
+      technical: 100,
+      news: 0,
       social: 0,
       onchain: 0,
       predictive: 0
