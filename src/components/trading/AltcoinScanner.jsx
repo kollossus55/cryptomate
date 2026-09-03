@@ -74,7 +74,7 @@ export const scanAltcoins = async (count = 12) => {
 
   let universe = [];
   try {
-    universe = await fetchUniverse({ topN: 60, minQuoteVolume24h: 5_000_000 });
+    universe = await fetchUniverse({ topN: 100, minQuoteVolume24h: 5_000_000 });
   } catch (err) {
     console.warn('⚠️ Binance universe unavailable, returning no opportunities:', err.message);
     return [];
