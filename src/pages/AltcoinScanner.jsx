@@ -26,6 +26,20 @@ const getRiskColor = (r) =>
     ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
     : "bg-red-500/20 text-red-400 border-red-500/30";
 
+// Quality filters — only surface actionable, high-conviction setups.
+const MIN_SCORE = 65;          // buy territory (drops Hold 45–64)
+const MIN_VOLUME_SURGE = 1.5;   // real relative volume vs average
+const MIN_MOMENTUM = 2;         // |24h change| % — must already be moving
+
+const filterOpportunities = (list) =>
+  list.filter(
+    (o) =>
+      o.signal !== "hold" &&
+      o.score >= MIN_SCORE &&
+      o.volume_surge >= MIN_VOLUME_SURGE &&
+      Math.abs(o.momentum) >= MIN_MOMENTUM
+  );
+
 export default function AltcoinScanner() {
   const [opportunities, setOpportunities] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -56,13 +70,18 @@ export default function AltcoinScanner() {
     setIsLoading(true);
     setScanError(null);
     try {
-      const results = await scanAltcoins(24);
-      setOpportunities(results);
+      const raw = await scanAltcoins(50);
+      const filtered = filterOpportunities(raw);
+      setOpportunities(filtered);
       setLastScan(new Date());
       // Populate the global so other pages (Trading, Trade Signals) can consume
-      window.altcoinOpportunities = results;
-      if (results.length === 0) {
+      window.altcoinOpportunities = filtered;
+      if (raw.length === 0) {
         setScanError("No opportunities found. Binance may be unavailable — try refreshing.");
+      } else if (filtered.length === 0) {
+        setScanError(
+          `Scanned ${raw.length} coins but none passed the quality filters (score ≥ ${MIN_SCORE}, volume ≥ ${MIN_VOLUME_SURGE}x, |move| ≥ ${MIN_MOMENTUM}%). The market is flat right now — try refreshing later.`
+        );
       }
     } catch (error) {
       console.error("Scanner failed:", error);

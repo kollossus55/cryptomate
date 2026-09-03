@@ -17,7 +17,7 @@ import { scoreAsset, MIN_CANDLES } from '@shared/trading/signalEngine.js';
 import { relativeVolume } from '@shared/trading/indicators.js';
 
 // Scan scope — top candidates by volume that we then score on real candles.
-const SCAN_CANDIDATES = 25;
+const SCAN_CANDIDATES = 50;
 const CANDLE_INTERVAL = '1h';
 const CANDLE_LIMIT = 200;
 
