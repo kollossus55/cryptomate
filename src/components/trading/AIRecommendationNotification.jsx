@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 const altcoinToAsset = (opp) => ({
   symbol: opp.symbol,
   name: opp.name,
-  price: opp.simulated_price,    // real last price from Binance candles
+  price: opp.price,              // real last price from Binance candles
   change24h: opp.momentum,      // real 24h % change from Binance
   volume24h: opp.volume24h || 0, // real 24h quote volume from Binance (USDT)
   icon: opp.symbol.substring(0, 2),
@@ -36,7 +36,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
   const backgroundMonitorRef = useRef(null);
   const assetsRef = useRef(assets); // Store latest assets in ref
 
-  const AUTO_REFRESH_INTERVAL = 10 * 60 * 1000; // INCREASED: 10 minutes (was 3 minutes)
+  const AUTO_REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes
   const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // INCREASED: 5 minutes (was 3 minutes)
   const BACKGROUND_CHECK_INTERVAL = 5 * 60 * 1000; // INCREASED: Check every 5 minutes (was 2 minutes)
   const MIN_TIME_BETWEEN_LLM_CALLS = 2 * 60 * 1000; // NEW: Minimum 2 minutes between LLM calls
@@ -88,9 +88,9 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
 
     // Setup auto-refresh when not minimized
     if (!isMinimized) {
-      console.log('🔄 Setting up auto-refresh every 10 minutes');
+      console.log('🔄 Setting up auto-refresh every 15 minutes');
       autoRefreshIntervalRef.current = setInterval(() => {
-        console.log('🔄 Auto-refreshing AI signals... (10 min interval)');
+        console.log('🔄 Auto-refreshing AI signals... (15 min interval)');
         analyzeTopAssets();
       }, AUTO_REFRESH_INTERVAL);
     }
@@ -912,7 +912,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
                   {/* Auto-refresh & inactivity info */}
                   <div className="mt-3 p-2 bg-black/20 rounded-lg text-center">
                     <p className="text-xs text-indigo-300">
-                      🔄 Auto-refreshing every 10 minutes • ⏰ Auto-closes after 5 min of inactivity
+                      🔄 Auto-refreshing every 15 minutes • ⏰ Auto-closes after 5 min of inactivity
                     </p>
                   </div>
                 </div>

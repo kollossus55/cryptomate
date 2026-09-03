@@ -99,7 +99,7 @@ export default function AltcoinScanner() {
     const asset = {
       symbol: opp.symbol,
       name: opp.name,
-      price: opp.simulated_price,
+      price: opp.price,
       icon: opp.symbol.charAt(0),
       color: CATEGORY_COLORS[opp.category] || "bg-slate-600",
     };
@@ -346,7 +346,7 @@ export default function AltcoinScanner() {
                       </div>
                       <div className="bg-slate-900/50 rounded p-2">
                         <span className="text-slate-500">Price: </span>
-                        <span className="text-white font-semibold">${opp.simulated_price.toFixed(4)}</span>
+                        <span className="text-white font-semibold">${opp.price.toFixed(4)}</span>
                       </div>
                     </div>
 

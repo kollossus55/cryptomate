@@ -448,12 +448,12 @@ export default function Trading() {
       console.log('📥 Auto-trading state restored from previous session');
     }
 
-    // NOTE: The background altcoin scanner was removed. It generated
-    // `simulated_price` values (fake prices) and injected them into the
-    // trading pool and window.assetSignalData, which produced fake trades
-    // with inflated profits. Only the V5 server worker executes trades now,
-    // using real Binance OHLCV data. The AltcoinScannerModal remains
-    // available as a manual, on-demand UI feature.
+    // NOTE: The background altcoin scanner was removed. An earlier version
+    // generated fake prices and injected them into the trading pool and
+    // window.assetSignalData, which produced fake trades with inflated
+    // profits. Only the V5 server worker executes trades now, using real
+    // Binance OHLCV data. The AltcoinScannerModal remains available as a
+    // manual, on-demand UI feature.
 
     return () => {
       clearInterval(priceInterval);
@@ -764,9 +764,9 @@ export default function Trading() {
       const executionMode = autoTradingSettings.execution_mode || 'auto';
       
       // Defer ALL trade execution to the V5 server worker unless the user
-      // explicitly chose browser-only mode. The browser loop was trading on
-      // the altcoin scanner's synthetic `simulated_price` values, which are
-      // not real market data. The server worker fetches real Binance OHLCV.
+      // explicitly chose browser-only mode. The browser loop previously
+      // traded on synthetic (non-real) altcoin prices. The server worker
+      // fetches real Binance OHLCV.
       if (executionMode !== 'browser') {
         console.log('✅ Server-side auto-trading active (V5 worker) - browser provides monitoring only');
         return;
@@ -802,7 +802,7 @@ export default function Trading() {
             combinedAssets.push({
               symbol: opp.symbol,
               name: opp.name,
-              price: opp.simulated_price,
+              price: opp.price,
               change24h: opp.momentum,
               volume24h: opp.marketCap * 0.1, // Estimated volume
               marketCap: opp.marketCap,
@@ -1017,7 +1017,7 @@ export default function Trading() {
           combinedAssets.push({
             symbol: opp.symbol,
             name: opp.name,
-            price: opp.simulated_price,
+            price: opp.price,
             change24h: opp.momentum,
             volume24h: opp.marketCap * 0.1,
             marketCap: opp.marketCap,
@@ -1435,7 +1435,7 @@ export default function Trading() {
           combined.push({
             symbol: opp.symbol,
             name: opp.name,
-            price: opp.simulated_price || 0,
+            price: opp.price || 0,
             change24h: opp.momentum || 0,
             volume24h: 0,
             marketCap: opp.marketCap || 0,

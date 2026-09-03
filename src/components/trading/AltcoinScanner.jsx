@@ -118,8 +118,8 @@ export const scanAltcoins = async (count = 12) => {
         : result.strength >= 45 ? 'hold'
         : result.strength >= 35 ? 'sell'
         : 'strong_sell',
-      // Real last price from Binance candles. Field kept for UI compatibility.
-      simulated_price: result.price,
+      // Real last price from Binance candles.
+      price: result.price,
       confidence: result.strength,
       direction: result.direction,
       reasons: result.reasons,

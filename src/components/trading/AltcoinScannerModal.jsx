@@ -196,7 +196,7 @@ export default function AltcoinScannerModal({ onClose, onTradeAsset }) {
                         </div>
                         <div className="bg-black/20 rounded p-2">
                           <span className="text-slate-400">Price: </span>
-                          <span className="text-white font-bold">${opp.simulated_price.toFixed(4)}</span>
+                          <span className="text-white font-bold">${opp.price.toFixed(4)}</span>
                         </div>
                       </div>
 
@@ -216,7 +216,7 @@ export default function AltcoinScannerModal({ onClose, onTradeAsset }) {
                             const asset = {
                               symbol: opp.symbol,
                               name: opp.name,
-                              price: opp.simulated_price,
+                              price: opp.price,
                               icon: opp.symbol.charAt(0),
                               color: getCategoryColor(opp.category)
                             };
