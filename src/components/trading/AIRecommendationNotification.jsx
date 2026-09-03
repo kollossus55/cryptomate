@@ -8,6 +8,19 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 
+// Map a REAL Binance-scanned altcoin opportunity to the asset shape used by
+// this popup. Uses only real scanner fields — no fabricated market cap. Binance
+// 24h tickers don't expose market cap, so it's omitted (not invented).
+const altcoinToAsset = (opp) => ({
+  symbol: opp.symbol,
+  name: opp.name,
+  price: opp.simulated_price,    // real last price from Binance candles
+  change24h: opp.momentum,      // real 24h % change from Binance
+  volume24h: opp.volume24h || 0, // real 24h quote volume from Binance (USDT)
+  icon: opp.symbol.substring(0, 2),
+  color: "bg-cyan-500"
+});
+
 export default function AIRecommendationNotification({ assets, onTradeAsset, onExecuteTrade, portfolio, autoTradingSettings, onClose, useAltcoinScanner = false }) {
   const [recommendations, setRecommendations] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -147,16 +160,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
         window.altcoinOpportunities.forEach(opp => {
           altcoinSymbols.add(opp.symbol);
           if (!combinedAssets.find(a => a.symbol === opp.symbol)) {
-            combinedAssets.push({
-              symbol: opp.symbol,
-              name: opp.name,
-              price: opp.simulated_price,
-              change24h: opp.momentum,
-              volume24h: opp.marketCap * 0.1,
-              marketCap: opp.marketCap,
-              icon: opp.symbol.substring(0, 2),
-              color: "bg-cyan-500"
-            });
+            combinedAssets.push(altcoinToAsset(opp));
           }
         });
       }
@@ -257,7 +261,11 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
 
       const result = await base44.integrations.Core.InvokeLLM({
         prompt,
-        add_context_from_internet: false, // CHANGED: Disable to reduce rate limit usage
+        // Enable REAL web context so news / social / on-chain analysis is
+        // grounded in live data instead of hallucinated. Uses gemini_3_flash
+        // (web-search capable). Costs more integration credits per call.
+        add_context_from_internet: true,
+        model: 'gemini_3_flash',
         response_json_schema: {
           type: "object",
           properties: {
@@ -373,16 +381,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
     if (window.altcoinOpportunities && window.altcoinOpportunities.length > 0) {
       window.altcoinOpportunities.forEach(opp => {
         if (!combinedAssets.find(a => a.symbol === opp.symbol)) {
-          combinedAssets.push({
-            symbol: opp.symbol,
-            name: opp.name,
-            price: opp.simulated_price,
-            change24h: opp.momentum,
-            volume24h: opp.marketCap * 0.1,
-            marketCap: opp.marketCap,
-            icon: opp.symbol.substring(0, 2),
-            color: "bg-cyan-500"
-          });
+          combinedAssets.push(altcoinToAsset(opp));
         }
       });
     }
@@ -399,14 +398,17 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
             console.log(`✅ Found altcoin opportunity: ${altcoin.symbol} - ${altcoin.confidence}% confidence`);
             signalData = {
               confidence: altcoin.confidence,
-              recommendation: altcoin.signal === 'strong_buy' || altcoin.signal === 'buy' ? 'buy' : 
+              recommendation: altcoin.signal === 'strong_buy' || altcoin.signal === 'buy' ? 'buy' :
                              altcoin.signal === 'strong_sell' || altcoin.signal === 'sell' ? 'sell' : 'hold',
               timestamp: Date.now(),
               source: 'altcoin_scanner',
               breakdown: {
-                technical: altcoin.opportunity_score || 0,
-                news: { sentiment_label: 'positive' },
-                social: { social_score: 75 }
+                technical: altcoin.score || 0,
+                // Altcoin scanner is technical-only (real Binance OHLCV).
+                // No news/social/on-chain feed — report neutral, never fabricated.
+                news: { sentiment_label: 'neutral' },
+                social: { social_score: 0 },
+                onchain: { signal: 'neutral' }
               },
               riskLevel: altcoin.risk_level || 'medium'
             };
@@ -432,7 +434,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
         symbol: asset.symbol,
         action: signalData.recommendation === 'sell' ? 'sell' : 'buy',
         confidence: signalData.confidence,
-        reasoning: `${asset.symbol} shows ${signalData.recommendation.toUpperCase()} signal with ${signalData.confidence}% confidence based on ${signalData.source === 'altcoin_scanner' ? 'altcoin scanner analysis' : 'technical analysis'}${signalData.breakdown?.news ? `, ${signalData.breakdown.news.sentiment_label} news sentiment` : ''}${signalData.breakdown?.social ? `, and strong social engagement` : ''}.`,
+        reasoning: `${asset.symbol} shows ${signalData.recommendation.toUpperCase()} signal with ${signalData.confidence}% confidence based on ${signalData.source === 'altcoin_scanner' ? 'real Binance technical indicator analysis (RSI, MACD, EMA, Bollinger, volume)' : 'technical analysis'}.`,
         risk_level: signalData.riskLevel || 'medium',
         target_price: asset.price * (signalData.recommendation === 'buy' ? 1.08 : 0.92),
         data_sources: {
@@ -544,16 +546,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
       if (!asset && window.altcoinOpportunities) {
         const altcoin = window.altcoinOpportunities.find(a => a.symbol === rec.symbol);
         if (altcoin) {
-          asset = {
-            symbol: altcoin.symbol,
-            name: altcoin.name,
-            price: altcoin.simulated_price,
-            change24h: altcoin.momentum,
-            volume24h: altcoin.marketCap * 0.1,
-            marketCap: altcoin.marketCap,
-            icon: altcoin.symbol.substring(0, 2),
-            color: "bg-cyan-500"
-          };
+          asset = altcoinToAsset(altcoin);
         }
       }
       
@@ -769,16 +762,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
                     if (!asset && window.altcoinOpportunities) {
                       const altcoin = window.altcoinOpportunities.find(a => a.symbol === rec.symbol);
                       if (altcoin) {
-                        asset = {
-                          symbol: altcoin.symbol,
-                          name: altcoin.name,
-                          price: altcoin.simulated_price,
-                          change24h: altcoin.momentum,
-                          volume24h: altcoin.marketCap * 0.1,
-                          marketCap: altcoin.marketCap,
-                          icon: altcoin.symbol.substring(0, 2),
-                          color: "bg-cyan-500"
-                        };
+                        asset = altcoinToAsset(altcoin);
                       }
                     }
 

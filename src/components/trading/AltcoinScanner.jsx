@@ -109,6 +109,10 @@ export const scanAltcoins = async (count = 12) => {
       volatility: parseFloat((result.atrPercent || 0).toFixed(2)),
       // Real relative volume (current vs average), 1.0 when unavailable.
       volume_surge: rv !== null ? parseFloat(rv.toFixed(2)) : 1.0,
+      // Real 24h quote volume from Binance (USDT). Used by the AI signals popup.
+      volume24h: u.quoteVolume24h || 0,
+      // Risk level derived from real ATR volatility (deterministic, not guessed).
+      risk_level: (result.atrPercent || 0) > 12 ? 'high' : (result.atrPercent || 0) > 8 ? 'medium' : 'low',
       signal: result.strength >= 75 ? 'strong_buy'
         : result.strength >= 65 ? 'buy'
         : result.strength >= 45 ? 'hold'
