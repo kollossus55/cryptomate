@@ -250,28 +250,47 @@ export const calculateSP500AIIndicator = (prices, highs = null, lows = null, vol
   const mfBearish = moneyFlowOsc < 0;
 
   // --- Signal Strength (0-6) ---
+  const useHA = options.useHA !== false;
+  const useSSL = options.useSSL !== false;
+  const useCMO = options.useCMO !== false;
   const useAIRSI = options.useAIRSI !== false;
   const useAIMomentum = options.useAIMomentum !== false;
   const useAIMoneyFlow = options.useAIMoneyFlow !== false;
 
-  // Long signal: HA bullish + SSL bullish + CMO not overbought + (optional filters)
-  let longBasic = haBullish && sslBullish && !cmoOverboughtCond;
+  // Long signal: enabled core components must confirm; disabled ones pass through.
+  let longBasic = true;
+  if (useHA) longBasic = longBasic && haBullish;
+  if (useSSL) longBasic = longBasic && sslBullish;
+  if (useCMO) longBasic = longBasic && !cmoOverboughtCond;
   let longWithRSI = useAIRSI ? (longBasic && aiRSIBullish) : longBasic;
   let longWithMomentum = useAIMomentum ? (longWithRSI && tmoBullish) : longWithRSI;
   const longSignal = useAIMoneyFlow ? (longWithMomentum && mfBullish) : longWithMomentum;
 
-  let shortBasic = haBearish && sslBearish && !cmoOversoldCond;
+  let shortBasic = true;
+  if (useHA) shortBasic = shortBasic && haBearish;
+  if (useSSL) shortBasic = shortBasic && sslBearish;
+  if (useCMO) shortBasic = shortBasic && !cmoOversoldCond;
   let shortWithRSI = useAIRSI ? (shortBasic && aiRSIBearish) : shortBasic;
   let shortWithMomentum = useAIMomentum ? (shortWithRSI && tmoBearish) : shortWithRSI;
   const shortSignal = useAIMoneyFlow ? (shortWithMomentum && mfBearish) : shortWithMomentum;
 
-  // Strength score (how many sub-components confirm the direction)
-  const bullStrength = (sslBullish ? 1 : 0) + (!cmoOverboughtCond ? 1 : 0) +
-    (useAIRSI && aiRSIBullish ? 1 : 0) + (useAIMomentum && tmoBullish ? 1 : 0) +
-    (useAIMoneyFlow && mfBullish ? 1 : 0) + (haBullish ? 1 : 0);
-  const bearStrength = (sslBearish ? 1 : 0) + (!cmoOversoldCond ? 1 : 0) +
-    (useAIRSI && aiRSIBearish ? 1 : 0) + (useAIMomentum && tmoBearish ? 1 : 0) +
-    (useAIMoneyFlow && mfBearish ? 1 : 0) + (haBearish ? 1 : 0);
+  // Strength score (how many enabled sub-components confirm the direction)
+  const bullStrength =
+    (useHA && haBullish ? 1 : 0) +
+    (useSSL && sslBullish ? 1 : 0) +
+    (useCMO && !cmoOverboughtCond ? 1 : 0) +
+    (useAIRSI && aiRSIBullish ? 1 : 0) +
+    (useAIMomentum && tmoBullish ? 1 : 0) +
+    (useAIMoneyFlow && mfBullish ? 1 : 0);
+  const bearStrength =
+    (useHA && haBearish ? 1 : 0) +
+    (useSSL && sslBearish ? 1 : 0) +
+    (useCMO && !cmoOversoldCond ? 1 : 0) +
+    (useAIRSI && aiRSIBearish ? 1 : 0) +
+    (useAIMomentum && tmoBearish ? 1 : 0) +
+    (useAIMoneyFlow && mfBearish ? 1 : 0);
+
+  const enabledCount = [useHA, useSSL, useCMO, useAIRSI, useAIMomentum, useAIMoneyFlow].filter(Boolean).length;
 
   const bullish = longSignal;
   const bearish = shortSignal;
@@ -283,7 +302,7 @@ export const calculateSP500AIIndicator = (prices, highs = null, lows = null, vol
     bullish,
     bearish,
     strength,
-    maxStrength: 6,
+    maxStrength: enabledCount || 6,
     components: { haBullish, haBearish, sslBullish, sslBearish, cmo, cmoOverboughtCond, cmoOversoldCond, aiRSIBullish, aiRSIBearish, tmoBullish, tmoBearish, mfBullish, mfBearish }
   };
 };
@@ -466,6 +485,9 @@ export const analyzeIndicators = async (asset, enabledIndicators, candles = null
 
   // Legacy helpers below expect a bare close array.
   const prices = ohlcv.map((c) => c.close);
+  const highs = ohlcv.map((c) => c.high);
+  const lows = ohlcv.map((c) => c.low);
+  const volumes = ohlcv.map((c) => c.volume);
   
   const results = {};
   let scoreModifier = 0;
@@ -614,7 +636,14 @@ export const analyzeIndicators = async (asset, enabledIndicators, candles = null
   }
 
   if (enabledIndicators.sp500ai) {
-    const sp500 = calculateSP500AIIndicator(prices);
+    const sp500 = calculateSP500AIIndicator(prices, highs, lows, volumes, {
+      useHA: enabledIndicators.sp500ai_ha !== false,
+      useSSL: enabledIndicators.sp500ai_ssl !== false,
+      useCMO: enabledIndicators.sp500ai_cmo !== false,
+      useAIRSI: enabledIndicators.sp500ai_airsi !== false,
+      useAIMomentum: enabledIndicators.sp500ai_tmo !== false,
+      useAIMoneyFlow: enabledIndicators.sp500ai_mf !== false,
+    });
     results.sp500ai = sp500;
 
     // FILTER: if enabled and neither long nor short signal fires, block the trade

@@ -24,7 +24,7 @@
 
 import {
   rsi, macd, bollingerBands, stochastic, ema, atrPercent,
-  heikinAshi, sslChannel, mfi, cmo, relativeVolume, _last as last,
+  heikinAshi, sslChannel, mfi, cmo, tmo, relativeVolume, _last as last,
 } from './indicators.js';
 
 /** Minimum closed bars before any score is meaningful. */
@@ -220,17 +220,19 @@ function compositeComponent(candles) {
   const ha = heikinAshi(candles);
   const ssl = sslChannel(candles);
   const c = cmo(candles);
+  const t = tmo(candles);
   const m = mfi(candles);
   const r = rsi(candles);
   const mac = macd(candles);
 
-  if (!ha.length || !ssl || c === null || m === null || r === null || !mac) return null;
+  if (!ha.length || !ssl || c === null || !t || m === null || r === null || !mac) return null;
 
   const haNow = last(ha);
   const votes = [
     { name: 'Heikin Ashi', bull: haNow.close > haNow.open },
     { name: 'SSL Channel', bull: ssl.bullish },
     { name: 'CMO', bull: c > 0 && c < 50 },
+    { name: 'TMO', bull: t.bullish },
     { name: 'Money Flow', bull: m > 50 && m < 80 },
     { name: 'RSI', bull: r > 50 && r < 70 },
     { name: 'MACD', bull: mac.histogram > 0 },

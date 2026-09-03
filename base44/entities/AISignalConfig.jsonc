@@ -287,6 +287,36 @@
         "sp500ai": {
           "type": "boolean",
           "default": true
+        },
+        "sp500ai_ha": {
+          "type": "boolean",
+          "default": true,
+          "description": "SP500 AI sub-component: Heikin Ashi"
+        },
+        "sp500ai_ssl": {
+          "type": "boolean",
+          "default": true,
+          "description": "SP500 AI sub-component: SSL Channel"
+        },
+        "sp500ai_cmo": {
+          "type": "boolean",
+          "default": true,
+          "description": "SP500 AI sub-component: Chande Momentum Oscillator"
+        },
+        "sp500ai_airsi": {
+          "type": "boolean",
+          "default": true,
+          "description": "SP500 AI sub-component: Dual AI RSI"
+        },
+        "sp500ai_tmo": {
+          "type": "boolean",
+          "default": true,
+          "description": "SP500 AI sub-component: True Momentum Oscillator"
+        },
+        "sp500ai_mf": {
+          "type": "boolean",
+          "default": true,
+          "description": "SP500 AI sub-component: AI Money Flow"
         }
       }
     },
@@ -306,52 +336,16 @@
   ],
   "rls": {
     "create": {
-      "$or": [
-        {
-          "created_by_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "created_by": "{{user.email}}"
     },
     "read": {
-      "$or": [
-        {
-          "created_by_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "created_by": "{{user.email}}"
     },
     "update": {
-      "$or": [
-        {
-          "created_by_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "created_by": "{{user.email}}"
     },
     "delete": {
-      "$or": [
-        {
-          "created_by_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "created_by": "{{user.email}}"
     }
   }
 }

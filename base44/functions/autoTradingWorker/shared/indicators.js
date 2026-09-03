@@ -326,6 +326,53 @@ export function cmo(candles, period = 14) {
 }
 
 // ---------------------------------------------------------------------------
+// True Momentum Oscillator (TMO)
+// Compares each close to prior closes over a lookback, EMA-smooths the tally.
+// ---------------------------------------------------------------------------
+
+export function tmo(candles, length = 14, calcLength = 5, smoothLength = 3) {
+  const prices = candles.map(close);
+  const n = prices.length;
+  if (n < length + 1) return null;
+
+  // Raw TMO: for each bar, sum sign(close[i] - close[i - j]) over j = 1..length.
+  const raw = [];
+  for (let i = length; i < n; i++) {
+    let sum = 0;
+    for (let j = 1; j <= length; j++) {
+      const cmpIdx = i - j;
+      if (cmpIdx < 0) break;
+      const diff = prices[i] - prices[cmpIdx];
+      sum += diff > 0 ? 1 : diff < 0 ? -1 : 0;
+    }
+    raw.push(sum);
+  }
+
+  const emaArr = (arr, period) => {
+    if (arr.length === 0) return [];
+    if (arr.length < period) return arr.slice();
+    const k = 2 / (period + 1);
+    const seed = arr.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    const out = [seed];
+    for (let i = period; i < arr.length; i++) out.push(arr[i] * k + out[out.length - 1] * (1 - k));
+    return out;
+  };
+
+  const mainSeries = emaArr(raw, calcLength);
+  const signalSeries = emaArr(mainSeries, smoothLength);
+  const main = last(mainSeries);
+  const signal = last(signalSeries);
+  if (main === undefined || signal === undefined) return null;
+
+  return {
+    main,
+    signal,
+    bullish: main > signal && main > 0,
+    bearish: main < signal && main < 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Volume analysis — real relative volume
 // ---------------------------------------------------------------------------
 

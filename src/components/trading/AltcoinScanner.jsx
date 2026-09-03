@@ -91,7 +91,7 @@ export const scanAltcoins = async (count = 12) => {
     const candles = candleMap.get(u.symbol);
     if (!candles || candles.length < MIN_CANDLES) continue;
 
-    const result = scoreAsset(candles);
+    const result = scoreAsset(candles, { indicators: { sp500ai: true } });
     if (!result) continue;
 
     const base = u.base;

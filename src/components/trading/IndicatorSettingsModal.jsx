@@ -116,6 +116,15 @@ export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUp
     }
   ];
 
+  const sp500SubIndicators = [
+    { id: 'sp500ai_ha', name: 'Heikin Ashi' },
+    { id: 'sp500ai_ssl', name: 'SSL Channel' },
+    { id: 'sp500ai_cmo', name: 'Chande Momentum (CMO)' },
+    { id: 'sp500ai_airsi', name: 'AI RSI (Dual Divergence)' },
+    { id: 'sp500ai_tmo', name: 'True Momentum (TMO)' },
+    { id: 'sp500ai_mf', name: 'AI Money Flow' }
+  ];
+
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent className="bg-slate-900 border-slate-700 text-white overflow-y-auto">
@@ -151,27 +160,48 @@ export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUp
         <div className="space-y-4 py-4">
           {indicators.map((indicator) => {
             const Icon = indicator.icon;
+            const isSp500 = indicator.id === 'sp500ai';
             return (
-              <div key={indicator.id} className="flex items-start justify-between bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
-                <div className="flex gap-3">
-                  <div className={`mt-1 ${indicator.color}`}>
-                    <Icon className="w-5 h-5" />
+              <div key={indicator.id} className="space-y-2">
+                <div className="flex items-start justify-between bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
+                  <div className="flex gap-3">
+                    <div className={`mt-1 ${indicator.color}`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={indicator.id} className="text-base font-semibold cursor-pointer">
+                        {indicator.name}
+                      </Label>
+                      <p className="text-xs text-slate-400 pr-4">
+                        {indicator.description}
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor={indicator.id} className="text-base font-semibold cursor-pointer">
-                      {indicator.name}
-                    </Label>
-                    <p className="text-xs text-slate-400 pr-4">
-                      {indicator.description}
-                    </p>
-                  </div>
+                  <Switch
+                    id={indicator.id}
+                    checked={settings[indicator.id]}
+                    onCheckedChange={() => handleToggle(indicator.id)}
+                    className="data-[state=checked]:bg-indigo-600"
+                  />
                 </div>
-                <Switch
-                  id={indicator.id}
-                  checked={settings[indicator.id]}
-                  onCheckedChange={() => handleToggle(indicator.id)}
-                  className="data-[state=checked]:bg-indigo-600"
-                />
+                {isSp500 && settings.sp500ai && (
+                  <div className="ml-8 pl-3 border-l-2 border-rose-500/30 space-y-2">
+                    <p className="text-xs text-slate-500 italic">Toggle individual SP500 AI components:</p>
+                    {sp500SubIndicators.map((sub) => (
+                      <div key={sub.id} className="flex items-center justify-between bg-slate-900/40 p-2 rounded-md">
+                        <Label htmlFor={sub.id} className="text-sm text-slate-300 cursor-pointer">
+                          {sub.name}
+                        </Label>
+                        <Switch
+                          id={sub.id}
+                          checked={settings[sub.id] !== false}
+                          onCheckedChange={() => handleToggle(sub.id)}
+                          className="data-[state=checked]:bg-rose-500"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
