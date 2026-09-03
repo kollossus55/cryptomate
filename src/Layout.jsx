@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "./components/utils";
 import { base44 } from "@/api/base44Client";
-import { TrendingUp, History, Settings, LogOut, User, Sparkles, Bell, Shield, Activity, Brain, Target } from "lucide-react";
+import { TrendingUp, History, Settings, LogOut, User, Sparkles, Bell, Shield, Activity, Brain, Target, Scan } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -78,6 +78,7 @@ export default function Layout({ children, currentPageName }) {
     { name: "Trading", path: "Trading", icon: TrendingUp },
     { name: "Auto-Trading", path: "AutoTrading", icon: Sparkles },
     { name: "Trade Signals", path: "TradeSignals", icon: Target },
+    { name: "Altcoin Scanner", path: "AltcoinScanner", icon: Scan },
     { name: "AI Signals", path: "AISignals", icon: Brain },
     { name: "AI Insights", path: "Insights", icon: Activity },
     { name: "Backtesting", path: "Backtesting", icon: Activity },
