@@ -239,10 +239,10 @@ function compositeComponent(candles) {
   ];
 
   const bullCount = votes.filter((v) => v.bull).length;
-  const reasons = [`Composite ${bullCount}/6 bullish: ${votes.filter((v) => v.bull).map((v) => v.name).join(', ') || 'none'}`];
+  const reasons = [`Composite ${bullCount}/${votes.length} bullish: ${votes.filter((v) => v.bull).map((v) => v.name).join(', ') || 'none'}`];
 
   return {
-    score: scale(bullCount, 0, 6, 5, 95),
+    score: scale(bullCount, 0, votes.length, 5, 95),
     bullCount,
     votes,
     reasons,
@@ -273,11 +273,16 @@ export function scoreAsset(candles, opts = {}) {
   const indicators = { ...DEFAULT_INDICATORS, ...(opts.indicators || {}) };
   const weights = { ...DEFAULT_WEIGHTS, ...(opts.weights || {}) };
 
+  // Gate every component by its underlying indicator toggles, so that when
+  // the user enables only SP500 AI, the score is driven solely by the composite
+  // — not by trend/volume components that would otherwise run unconditionally.
+  const classicOn = !!(indicators.rsi || indicators.macd || indicators.bollinger || indicators.ema || indicators.stoch);
+
   const components = {
-    trend: trendComponent(candles),
+    trend: indicators.ema ? trendComponent(candles) : null,
     momentum: momentumComponent(candles, indicators),
     meanReversion: meanReversionComponent(candles, indicators),
-    volume: volumeComponent(candles),
+    volume: classicOn ? volumeComponent(candles) : null,
     composite: indicators.sp500ai ? compositeComponent(candles) : null,
   };
 
