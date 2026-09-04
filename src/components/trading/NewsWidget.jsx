@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Newspaper, TrendingUp, TrendingDown, Clock, ExternalLink, Bell, Filter, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
+import { analyzeNewsSentiment } from "./AdvancedSignalGenerator";
 
 export default function NewsWidget({ assets, onNewsAlert, isCompact = false }) {
   const [newsFeed, setNewsFeed] = useState([]);
@@ -41,20 +42,20 @@ export default function NewsWidget({ assets, onNewsAlert, isCompact = false }) {
     try {
       const currentAssets = assetsRef.current;
       const currentSelected = selectedAssetRef.current;
-      
-      const newsItems = [];
-      const assetsToFetch = currentSelected === "all" 
+
+      const assetsToFetch = currentSelected === "all"
         ? currentAssets.slice(0, 5) // Top 5 for "all" view
         : currentAssets.filter(a => a.symbol === currentSelected);
 
+      const newsItems = [];
+      const fetchedAt = new Date().toISOString(); // honest "retrieved at" time
+
       for (const asset of assetsToFetch) {
-        const signalData = window.assetSignalData?.[asset.symbol];
-        
-        if (signalData?.breakdown?.news) {
-          const newsData = signalData.breakdown.news;
-          
-          // Create news items from the data
-          newsData.key_headlines?.forEach((headline, idx) => {
+        // Real news only — live web search via LLM. No simulated fallback.
+        const newsData = await analyzeNewsSentiment(asset);
+
+        if (newsData && newsData.key_headlines?.length > 0) {
+          newsData.key_headlines.forEach((headline, idx) => {
             newsItems.push({
               id: `${asset.symbol}-${idx}-${headline.substring(0, 20).replace(/\s+/g, '')}`,
               asset: asset.symbol,
@@ -62,35 +63,18 @@ export default function NewsWidget({ assets, onNewsAlert, isCompact = false }) {
               sentiment: newsData.sentiment_label,
               sentiment_score: newsData.sentiment_score,
               impact: newsData.impact_level,
-              timestamp: new Date(Date.now() - Math.random() * 3600000 * 24).toISOString(), // Random within last 24h
+              timestamp: fetchedAt,
               source: newsData.sources?.[idx] || "Web Search",
               summary: idx === 0 ? newsData.summary : null
             });
           });
-        } else {
-          // Generate simulated news if signal data not available
-          const sentiment = asset.change24h > 3 ? 'bullish' : asset.change24h < -3 ? 'bearish' : 'neutral';
-          const sentimentScore = asset.change24h > 0 ? Math.min(asset.change24h / 10, 0.8) : Math.max(asset.change24h / 10, -0.8);
-          
-          newsItems.push({
-            id: `${asset.symbol}-simulated-${Date.now()}`,
-            asset: asset.symbol,
-            headline: `${asset.name} ${asset.change24h > 0 ? 'gains' : 'drops'} ${Math.abs(asset.change24h).toFixed(2)}% in 24h trading`,
-            sentiment: sentiment,
-            sentiment_score: sentimentScore,
-            impact: Math.abs(asset.change24h) > 5 ? 'high' : 'medium',
-            timestamp: new Date(Date.now() - Math.random() * 3600000).toISOString(),
-            source: "Market Data",
-            summary: `${asset.name} is showing ${sentiment} momentum with ${Math.abs(asset.change24h).toFixed(2)}% price movement.`
-          });
         }
       }
 
-      // Sort by timestamp
       newsItems.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      
+
       setNewsFeed(newsItems);
-      
+
       // Check for high-impact news and create alerts
       checkForSignificantNews(newsItems);
     } catch (error) {
@@ -284,7 +268,8 @@ export default function NewsWidget({ assets, onNewsAlert, isCompact = false }) {
                 {filteredNews.length === 0 ? (
                   <div className="text-center py-8">
                     <Newspaper className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                    <p className="text-slate-400">No news available</p>
+                    <p className="text-slate-400">No real-time news available right now.</p>
+                    <p className="text-slate-500 text-xs mt-1">Live web search returned no headlines — try refreshing.</p>
                   </div>
                 ) : (
                   filteredNews.map((news) => (

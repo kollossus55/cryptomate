@@ -14,6 +14,7 @@ import { analyzeNewsSentiment, analyzeSocialTrends, analyzeOnChainData } from ".
 export default function AIAnalysisModal({ isOpen, onClose, asset }) {
   const [analysis, setAnalysis] = useState(null);
   const [advancedData, setAdvancedData] = useState(null);
+  const [advancedLoading, setAdvancedLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -62,6 +63,7 @@ export default function AIAnalysisModal({ isOpen, onClose, asset }) {
 
   const analyzeAsset = async () => {
     setIsLoading(true);
+    setAdvancedLoading(true);
     try {
       // Check if we have cached signal data first
       const cachedSignal = window.assetSignalData?.[asset.symbol];
@@ -75,19 +77,22 @@ export default function AIAnalysisModal({ isOpen, onClose, asset }) {
           social: cachedSignal.breakdown?.social,
           onchain: cachedSignal.breakdown?.onchain
         });
+        setAdvancedLoading(false);
       } else {
-        // Fetch fresh data
+        // Fetch fresh real data via live web search
+        setAdvancedLoading(true);
         const [newsData, socialData, onChainData] = await Promise.all([
           analyzeNewsSentiment(asset),
           analyzeSocialTrends(asset),
           analyzeOnChainData(asset)
         ]);
-        
+
         setAdvancedData({
           news: newsData,
           social: socialData,
           onchain: onChainData
         });
+        setAdvancedLoading(false);
       }
 
       // Check rate limiting before making LLM call
@@ -178,6 +183,7 @@ Provide detailed trading recommendations with confidence scores.`;
       }
     } finally {
       setIsLoading(false);
+      setAdvancedLoading(false);
     }
   };
 
@@ -415,7 +421,9 @@ Provide detailed trading recommendations with confidence scores.`;
                 </div>
               </div>
             ) : (
-              <div className="py-12 text-center text-slate-400">Loading news sentiment...</div>
+              <div className="py-12 text-center text-slate-400">
+                {advancedLoading ? "Loading live news sentiment..." : "No real-time news data available right now."}
+              </div>
             )}
           </TabsContent>
 
@@ -490,7 +498,9 @@ Provide detailed trading recommendations with confidence scores.`;
                 </div>
               </div>
             ) : (
-              <div className="py-12 text-center text-slate-400">Loading social trends...</div>
+              <div className="py-12 text-center text-slate-400">
+                {advancedLoading ? "Loading live social trends..." : "No real-time social data available right now."}
+              </div>
             )}
           </TabsContent>
 
@@ -544,7 +554,9 @@ Provide detailed trading recommendations with confidence scores.`;
                 </div>
               </div>
             ) : (
-              <div className="py-12 text-center text-slate-400">Loading on-chain data...</div>
+              <div className="py-12 text-center text-slate-400">
+                {advancedLoading ? "Loading live on-chain data..." : "No real-time on-chain data available right now."}
+              </div>
             )}
           </TabsContent>
 

@@ -13,35 +13,33 @@ const cache = {
   onchain: new Map()
 };
 
-const CACHE_DURATION = 10 * 60 * 1000; // INCREASED: 10 minutes (was 5)
-const USE_SIMULATED_DATA = true; // Always use simulated data to avoid rate limits
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
-// Rate limit tracker
-const rateLimitTracker = {
-  lastCall: 0,
-  callCount: 0,
-  windowStart: Date.now()
+// Per-type rate limit — each live data source gets its own budget so fetching
+// news doesn't exhaust the quota for social / on-chain.
+const RATE_LIMIT_PER_TYPE = 8; // max live web-search calls per minute per type
+const rateLimitTrackers = {
+  news: { callCount: 0, windowStart: Date.now() },
+  social: { callCount: 0, windowStart: Date.now() },
+  onchain: { callCount: 0, windowStart: Date.now() }
 };
 
-// Check if we're within rate limits (max 5 calls per minute)
-const checkRateLimit = () => {
+const checkRateLimit = (type) => {
   const now = Date.now();
   const oneMinute = 60 * 1000;
-  
-  // Reset window if needed
-  if (now - rateLimitTracker.windowStart > oneMinute) {
-    rateLimitTracker.windowStart = now;
-    rateLimitTracker.callCount = 0;
+  const tracker = rateLimitTrackers[type] || (rateLimitTrackers[type] = { callCount: 0, windowStart: now });
+
+  if (now - tracker.windowStart > oneMinute) {
+    tracker.windowStart = now;
+    tracker.callCount = 0;
   }
-  
-  // Check if we've exceeded limit
-  if (rateLimitTracker.callCount >= 5) {
-    console.warn('⚠️ Rate limit protection: Skipping API call, using cached data');
+
+  if (tracker.callCount >= RATE_LIMIT_PER_TYPE) {
+    console.warn(`⚠️ Rate limit (${type}): skipping live fetch, no data returned`);
     return false;
   }
-  
-  rateLimitTracker.callCount++;
-  rateLimitTracker.lastCall = now;
+
+  tracker.callCount++;
   return true;
 };
 
@@ -62,21 +60,17 @@ const setCache = (type, assetSymbol, data) => {
   });
 };
 
-// Simulate real-time news sentiment analysis
+// Real-time news sentiment via live web search (Gemini). Returns null when
+// rate-limited or unavailable — never fabricated data.
 export const analyzeNewsSentiment = async (asset) => {
   const cached = getCached('news', asset.symbol);
   if (cached) return cached;
 
-  // Respect rate limit to control LLM/web-search credit usage
-  if (!checkRateLimit()) {
-    const result = generateSimulatedNewsSentiment(asset);
-    setCache('news', asset.symbol, result);
-    return result;
-  }
+  if (!checkRateLimit('news')) return null;
 
   try {
     const response = await base44.integrations.Core.InvokeLLM({
-      prompt: `Search the web for the latest real news about the cryptocurrency ${asset.name} (${asset.symbol}) from the last 24 hours. Return 3 actual recent headlines, an overall sentiment score from -1 (very bearish) to 1 (very bullish), a sentiment label, the impact level, a brief summary, and the source name for each headline.`,
+      prompt: `Search the web for the latest real news about the cryptocurrency ${asset.name} (${asset.symbol}) from the last 24 hours. Return 3 actual recent headlines you found via web search, an overall sentiment score from -1 (very bearish) to 1 (very bullish), a sentiment label, the impact level, a brief summary, and the source name for each headline. Only use real, verifiable headlines — do not invent any.`,
       add_context_from_internet: true,
       model: "gemini_3_flash",
       response_json_schema: {
@@ -103,33 +97,117 @@ export const analyzeNewsSentiment = async (asset) => {
     setCache('news', asset.symbol, result);
     return result;
   } catch (error) {
-    console.error("Real news fetch failed, using simulated fallback:", error);
-    const result = generateSimulatedNewsSentiment(asset);
-    setCache('news', asset.symbol, result);
-    return result;
+    console.error("Live news fetch failed:", error);
+    return null;
   }
 };
 
-// Simulate social media trends analysis
+// Real social media sentiment via live web search (Gemini). Returns null when
+// rate-limited or unavailable — never fabricated data.
 export const analyzeSocialTrends = async (asset) => {
   const cached = getCached('social', asset.symbol);
   if (cached) return cached;
 
-  // ALWAYS use simulated data to avoid rate limits
-  const result = generateSimulatedSocialTrends(asset);
-  setCache('social', asset.symbol, result);
-  return result;
+  if (!checkRateLimit('social')) return null;
+
+  try {
+    const response = await base44.integrations.Core.InvokeLLM({
+      prompt: `Search the web for real-time social media sentiment about the cryptocurrency ${asset.name} (${asset.symbol}) from the last 24 hours — Twitter/X, Reddit, and crypto forums. Based only on what you actually find, return a social score (0-100), mention volume, a sentiment breakdown (positive/neutral/negative percentages summing to 100), up to 3 real trending topics or hashtags, influencer sentiment, and engagement level. Do not invent data; if little is found, reflect that in lower scores.`,
+      add_context_from_internet: true,
+      model: "gemini_3_flash",
+      response_json_schema: {
+        type: "object",
+        properties: {
+          social_score: { type: "number" },
+          mention_volume: { type: "string", enum: ["high", "moderate", "low"] },
+          sentiment_breakdown: {
+            type: "object",
+            properties: {
+              positive: { type: "number" },
+              neutral: { type: "number" },
+              negative: { type: "number" }
+            }
+          },
+          trending_topics: { type: "array", items: { type: "string" } },
+          influencer_sentiment: { type: "string", enum: ["bullish", "mixed", "bearish"] },
+          engagement_level: { type: "string", enum: ["viral", "high", "moderate", "low"] }
+        }
+      }
+    });
+
+    const result = {
+      social_score: Math.max(0, Math.min(100, response.social_score || 50)),
+      mention_volume: response.mention_volume || 'low',
+      sentiment_breakdown: {
+        positive: Math.round(response.sentiment_breakdown?.positive ?? 33),
+        neutral: Math.round(response.sentiment_breakdown?.neutral ?? 34),
+        negative: Math.round(response.sentiment_breakdown?.negative ?? 33)
+      },
+      trending_topics: (response.trending_topics || []).slice(0, 3),
+      influencer_sentiment: response.influencer_sentiment || 'mixed',
+      engagement_level: response.engagement_level || 'low'
+    };
+    setCache('social', asset.symbol, result);
+    return result;
+  } catch (error) {
+    console.error("Live social trends fetch failed:", error);
+    return null;
+  }
 };
 
-// Simulate on-chain data analysis
+// Real on-chain metrics via live web search (Gemini). Returns null when
+// rate-limited or unavailable — never fabricated data.
 export const analyzeOnChainData = async (asset) => {
   const cached = getCached('onchain', asset.symbol);
   if (cached) return cached;
 
-  // ALWAYS use simulated data to avoid rate limits
-  const result = generateSimulatedOnChainData(asset);
-  setCache('onchain', asset.symbol, result);
-  return result;
+  if (!checkRateLimit('onchain')) return null;
+
+  try {
+    const response = await base44.integrations.Core.InvokeLLM({
+      prompt: `Search the web for real on-chain metrics for the cryptocurrency ${asset.name} (${asset.symbol}) from the last 24 hours — whale activity, exchange inflows/outflows, active addresses, large transactions, and network health. Based only on what you actually find, return an on-chain score (0-100), whale activity, exchange flow, network health %, a holder distribution summary, key metrics (active addresses, transaction volume in USD, large tx count), and an overall on-chain signal. Do not invent data; if little is found, reflect that in conservative values.`,
+      add_context_from_internet: true,
+      model: "gemini_3_flash",
+      response_json_schema: {
+        type: "object",
+        properties: {
+          onchain_score: { type: "number" },
+          whale_activity: { type: "string", enum: ["accumulating", "distributing", "neutral"] },
+          exchange_flow: { type: "string", enum: ["net_inflow", "net_outflow", "balanced"] },
+          network_health: { type: "number" },
+          holder_distribution: { type: "string" },
+          key_metrics: {
+            type: "object",
+            properties: {
+              active_addresses: { type: "number" },
+              transaction_volume: { type: "number" },
+              large_transactions: { type: "number" }
+            }
+          },
+          signal: { type: "string", enum: ["bullish", "bearish", "neutral"] }
+        }
+      }
+    });
+
+    const result = {
+      onchain_score: Math.max(0, Math.min(100, response.onchain_score || 50)),
+      whale_activity: response.whale_activity || 'neutral',
+      exchange_flow: response.exchange_flow || 'balanced',
+      network_health: Math.max(0, Math.min(100, response.network_health ?? 70)),
+      holder_distribution: response.holder_distribution || 'No distribution data available from live sources.',
+      key_metrics: {
+        active_addresses: response.key_metrics?.active_addresses || 0,
+        transaction_volume: response.key_metrics?.transaction_volume || 0,
+        large_transactions: response.key_metrics?.large_transactions || 0
+      },
+      signal: response.signal || 'neutral'
+    };
+    setCache('onchain', asset.symbol, result);
+    return result;
+  } catch (error) {
+    console.error("Live on-chain fetch failed:", error);
+    return null;
+  }
 };
 
 // Predictive price movement analysis using machine learning-like patterns
@@ -273,122 +351,6 @@ const calculateTechnicalScore = (asset) => {
   else if (volatility < 2) score += 5;
 
   return Math.max(0, Math.min(100, score));
-};
-
-// Fallback simulations when API calls fail
-
-const generateSimulatedNewsSentiment = (asset) => {
-  // Create more realistic sentiment based on price action
-  const priceChange = asset.change24h || 0;
-  let sentimentValue = (Math.random() * 1.2) - 0.6; // Base random -0.6 to 0.6
-  
-  // Influence by price movement
-  if (priceChange > 5) sentimentValue += 0.3;
-  else if (priceChange > 2) sentimentValue += 0.15;
-  else if (priceChange < -5) sentimentValue -= 0.3;
-  else if (priceChange < -2) sentimentValue -= 0.15;
-  
-  // Clamp to -1 to 1
-  sentimentValue = Math.max(-1, Math.min(1, sentimentValue));
-  
-  const labels = ["very_bearish", "bearish", "neutral", "bullish", "very_bullish"];
-  const labelIndex = Math.floor((sentimentValue + 1) * 2.5);
-  
-  const headlines = [
-    `${asset.symbol} shows strong institutional adoption trends`,
-    `Major partnership announced for ${asset.name} ecosystem`,
-    `Technical analysis suggests ${asset.symbol} consolidation phase`,
-    `Market sentiment shifts positively for ${asset.name}`,
-    `${asset.symbol} network upgrade completed successfully`,
-    `Analysts predict ${asset.name} price movement based on fundamentals`,
-    `${asset.symbol} trading volume increases amid market activity`
-  ];
-
-  return {
-    sentiment_score: sentimentValue,
-    sentiment_label: labels[Math.min(labelIndex, 4)],
-    key_headlines: headlines.slice(0, 3),
-    impact_level: Math.abs(sentimentValue) > 0.5 ? 'high' : Math.abs(sentimentValue) > 0.25 ? 'medium' : 'low',
-    summary: `Overall news sentiment for ${asset.name} is ${labels[Math.min(labelIndex, 4)].replace('_', ' ')} based on recent market developments and price action.`
-  };
-};
-
-const generateSimulatedSocialTrends = (asset) => {
-  const priceChange = asset.change24h || 0;
-  let baseScore = 50;
-  
-  // Influence by price movement
-  if (priceChange > 5) baseScore += 25;
-  else if (priceChange > 2) baseScore += 15;
-  else if (priceChange < -5) baseScore -= 15;
-  else if (priceChange < -2) baseScore -= 10;
-  
-  const socialScore = Math.max(20, Math.min(95, baseScore + (Math.random() * 20 - 10)));
-  
-  const positive = Math.max(15, Math.min(70, 35 + (priceChange * 3) + (Math.random() * 15)));
-  const negative = Math.max(10, Math.min(40, 20 - (priceChange * 2) + (Math.random() * 10)));
-  const neutral = Math.max(0, 100 - positive - negative);
-
-  const topics = [
-    `#${asset.symbol}ToTheMoon`,
-    `${asset.name} Analysis`,
-    `Crypto Market ${priceChange > 0 ? 'Rally' : 'Correction'}`,
-    `${asset.symbol} Price Action`,
-    `DeFi ${asset.symbol}`,
-    `${asset.symbol} Trading Strategy`,
-    `${asset.name} Updates`
-  ];
-
-  return {
-    social_score: socialScore,
-    mention_volume: socialScore > 70 ? 'high' : socialScore > 40 ? 'moderate' : 'low',
-    sentiment_breakdown: {
-      positive: Math.round(positive),
-      neutral: Math.round(neutral),
-      negative: Math.round(negative)
-    },
-    trending_topics: topics.slice(0, 3),
-    influencer_sentiment: positive > 50 ? 'bullish' : positive > 35 ? 'mixed' : 'bearish',
-    engagement_level: socialScore > 80 ? 'viral' : socialScore > 60 ? 'high' : socialScore > 40 ? 'moderate' : 'low'
-  };
-};
-
-const generateSimulatedOnChainData = (asset) => {
-  const priceChange = asset.change24h || 0;
-  let baseScore = 50;
-  
-  // Influence by price movement and volume
-  if (priceChange > 3) baseScore += 20;
-  else if (priceChange > 1) baseScore += 10;
-  else if (priceChange < -3) baseScore -= 20;
-  else if (priceChange < -1) baseScore -= 10;
-  
-  if (asset.volume24h > 2000000000) baseScore += 10;
-  
-  const onchainScore = Math.max(25, Math.min(95, baseScore + (Math.random() * 15 - 7.5)));
-  
-  const whaleActivities = ['accumulating', 'distributing', 'neutral'];
-  const whaleIndex = onchainScore > 60 ? 0 : onchainScore > 40 ? 2 : 1;
-  
-  const flows = ['net_inflow', 'net_outflow', 'balanced'];
-  const flowIndex = priceChange > 2 ? 0 : priceChange < -2 ? 1 : 2;
-  
-  const signals = ['bullish', 'bearish', 'neutral'];
-  const signalIndex = onchainScore > 60 ? 0 : onchainScore > 40 ? 2 : 1;
-
-  return {
-    onchain_score: onchainScore,
-    whale_activity: whaleActivities[whaleIndex],
-    exchange_flow: flows[flowIndex],
-    network_health: Math.max(50, Math.min(95, 70 + (Math.random() * 20 - 10))),
-    holder_distribution: onchainScore > 60 ? 'Healthy distribution with growing retail participation' : 'Mixed holder distribution with moderate concentration',
-    key_metrics: {
-      active_addresses: Math.floor(50000 + Math.random() * 200000),
-      transaction_volume: Math.floor(asset.volume24h / 1000000),
-      large_transactions: Math.floor(100 + Math.random() * 500)
-    },
-    signal: signals[signalIndex]
-  };
 };
 
 const generateBasicSignal = (asset) => {
