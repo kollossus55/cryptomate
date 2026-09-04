@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Sparkles, TrendingUp, TrendingDown, X, RefreshCw, Target, Minimize2, Maximize2, Bell } from "lucide-react";
+import { Sparkles, TrendingUp, TrendingDown, X, RefreshCw, Target, Minimize2, Maximize2, Bell, Power } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -30,7 +30,8 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
   const [lastInteractionTime, setLastInteractionTime] = useState(Date.now());
   const [userPreferences, setUserPreferences] = useState(null);
   const [selectedTrades, setSelectedTrades] = useState(new Set());
-  
+  const [isPaused, setIsPaused] = useState(false);
+
   const autoRefreshIntervalRef = useRef(null);
   const inactivityTimerRef = useRef(null);
   const backgroundMonitorRef = useRef(null);
@@ -86,8 +87,8 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
       backgroundMonitorRef.current = null;
     }
 
-    // Setup auto-refresh when not minimized
-    if (!isMinimized) {
+    // Setup auto-refresh when not minimized and not paused
+    if (!isMinimized && !isPaused) {
       console.log('🔄 Setting up auto-refresh every 15 minutes');
       autoRefreshIntervalRef.current = setInterval(() => {
         console.log('🔄 Auto-refreshing AI signals... (15 min interval)');
@@ -95,8 +96,8 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
       }, AUTO_REFRESH_INTERVAL);
     }
 
-    // Setup background monitoring when minimized
-    if (isMinimized) {
+    // Setup background monitoring when minimized and not paused
+    if (isMinimized && !isPaused) {
       console.log('🔍 Setting up background monitoring every 5 minutes');
       backgroundMonitorRef.current = setInterval(() => {
         console.log('🔍 Background check for new signals... (5 min interval)');
@@ -112,7 +113,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
         clearInterval(backgroundMonitorRef.current);
       }
     };
-  }, [isMinimized]); // Only re-run when minimize state changes
+  }, [isMinimized, isPaused]); // Re-run when minimize or pause state changes
 
   // Inactivity auto-close timer - DISABLED for continuous monitoring
   useEffect(() => {
@@ -675,6 +676,20 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
                 <Button
                   variant="ghost"
                   size="sm"
+                  onClick={() => setIsPaused((p) => !p)}
+                  className={`gap-1.5 font-medium ${
+                    isPaused
+                      ? "text-green-300 hover:text-green-200 hover:bg-green-500/15"
+                      : "text-white/80 hover:text-white hover:bg-white/15"
+                  }`}
+                  title={isPaused ? "Turn auto-refresh back on" : "Turn off auto-refresh"}
+                >
+                  <Power className="w-4 h-4" />
+                  <span className="text-xs">{isPaused ? "Turn On" : "Turn Off"}</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={toggleMinimize}
                   className="text-white/80 hover:text-white hover:bg-white/15 gap-1.5 font-medium"
                   title={isMinimized ? "Expand signals" : "Minimize"}
@@ -912,7 +927,9 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
                   {/* Auto-refresh & inactivity info */}
                   <div className="mt-3 p-2 bg-black/20 rounded-lg text-center">
                     <p className="text-xs text-indigo-300">
-                      🔄 Auto-refreshing every 15 minutes • ⏰ Auto-closes after 5 min of inactivity
+                      {isPaused
+                        ? "⏸️ Auto-refresh paused — use Turn On to resume"
+                        : "🔄 Auto-refreshing every 15 minutes • ⏰ Auto-closes after 5 min of inactivity"}
                     </p>
                   </div>
                 </div>
