@@ -235,9 +235,15 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
   try {
     const rows = await base44.asServiceRole.entities.ScanResult.list('-scanned_at', 1);
     const latest = rows?.[0];
-    const SCAN_STALE_MS = 20 * 60 * 1000;
+    // The server is geo-blocked from Binance, so the scheduled scan cannot
+    // refresh — only a browser (Altcoin Scanner page) feeds real data. Use the
+    // latest real scan even if it is hours old; it is still real OHLCV data,
+    // which beats not trading. Log staleness so it is never silent.
+    const SCAN_STALE_MS = 24 * 60 * 60 * 1000;
+    const scanAgeMs = latest?.scanned_at ? now.getTime() - new Date(latest.scanned_at).getTime() : Infinity;
+    if (scanAgeMs > 20 * 60 * 1000 && scanAgeMs !== Infinity) log(`Scan is ${Math.round(scanAgeMs / 60000)} min old — using latest real scan`);
     if (latest && !latest.error && Array.isArray(latest.opportunities) && latest.scanned_at
-        && (now.getTime() - new Date(latest.scanned_at).getTime()) < SCAN_STALE_MS) {
+        && scanAgeMs < SCAN_STALE_MS) {
       scannerOppMap = new Map();
       for (const opp of latest.opportunities) {
         if (!opp || !opp.symbol) continue;
@@ -404,14 +410,15 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
         if (heldNow.includes(ticker.symbol)) continue;
         if (counters.assets_traded_today.includes(ticker.symbol)) continue;
 
-        const candles = candlesBySymbol.get(ticker.symbol);
-        if (!candles || candles.length < MIN_CANDLES) continue;
-
+        const candles = candlesBySymbol.get(ticker.symbol) || null;
         let signal;
         if (scannerOppMap) {
           const opp = scannerOppMap.get(ticker.symbol);
           if (!opp) continue;
           // Reuse the scanner's SP500-AI score — one scan, shared candidate list.
+          // Candles are optional here: the server is geo-blocked from Binance
+          // (HTTP 451), so we may have a real scanner signal but no OHLCV. We
+          // still trade it on flat-percent sizing rather than skipping.
           signal = {
             strength: opp.score,
             direction: opp.direction,
@@ -419,6 +426,8 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
             atrPercent: opp.volatility ?? 0.02,
           };
         } else {
+          // Own-universe path needs real candles to score — no signal without them.
+          if (!candles || candles.length < MIN_CANDLES) continue;
           signal = scoreAsset(candles, {
             indicators: settings.indicator_settings || undefined,
             // No sentiment provider wired up, so sentiment contributes nothing.
@@ -445,18 +454,24 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
           break;
         }
 
-        let sizing = calculatePositionSize({
-          equity: equityNow,
-          availableBalance: state.available_balance,
-          price: ticker.price,
-          candles,
-          riskPerTradePercent: settings.risk_per_trade_percent ?? 1,
-          atrMultiplier: settings.atr_stop_multiplier ?? 2,
-          maxPositionPercent: settings.max_position_size_percent ?? 10,
-        });
+        let sizing;
+        if (!candles) {
+          // Server geo-block: no OHLCV → no ATR. Use flat-percent sizing so the
+          // scanner's real-data signals can still execute.
+          sizing = { quoteAmount: 0, reason: 'insufficient_data_for_atr' };
+        } else {
+          sizing = calculatePositionSize({
+            equity: equityNow,
+            availableBalance: state.available_balance,
+            price: ticker.price,
+            candles,
+            riskPerTradePercent: settings.risk_per_trade_percent ?? 1,
+            atrMultiplier: settings.atr_stop_multiplier ?? 2,
+            maxPositionPercent: settings.max_position_size_percent ?? 10,
+          });
+        }
 
-        // Server geo-block: no candles → no ATR. Fall back to flat-percent sizing
-        // so the scanner's real-data signals can still execute.
+        // No ATR available (geo-block) — fall back to flat-percent sizing.
         if (sizing.quoteAmount <= 0 && sizing.reason === 'insufficient_data_for_atr') {
           const flatAmount = Math.min(
             equityNow * ((settings.max_position_size_percent ?? 10) / 100),
@@ -494,12 +509,16 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
           continue;
         }
 
-        const corr = checkCorrelation(logReturns(candles), heldReturns, {
-          maxCorrelation: settings.max_correlation ?? 0.8,
-        });
-        if (!corr.allowed) {
-          log(`Skip ${ticker.symbol}: ${corr.reason}`);
-          continue;
+        // Correlation needs candle returns; skip the gate when the server
+        // geo-block left us with no candles for this candidate.
+        if (candles && heldReturns.size > 0) {
+          const corr = checkCorrelation(logReturns(candles), heldReturns, {
+            maxCorrelation: settings.max_correlation ?? 0.8,
+          });
+          if (!corr.allowed) {
+            log(`Skip ${ticker.symbol}: ${corr.reason}`);
+            continue;
+          }
         }
 
         const book = await fetchOrderBook(ticker.symbol, 100);

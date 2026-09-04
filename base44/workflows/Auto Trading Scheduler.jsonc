@@ -1,0 +1,45 @@
+{
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "auto_trading_scheduler",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_auto_trading": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "tradingScheduler",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Run auto-trading cycle",
+            "description": "Loops all users with server-side auto-trading enabled and invokes the auto-trading worker for each"
+          }
+        }
+      }
+    ]
+  },
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/5 * * * *",
+      "one_time_date": null,
+      "timezone": "UTC",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "name": "Auto Trading Scheduler",
+  "description": "Runs the server-side auto-trading scheduler every 5 minutes so enabled portfolios are scanned and traded without any browser involvement."
+}
