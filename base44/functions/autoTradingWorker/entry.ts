@@ -182,10 +182,34 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
     universe = await fetchUniverse({ topN: UNIVERSE_SIZE });
     log(`Universe: ${universe.length} liquid USDT pairs`);
   } catch (err) {
-    // NO synthetic fallback. V4 generated ten fake coins with Math.random()
-    // prices here and traded them.
-    log(`Market data unavailable: ${err.message} — aborting run`);
-    return { halted: true, reason: 'market_data_unavailable', error: err.message };
+    // Server is geo-blocked from Binance (HTTP 451). Fall back to the latest
+    // browser-fed scanner result so trading continues on real data.
+    log(`Binance unreachable from server (${err.message}) — using scanner fallback`);
+    try {
+      const rows = await base44.asServiceRole.entities.ScanResult.list('-scanned_at', 1);
+      const latest = rows?.[0];
+      if (latest && Array.isArray(latest.opportunities) && latest.opportunities.length) {
+        universe = latest.opportunities
+          .filter((o) => o && o.symbol)
+          .map((o) => ({
+            symbol: o.symbol + 'USDT',
+            base: o.symbol,
+            price: o.price,
+            change24h: o.momentum || 0,
+            quoteVolume24h: o.volume24h || 0,
+            high24h: null,
+            low24h: null,
+            trades24h: null,
+          }));
+        log(`Fallback universe: ${universe.length} symbols from scan @ ${latest.scanned_at}`);
+      }
+    } catch (e) {
+      log(`ScanResult fallback read failed: ${e.message}`);
+    }
+    if (!universe || universe.length === 0) {
+      log(`No scanner data either — aborting run`);
+      return { halted: true, reason: 'market_data_unavailable', error: err.message };
+    }
   }
 
   if (universe.length === 0) {
@@ -421,7 +445,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
           break;
         }
 
-        const sizing = calculatePositionSize({
+        let sizing = calculatePositionSize({
           equity: equityNow,
           availableBalance: state.available_balance,
           price: ticker.price,
@@ -430,6 +454,27 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
           atrMultiplier: settings.atr_stop_multiplier ?? 2,
           maxPositionPercent: settings.max_position_size_percent ?? 10,
         });
+
+        // Server geo-block: no candles → no ATR. Fall back to flat-percent sizing
+        // so the scanner's real-data signals can still execute.
+        if (sizing.quoteAmount <= 0 && sizing.reason === 'insufficient_data_for_atr') {
+          const flatAmount = Math.min(
+            equityNow * ((settings.max_position_size_percent ?? 10) / 100),
+            state.available_balance
+          );
+          if (flatAmount >= 10) {
+            const stopPct = settings.stop_loss_percent ?? 3;
+            sizing = {
+              quoteAmount: flatAmount,
+              quantity: flatAmount / ticker.price,
+              stopPrice: ticker.price * (1 - stopPct / 100),
+              stopDistancePercent: stopPct,
+              riskAmount: flatAmount * (stopPct / 100),
+              reason: 'ok',
+            };
+            log(`Flat sizing for ${ticker.symbol} (no ATR): ${flatAmount.toFixed(0)} USDT`);
+          }
+        }
 
         if (sizing.quoteAmount <= 0) {
           log(`Skip ${ticker.symbol}: ${sizing.reason}`);

@@ -51,6 +51,40 @@ const categorizeCoin = (base) => {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Parse raw Binance kline arrays into the candle format scoreAsset expects. */
+function parseKlines(raw) {
+  if (!Array.isArray(raw)) return null;
+  const now = Date.now();
+  const candles = raw
+    .map((k) => ({
+      openTime: k[0], open: parseFloat(k[1]), high: parseFloat(k[2]),
+      low: parseFloat(k[3]), close: parseFloat(k[4]), volume: parseFloat(k[5]),
+      closeTime: k[6], quoteVolume: parseFloat(k[7]), trades: k[8],
+    }))
+    .filter((c) => c.closeTime < now)
+    .filter((c) => Number.isFinite(c.close) && Number.isFinite(c.high) &&
+                   Number.isFinite(c.low) && Number.isFinite(c.volume));
+  return candles.length ? candles : null;
+}
+
+/** Ticker-derived score when OHLCV is unavailable (server geo-blocked). */
+function scoreFromTicker(u) {
+  const momentum = u.change24h || 0;
+  const volatility = (u.high24h && u.low24h && u.price)
+    ? ((u.high24h - u.low24h) / u.price) * 100 : 0;
+  let strength = 50 + momentum * 1.5;
+  strength = Math.max(5, Math.min(95, strength));
+  const direction = momentum > 0.5 ? 'bullish' : momentum < -0.5 ? 'bearish' : 'neutral';
+  return {
+    strength: Math.round(strength),
+    direction,
+    atrPercent: volatility,
+    price: u.price,
+    reasons: [`Ticker momentum ${momentum.toFixed(2)}%`, `24h range ${volatility.toFixed(2)}%`],
+    dataPoints: 2,
+  };
+}
+
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -63,65 +97,87 @@ export default async function(req) {
 
     console.log('🔍 Altcoin Scanner Worker: starting server-side scan…');
 
-    // 1. Build the universe from real Binance 24h tickers.
+    // 1. Universe: prefer a browser-fed payload (server is geo-blocked from
+    //    Binance), fall back to a server fetch when no payload is supplied.
+    const body = await req.json().catch(() => ({}));
+    const providedUniverse = Array.isArray(body?.universe) ? body.universe : null;
+    const providedCandles = body?.candles && typeof body.candles === 'object' ? body.candles : null;
+
     let universe = [];
-    try {
-      universe = await fetchUniverse({ topN: SCAN_CANDIDATES, minQuoteVolume24h: MIN_QUOTE_VOLUME_24H });
-    } catch (err) {
-      console.warn('⚠️ Binance universe unavailable:', err.message);
-      await storeScanResult(base44, [], 0, 0, err.message);
-      return Response.json({ success: false, error: 'Universe unavailable: ' + err.message });
+    if (providedUniverse) {
+      universe = providedUniverse;
+      console.log(`📥 Using browser-fed universe: ${universe.length} symbols`);
+    } else {
+      try {
+        universe = await fetchUniverse({ topN: SCAN_CANDIDATES, minQuoteVolume24h: MIN_QUOTE_VOLUME_24H });
+      } catch (err) {
+        console.warn('⚠️ Binance universe unavailable:', err.message);
+        await storeScanResult(base44, [], 0, 0, err.message);
+        return Response.json({ success: false, error: 'Universe unavailable: ' + err.message });
+      }
     }
 
-    // 2. Fetch candles + score in rate-limited batches.
+    // 2. Build the candle map. Browser-fed klines first; remaining symbols are
+    //    fetched server-side only when the browser supplied nothing (egress OK).
+    const candleMap = new Map();
+    if (providedCandles) {
+      for (const [sym, raw] of Object.entries(providedCandles)) {
+        const parsed = parseKlines(raw);
+        if (parsed && parsed.length >= MIN_CANDLES) candleMap.set(sym, parsed);
+      }
+      console.log(`📥 Browser-fed candles: ${candleMap.size} symbols`);
+    } else {
+      for (let i = 0; i < universe.length; i += BATCH_SIZE) {
+        const batch = universe.slice(i, i + BATCH_SIZE);
+        const fetched = await fetchCandlesBatch(
+          batch.map((u) => u.symbol), CANDLE_INTERVAL, CANDLE_LIMIT, BATCH_CONCURRENCY
+        );
+        for (const [sym, c] of fetched.entries()) candleMap.set(sym, c);
+        if (i + BATCH_SIZE < universe.length) await sleep(BATCH_DELAY_MS);
+      }
+    }
+
+    // 3. Score every universe symbol. Full SP500-AI on OHLCV where available,
+    //    ticker-derived momentum score everywhere else (server geo-block fallback).
     const opportunities = [];
     let scored = 0;
 
-    for (let i = 0; i < universe.length; i += BATCH_SIZE) {
-      const batch = universe.slice(i, i + BATCH_SIZE);
-      const symbols = batch.map((u) => u.symbol);
-      const candleMap = await fetchCandlesBatch(symbols, CANDLE_INTERVAL, CANDLE_LIMIT, BATCH_CONCURRENCY);
-
-      for (const u of batch) {
-        const candles = candleMap.get(u.symbol);
-        if (!candles || candles.length < MIN_CANDLES) continue;
-
-        const result = scoreAsset(candles, {
+    for (const u of universe) {
+      const candles = candleMap.get(u.symbol);
+      let result = null;
+      if (candles && candles.length >= MIN_CANDLES) {
+        result = scoreAsset(candles, {
           indicators: { rsi: false, macd: false, bollinger: false, ema: false, stoch: false, sp500ai: true },
         });
-        if (!result) continue;
-
-        scored++;
-        const base = u.base;
-        const rv = relativeVolume(candles);
-
-        opportunities.push({
-          symbol: base,
-          name: NAME_MAP[base] || base,
-          category: categorizeCoin(base),
-          score: result.strength,
-          momentum: parseFloat(u.change24h.toFixed(2)),
-          volatility: parseFloat((result.atrPercent || 0).toFixed(2)),
-          volume_surge: rv !== null ? parseFloat(rv.toFixed(2)) : 1.0,
-          volume24h: u.quoteVolume24h || 0,
-          risk_level: (result.atrPercent || 0) > 12 ? 'high' : (result.atrPercent || 0) > 8 ? 'medium' : 'low',
-          signal: result.strength >= 75 ? 'strong_buy'
-            : result.strength >= 65 ? 'buy'
-            : result.strength >= 45 ? 'hold'
-            : result.strength >= 35 ? 'sell'
-            : 'strong_sell',
-          price: result.price,
-          confidence: result.strength,
-          direction: result.direction,
-          reasons: result.reasons,
-          dataPoints: result.dataPoints,
-        });
       }
+      if (!result) result = scoreFromTicker(u);
+      if (!result) continue;
 
-      // Pause between batches to stay well inside Binance rate limits.
-      if (i + BATCH_SIZE < universe.length) {
-        await sleep(BATCH_DELAY_MS);
-      }
+      scored++;
+      const base = u.base;
+      const rv = candles ? relativeVolume(candles) : null;
+
+      opportunities.push({
+        symbol: base,
+        name: NAME_MAP[base] || base,
+        category: categorizeCoin(base),
+        score: result.strength,
+        momentum: parseFloat((u.change24h || 0).toFixed(2)),
+        volatility: parseFloat((result.atrPercent || 0).toFixed(2)),
+        volume_surge: rv !== null ? parseFloat(rv.toFixed(2)) : 1.0,
+        volume24h: u.quoteVolume24h || 0,
+        risk_level: (result.atrPercent || 0) > 12 ? 'high' : (result.atrPercent || 0) > 8 ? 'medium' : 'low',
+        signal: result.strength >= 75 ? 'strong_buy'
+          : result.strength >= 65 ? 'buy'
+          : result.strength >= 45 ? 'hold'
+          : result.strength >= 35 ? 'sell'
+          : 'strong_sell',
+        price: result.price,
+        confidence: result.strength,
+        direction: result.direction,
+        reasons: result.reasons,
+        dataPoints: result.dataPoints,
+      });
     }
 
     // 3. Strongest signals first.
