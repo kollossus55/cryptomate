@@ -202,7 +202,36 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
 
   // Held symbols outside the top-N still need candles for exit decisions.
   const heldSymbols = state.positions.map((p) => p.asset_symbol);
-  const scanSymbols = universe.slice(0, MAX_SCAN_CANDIDATES).map((u) => u.symbol);
+
+  // Consume the latest Altcoin Scanner result so the auto-trader and the
+  // scanner share one scan and the same candidate list. Falls back to the
+  // own-universe scan when no fresh scanner result is available (e.g. when
+  // Binance is geo-blocked from the server).
+  let scannerOppMap = null;
+  try {
+    const rows = await base44.asServiceRole.entities.ScanResult.list('-scanned_at', 1);
+    const latest = rows?.[0];
+    const SCAN_STALE_MS = 20 * 60 * 1000;
+    if (latest && !latest.error && Array.isArray(latest.opportunities) && latest.scanned_at
+        && (now.getTime() - new Date(latest.scanned_at).getTime()) < SCAN_STALE_MS) {
+      scannerOppMap = new Map();
+      for (const opp of latest.opportunities) {
+        if (!opp || !opp.symbol) continue;
+        const pair = opp.symbol + 'USDT';
+        if (!universeBySymbol.has(pair)) continue;
+        scannerOppMap.set(pair, opp);
+      }
+      log(`Using scanner candidates: ${scannerOppMap.size} from scan @ ${latest.scanned_at}`);
+    }
+  } catch (e) {
+    log(`ScanResult read failed: ${e.message}`);
+  }
+
+  const scanSymbols = scannerOppMap
+    ? [...scannerOppMap.keys()].slice(0, MAX_SCAN_CANDIDATES)
+    : universe.slice(0, MAX_SCAN_CANDIDATES).map((u) => u.symbol);
+  if (!scannerOppMap) log(`No fresh scanner result — scanning ${scanSymbols.length} from own universe`);
+
   const symbolsNeedingCandles = [...new Set([...heldSymbols, ...scanSymbols])];
 
   log(`Fetching ${CANDLE_INTERVAL} candles for ${symbolsNeedingCandles.length} symbols`);
@@ -342,21 +371,38 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
       }
       const heldReturns = buildReturnsMap(heldCandles);
 
+      const candidateTickers = scannerOppMap
+        ? scanSymbols.map((sym) => universeBySymbol.get(sym)).filter(Boolean)
+        : universe.slice(0, MAX_SCAN_CANDIDATES);
+
       const candidates = [];
-      for (const ticker of universe.slice(0, MAX_SCAN_CANDIDATES)) {
+      for (const ticker of candidateTickers) {
         if (heldNow.includes(ticker.symbol)) continue;
         if (counters.assets_traded_today.includes(ticker.symbol)) continue;
 
         const candles = candlesBySymbol.get(ticker.symbol);
         if (!candles || candles.length < MIN_CANDLES) continue;
 
-        const signal = scoreAsset(candles, {
-          indicators: settings.indicator_settings || undefined,
-          // No sentiment provider wired up, so sentiment contributes nothing.
-          // See signalEngine.js — a random number is not sentiment analysis.
-        });
+        let signal;
+        if (scannerOppMap) {
+          const opp = scannerOppMap.get(ticker.symbol);
+          if (!opp) continue;
+          // Reuse the scanner's SP500-AI score — one scan, shared candidate list.
+          signal = {
+            strength: opp.score,
+            direction: opp.direction,
+            reasons: opp.reasons || [],
+            atrPercent: opp.volatility ?? 0.02,
+          };
+        } else {
+          signal = scoreAsset(candles, {
+            indicators: settings.indicator_settings || undefined,
+            // No sentiment provider wired up, so sentiment contributes nothing.
+            // See signalEngine.js — a random number is not sentiment analysis.
+          });
+          if (!signal) continue;
+        }
 
-        if (!signal) continue;
         scanned.push({ symbol: ticker.symbol, strength: signal.strength });
 
         if (signal.strength >= minStrength && signal.direction === 'bullish') {
