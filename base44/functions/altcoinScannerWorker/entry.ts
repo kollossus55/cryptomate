@@ -111,8 +111,9 @@ export default async function(req) {
       try {
         universe = await fetchUniverse({ topN: SCAN_CANDIDATES, minQuoteVolume24h: MIN_QUOTE_VOLUME_24H });
       } catch (err) {
-        console.warn('⚠️ Binance universe unavailable:', err.message);
-        await storeScanResult(base44, [], 0, 0, err.message);
+        // Server is geo-blocked from Binance. Do NOT wipe a valid browser-fed
+        // scan with an empty error record — just report and leave the DB as-is.
+        console.warn('⚠️ Binance universe unavailable (server geo-block):', err.message);
         return Response.json({ success: false, error: 'Universe unavailable: ' + err.message });
       }
     }
