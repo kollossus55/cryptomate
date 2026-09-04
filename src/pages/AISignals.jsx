@@ -77,10 +77,9 @@ export default function AISignals() {
         return {
           symbol,
           name: symbol,
-          price: cached?.price || 40000 + Math.random() * 10000,
-          change24h: cached?.change24h || (Math.random() - 0.5) * 10,
-          volume24h: cached?.volume24h || 1000000000 + Math.random() * 2000000000,
-          marketCap: cached?.marketCap || 500000000000 + Math.random() * 500000000000
+          price: cached?.price || 0,
+          change24h: cached?.change24h || 0,
+          volume24h: cached?.volume24h || 0,
         };
       });
     },
@@ -105,19 +104,19 @@ export default function AISignals() {
   useEffect(() => {
     if (configs && configs.length === 0) {
       createConfigMutation.mutate({
-        config_name: "Technical + AI Sentiment",
+        config_name: "Indicator-Led",
         is_active: true,
         data_sources: {
           technical_indicators: true,
-          news_sentiment: true,
+          news_sentiment: false,
           social_media: false,
           on_chain_data: false,
           predictive_models: true,
           anomaly_detection: true
         },
         weights: {
-          technical: 90,
-          news: 10,
+          technical: 100,
+          news: 0,
           social: 0,
           onchain: 0,
           predictive: 0
@@ -226,27 +225,8 @@ export default function AISignals() {
   const calculateCompositeScore = (results, config) => {
     if (!config) return { score: 50, signal: 'hold' };
 
-    // PRIORITY: Technical Analysis (90%) + AI Sentiment (10%)
-    const technicalWeight = 0.90;
-    const sentimentWeight = 0.10;
-    
-    let technicalScore = results.advanced_signal?.confidence || 50;
-    let sentimentScore = 50; // Neutral default
-    
-    // Convert sentiment to score if available
-    if (results.advanced_signal?.sentiment) {
-      const sentimentMap = {
-        'very_bullish': 90,
-        'bullish': 70,
-        'neutral': 50,
-        'bearish': 30,
-        'very_bearish': 10
-      };
-      sentimentScore = sentimentMap[results.advanced_signal.sentiment] || 50;
-    }
-    
-    // Calculate weighted score
-    let finalScore = (technicalScore * technicalWeight) + (sentimentScore * sentimentWeight);
+    // Indicator-led: score is driven entirely by the technical signal engine
+    let finalScore = results.advanced_signal?.confidence || 50;
 
     // Adjust for anomalies
     if (results.anomalies?.anomalies_detected?.length > 0) {
@@ -276,8 +256,7 @@ export default function AISignals() {
       score: Math.round(finalScore),
       signal,
       breakdown: {
-        technical: Math.round(technicalScore),
-        sentiment: Math.round(sentimentScore),
+        technical: Math.round(finalScore),
         predictive: results.predictive?.confidence || 0,
         anomaly_impact: results.anomalies?.overall_risk || 'none'
       }
@@ -306,10 +285,10 @@ export default function AISignals() {
             </div>
             <div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                Technical + AI Signals
+                Indicator-Led Signals
               </h1>
               <p className="text-slate-400">
-                Technical Analysis (90%) • AI Sentiment (10%) • Real-time scoring
+                Indicator-driven scoring on real Binance OHLCV data
               </p>
             </div>
           </div>
@@ -387,7 +366,7 @@ export default function AISignals() {
                           </Badge>
                         </div>
                         <div className="text-sm text-slate-400">
-                          ${asset.price?.toLocaleString()}
+                          {asset.price ? '$' + asset.price.toLocaleString() : '—'}
                         </div>
                       </motion.div>
                     ))}
@@ -424,15 +403,15 @@ export default function AISignals() {
                 {isAnalyzing ? (
                   <div className="py-12 text-center">
                     <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-indigo-200 text-lg font-semibold">Analyzing with AI models...</p>
+                    <p className="text-indigo-200 text-lg font-semibold">Analyzing indicators...</p>
                     <p className="text-indigo-300 text-sm mt-2">
-                      Running predictive algorithms, detecting anomalies, and calculating composite scores
+                      Running technical indicators on real Binance data and detecting anomalies
                     </p>
                   </div>
                 ) : !signalResults ? (
                   <div className="py-12 text-center">
                     <Eye className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-400">Select an asset to view AI analysis</p>
+                    <p className="text-slate-400">Select an asset to view indicator analysis</p>
                   </div>
                 ) : (
                   <ScrollArea className="h-[600px]">
@@ -454,17 +433,11 @@ export default function AISignals() {
                             {signalResults.composite_score.score}
                             <span className="text-xl text-slate-400">/100</span>
                           </div>
-                          <div className="grid grid-cols-4 gap-4 mt-4">
+                          <div className="grid grid-cols-3 gap-4 mt-4">
                             <div className="bg-slate-800 rounded p-3">
-                              <div className="text-xs text-slate-400 mb-1">Technical (90%)</div>
+                              <div className="text-xs text-slate-400 mb-1">Technical</div>
                               <div className="text-lg font-bold text-white">
                                 {signalResults.composite_score.breakdown.technical}
-                              </div>
-                            </div>
-                            <div className="bg-slate-800 rounded p-3">
-                              <div className="text-xs text-slate-400 mb-1">AI Sentiment (10%)</div>
-                              <div className="text-lg font-bold text-white">
-                                {signalResults.composite_score.breakdown.sentiment || 'N/A'}
                               </div>
                             </div>
                             <div className="bg-slate-800 rounded p-3">

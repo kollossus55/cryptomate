@@ -89,7 +89,7 @@ export default function Home() {
               <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-full px-6 py-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-indigo-300">AI-Powered Trading Platform • Paper Trading Demo</span>
+                  <span className="text-indigo-300">Indicator-Led Trading Platform • Paper Trading Demo</span>
                 </div>
               </div>
             </div>
@@ -97,12 +97,12 @@ export default function Home() {
             <h1 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-6 leading-tight">
               <span className="block text-white">Trade Crypto with</span>
               <span className="block bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                AI Intelligence
+                Indicator Intelligence
               </span>
             </h1>
 
             <p className="text-xl text-slate-400 mb-10 max-w-3xl mx-auto leading-relaxed">
-              Leverage advanced AI algorithms, real-time price action analysis, and pattern recognition to trade the top 20 cryptocurrencies with confidence.
+              Leverage real-time Binance market data, technical indicators, and strategy-led signals to trade the top 20 cryptocurrencies with confidence.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
@@ -164,9 +164,9 @@ export default function Home() {
               <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mb-6">
                 <Sparkles className="w-7 h-7 text-white" />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-4">AI-Powered Signals</h3>
+              <h3 className="text-2xl font-bold text-white mb-4">Indicator-Led Signals</h3>
               <p className="text-slate-400 leading-relaxed mb-6">
-                Get real-time trading recommendations powered by advanced AI that analyzes market trends, patterns, and indicators with up to 85% confidence.
+                Get real-time trading recommendations driven by technical indicators on real Binance OHLCV data — RSI, MACD, EMA, Bollinger, and the SP500 AI composite.
               </p>
               <ul className="space-y-2">
                 <li className="flex items-center gap-2 text-slate-300">
@@ -175,7 +175,7 @@ export default function Home() {
                 </li>
                 <li className="flex items-center gap-2 text-slate-300">
                   <CheckCircle className="w-4 h-4 text-green-400" />
-                  <span>Pattern recognition</span>
+                  <span>Indicator-based scoring</span>
                 </li>
                 <li className="flex items-center gap-2 text-slate-300">
                   <CheckCircle className="w-4 h-4 text-green-400" />
@@ -203,7 +203,7 @@ export default function Home() {
                 </li>
                 <li className="flex items-center gap-2 text-slate-300">
                   <CheckCircle className="w-4 h-4 text-green-400" />
-                  <span>Market cap insights</span>
+                  <span>Volume & momentum tracking</span>
                 </li>
               </ul>
             </div>
@@ -236,8 +236,8 @@ export default function Home() {
           {/* Stats Section */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-20 p-8 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/30 rounded-3xl">
             <div className="text-center">
-              <div className="text-4xl font-bold text-white mb-2">85%</div>
-              <div className="text-slate-400">AI Accuracy</div>
+              <div className="text-4xl font-bold text-white mb-2">15+</div>
+              <div className="text-slate-400">Indicators</div>
             </div>
             <div className="text-center">
               <div className="text-4xl font-bold text-white mb-2">20</div>
@@ -260,7 +260,7 @@ export default function Home() {
                 Start Trading Smarter Today
               </h2>
               <p className="text-indigo-200 text-lg mb-8 max-w-2xl mx-auto">
-                Join thousands of traders using AI-powered insights to make better trading decisions. No credit card required.
+                Join thousands of traders using indicator-led signals to make better trading decisions. No credit card required.
               </p>
               <Button 
                 onClick={handleLogin}

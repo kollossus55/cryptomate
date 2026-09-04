@@ -1015,7 +1015,7 @@ export default function Trading() {
             name: opp.name,
             price: opp.price,
             change24h: opp.momentum,
-            volume24h: opp.marketCap * 0.1,
+            volume24h: opp.volume24h || 0,
             marketCap: opp.marketCap,
             icon: opp.symbol.substring(0, 2),
             color: "bg-cyan-500"
@@ -1449,7 +1449,7 @@ export default function Trading() {
           <div>
             <div className="flex items-center gap-4 mb-2">
               <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                AI Trading Platform
+                Indicator-Led Trading
               </h1>
               <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 rounded-xl border border-slate-700">
                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
@@ -1458,7 +1458,7 @@ export default function Trading() {
                 </span>
               </div>
             </div>
-            <p className="text-slate-400">Trade top 20 cryptocurrencies with AI-powered insights • Filter by AI Signal</p>
+            <p className="text-slate-400">Trade top 20 cryptocurrencies with indicator-led signals on real Binance data</p>
           </div>
 
           <div className="flex flex-wrap gap-3">
