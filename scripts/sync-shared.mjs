@@ -24,6 +24,7 @@ const source = path.join(root, 'shared', 'trading');
 const targets = [
   'base44/functions/autoTradingWorker/shared',
   'base44/functions/technicalAnalysis/shared',
+  'base44/functions/altcoinScannerWorker/shared',
 ];
 
 const BANNER = `// GENERATED FILE — DO NOT EDIT.

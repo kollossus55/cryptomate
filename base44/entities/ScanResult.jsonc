@@ -1,0 +1,63 @@
+{
+  "name": "ScanResult",
+  "type": "object",
+  "properties": {
+    "scan_scope": {
+      "type": "string",
+      "description": "Scan scope identifier (e.g. top100)"
+    },
+    "opportunities": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": [],
+      "description": "Scored opportunities from the latest server-side scan, sorted by score descending"
+    },
+    "scanned_at": {
+      "type": "string",
+      "description": "ISO timestamp of the scan"
+    },
+    "symbols_scanned": {
+      "type": "number",
+      "default": 0,
+      "description": "Size of the universe scanned"
+    },
+    "symbols_scored": {
+      "type": "number",
+      "default": 0,
+      "description": "Symbols that produced a valid score"
+    },
+    "candle_interval": {
+      "type": "string",
+      "default": "1h",
+      "description": "Binance kline interval used for the scan"
+    },
+    "error": {
+      "type": "string",
+      "description": "Error message if the scan failed"
+    }
+  },
+  "required": [
+    "scan_scope",
+    "scanned_at"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
