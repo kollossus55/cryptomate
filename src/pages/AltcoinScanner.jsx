@@ -89,7 +89,7 @@ export default function AltcoinScanner() {
     // Populate the global so other pages (Trading, Trade Signals) can consume
     window.altcoinOpportunities = filtered;
     if (record.error) {
-      setScanError(`Server scan failed: ${record.error}`);
+      setScanError("Scan is still updating — results will appear shortly. Try refreshing in a moment.");
     } else if (raw.length === 0) {
       setScanError("No opportunities found. The market may be flat — try refreshing later.");
     } else if (filtered.length === 0) {
