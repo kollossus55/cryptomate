@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Scan, RefreshCw, TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
 import TradeModal from "../components/trading/TradeModal";
-import { scanAltcoins, getCategories } from "../components/trading/AltcoinScanner";
+import { getCategories } from "../components/trading/AltcoinScanner";
 
 const CATEGORY_COLORS = {
   DeFi: "bg-blue-500",
@@ -66,33 +66,69 @@ export default function AltcoinScanner() {
     portfolioRef.current = portfolio;
   }, [portfolio]);
 
+  // Read the latest server-side scan from the database (instant, no browser work).
+  const loadCachedScan = async () => {
+    try {
+      const results = await base44.entities.ScanResult.list("-scanned_at", 1);
+      const latest = results[0];
+      if (latest) {
+        applyScanResult(latest);
+        return latest;
+      }
+    } catch (e) {
+      console.warn("Failed to load cached scan:", e);
+    }
+    return null;
+  };
+
+  const applyScanResult = (record) => {
+    const raw = record.opportunities || [];
+    const filtered = filterOpportunities(raw);
+    setOpportunities(filtered);
+    setLastScan(record.scanned_at ? new Date(record.scanned_at) : new Date());
+    // Populate the global so other pages (Trading, Trade Signals) can consume
+    window.altcoinOpportunities = filtered;
+    if (record.error) {
+      setScanError(`Server scan failed: ${record.error}`);
+    } else if (raw.length === 0) {
+      setScanError("No opportunities found. The market may be flat — try refreshing later.");
+    } else if (filtered.length === 0) {
+      setScanError(
+        `Scanned ${record.symbols_scored || raw.length} coins but none passed the quality filters (score ≥ ${MIN_SCORE}, volume ≥ ${MIN_VOLUME_SURGE}x, |move| ≥ ${MIN_MOMENTUM}%). The market is flat right now — try refreshing later.`
+      );
+    } else {
+      setScanError(null);
+    }
+  };
+
+  // Trigger the server-side worker, then re-read the persisted record.
   const runScan = async () => {
     setIsLoading(true);
     setScanError(null);
     try {
-      const raw = await scanAltcoins(50);
-      const filtered = filterOpportunities(raw);
-      setOpportunities(filtered);
-      setLastScan(new Date());
-      // Populate the global so other pages (Trading, Trade Signals) can consume
-      window.altcoinOpportunities = filtered;
-      if (raw.length === 0) {
-        setScanError("No opportunities found. Binance may be unavailable — try refreshing.");
-      } else if (filtered.length === 0) {
-        setScanError(
-          `Scanned ${raw.length} coins but none passed the quality filters (score ≥ ${MIN_SCORE}, volume ≥ ${MIN_VOLUME_SURGE}x, |move| ≥ ${MIN_MOMENTUM}%). The market is flat right now — try refreshing later.`
-        );
+      const res = await base44.functions.invoke("altcoinScannerWorker", {});
+      const data = res.data || {};
+      if (data.success === false) {
+        setScanError(data.error || "Server scan failed.");
       }
+      await loadCachedScan();
     } catch (error) {
-      console.error("Scanner failed:", error);
-      setScanError(error.message || "Scan failed. Please try again.");
+      console.error("Scanner trigger failed:", error);
+      setScanError(error?.response?.data?.error || error.message || "Scan failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    runScan();
+    (async () => {
+      const cached = await loadCachedScan();
+      if (!cached) {
+        // No cached result yet — trigger the first server-side scan.
+        runScan();
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleTrade = (opp, action) => {
@@ -213,7 +249,7 @@ export default function AltcoinScanner() {
                   Altcoin Scanner
                 </h1>
                 <p className="text-slate-400 text-sm">
-                  Scanning 100+ altcoins on real Binance data • No auto-refresh to conserve resources
+                  Server-side scan of 100+ altcoins on real Binance data • Cached results refresh on demand
                 </p>
               </div>
             </div>
