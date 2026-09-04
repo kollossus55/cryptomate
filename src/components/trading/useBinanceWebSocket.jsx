@@ -10,6 +10,7 @@ const getBinancePair = (symbol) => {
 
 export function useBinanceWebSocket(symbols = []) {
   const [livePrices, setLivePrices] = useState({});
+  const [liveTickers, setLiveTickers] = useState({});
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
@@ -39,7 +40,8 @@ export function useBinanceWebSocket(symbols = []) {
           // data is an array of mini-ticker objects
           // { s: "BTCUSDT", c: "45000.00", ... }
           
-          const updates = {};
+          const priceUpdates = {};
+          const tickerUpdates = {};
           let hasUpdates = false;
 
           // Create a set of lowercased symbols we care about for fast lookup
@@ -50,20 +52,31 @@ export function useBinanceWebSocket(symbols = []) {
             const pair = ticker.s.toLowerCase();
             // If we are tracking this pair (or if no specific symbols provided, track all - but that's too much memory)
             // Better to only track what's needed.
-            
+
             if (symbols.length === 0 || targetPairs.has(pair)) {
               // Extract symbol back from pair (remove usdt)
-              // This is a bit hacky, but works for standard pairs
               if (pair.endsWith('usdt')) {
                 const symbol = pair.slice(0, -4).toUpperCase();
-                updates[symbol] = parseFloat(ticker.c);
+                const close = parseFloat(ticker.c);
+                const open = parseFloat(ticker.o);
+                const quoteVolume = parseFloat(ticker.q);
+                // Real Binance 24h change % and quote volume straight from the
+                // miniTicker stream — no CoinGecko, no synthetic values.
+                const change24h = open > 0 ? ((close - open) / open) * 100 : 0;
+                priceUpdates[symbol] = close;
+                tickerUpdates[symbol] = {
+                  price: close,
+                  change24h,
+                  volume24h: quoteVolume || 0
+                };
                 hasUpdates = true;
               }
             }
           });
 
           if (hasUpdates) {
-            setLivePrices(prev => ({ ...prev, ...updates }));
+            setLivePrices(prev => ({ ...prev, ...priceUpdates }));
+            setLiveTickers(prev => ({ ...prev, ...tickerUpdates }));
           }
         } catch (err) {
           // ignore parse errors
@@ -95,5 +108,5 @@ export function useBinanceWebSocket(symbols = []) {
     };
   }, [JSON.stringify(symbols)]); // Re-connect if symbols list changes significantly
 
-  return { livePrices, isConnected };
+  return { livePrices, liveTickers, isConnected };
 }

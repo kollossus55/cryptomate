@@ -179,26 +179,16 @@ const predictPriceMovement = (asset) => {
   };
 };
 
-// Generate comprehensive AI signal combining all data sources
+// Generate a signal driven PURELY by technical indicators on real Binance
+// OHLCV candles. No simulated news, social, or on-chain data — those were
+// Math.random()-based and fabricated confidence. The app's indicators deduce
+// the signal from real exchange data.
 export const generateAdvancedSignal = async (asset, signalConfig = null, indicatorSettings = { rsi: true, macd: true, bollinger: true, ema: true, stoch: true }) => {
   try {
-    // Fetch all data sources in parallel (now using cached/simulated data)
-    const [newsData, socialData, onChainData] = await Promise.all([
-      analyzeNewsSentiment(asset),
-      analyzeSocialTrends(asset),
-      analyzeOnChainData(asset)
-    ]);
-
-    // Generate predictive analysis
-    const prediction = predictPriceMovement(asset);
-
-    // Advanced Technical Analysis on REAL candles.
-    // Now async, and returns null when candle data is unavailable.
+    // Advanced Technical Analysis on REAL Binance candles.
+    // Returns null when candle data is unavailable — no data means no signal.
     const technicalAnalysis = await analyzeIndicators(asset, indicatorSettings);
 
-    // No candles means no technical opinion. Returning null here is deliberate:
-    // the previous behaviour was to score on invented data, which produced a
-    // confident-looking signal built on nothing. An absent signal is correct.
     if (!technicalAnalysis) {
       return {
         symbol: asset.symbol,
@@ -208,56 +198,27 @@ export const generateAdvancedSignal = async (asset, signalConfig = null, indicat
       };
     }
 
-    // Technical indicators (from asset data + advanced indicators)
+    // Technical score from REAL Binance 24h change & quote volume (no market cap).
     let technicalScore = calculateTechnicalScore(asset);
-
-    // Apply modifier from advanced indicators
     technicalScore = Math.max(0, Math.min(100, technicalScore + technicalAnalysis.scoreModifier));
 
-    // Pure technicals. News/social/on-chain are simulated (Math.random),
-    // so weighting them fabricates confidence. Technicals come from real
-    // Binance candles via analyzeIndicators.
-    const defaultWeights = {
-      technical: 100,
-      news: 0,
-      social: 0,
-      onchain: 0,
-      predictive: 0
-    };
-    
-    const weights = (signalConfig && signalConfig.weights) ? signalConfig.weights : defaultWeights;
+    // Deterministic momentum read from real Binance change & volume.
+    const prediction = predictPriceMovement(asset);
 
-    // Calculate weights as decimals
-    const wTech = (weights.technical || 0) / 100;
-    const wNews = (weights.news || 0) / 100;
-    const wSocial = (weights.social || 0) / 100;
-    const wOnChain = (weights.onchain || 0) / 100;
-    const wPred = (weights.predictive || 0) / 100;
+    // Confidence is driven strictly by technical indicators on real candles.
+    let confidence = Math.max(30, Math.min(95, Math.round(technicalScore)));
 
-    // Composite score
-    const compositeScore = 
-      (technicalScore * wTech) +
-      ((newsData.sentiment_score + 1) * 50 * wNews) +  // Convert -1 to 1 scale to 0-100
-      (socialData.social_score * wSocial) +
-      (onChainData.onchain_score * wOnChain) +
-      (prediction.prediction_confidence * wPred);
-
-    // Determine confidence level
-    let confidence = Math.max(30, Math.min(95, Math.round(compositeScore)));
-
-    // Determine risk level
+    // Risk level from real volatility.
     let riskLevel = 'medium';
     const volatility = Math.abs(asset.change24h || 0);
-    if (confidence >= 80 && volatility < 5 && prediction.prediction_confidence > 70) riskLevel = 'low';
-    else if (confidence < 60 || volatility > 10 || prediction.prediction_confidence < 50) riskLevel = 'high';
+    if (confidence >= 80 && volatility < 5) riskLevel = 'low';
+    else if (confidence < 60 || volatility > 10) riskLevel = 'high';
 
-    // Generate trading recommendation with predictive influence
+    // Recommendation from technicals + real momentum only.
     let recommendation = 'hold';
-    const newsInfluence = newsData.sentiment_score * (newsData.impact_level === 'high' ? 1.5 : 1.0);
-    
-    if (confidence >= 75 && asset.change24h > 1 && newsInfluence > 0.2 && prediction.predicted_change > 0) {
+    if (confidence >= 75 && asset.change24h > 1 && prediction.predicted_change > 0) {
       recommendation = 'buy';
-    } else if (confidence < 50 || asset.change24h < -3 || newsInfluence < -0.3 || prediction.predicted_change < -3) {
+    } else if (confidence < 50 || asset.change24h < -3 || prediction.predicted_change < -3) {
       recommendation = 'sell';
     }
 
@@ -267,25 +228,17 @@ export const generateAdvancedSignal = async (asset, signalConfig = null, indicat
       riskLevel,
       prediction,
       activeIndicators: [
-          { name: "Technical Analysis", status: "active", score: technicalScore, weight: "70%" },
-          { name: "News Sentiment AI", status: "active", score: (newsData.sentiment_score + 1) * 50, weight: "30%" },
-          { name: "Social Trends", status: "simulated", score: socialData.social_score, weight: "0%" },
-          { name: "On-Chain Metrics", status: "simulated", score: onChainData.onchain_score, weight: "0%" },
-          { name: "Pattern Recognition", status: "active", score: prediction.prediction_confidence, weight: "Variable" }
+        { name: "Technical Analysis", status: "active", score: technicalScore, weight: "100%" },
+        { name: "Pattern Recognition", status: "active", score: prediction.prediction_confidence, weight: "Variable" }
       ],
       technicalDetails: technicalAnalysis,
       breakdown: {
         technical: technicalScore,
-        news: newsData,
-        social: socialData,
-        onchain: onChainData,
         advanced_indicators: technicalAnalysis.results
       },
       signals: {
         strength: confidence >= 75 ? 'strong' : confidence >= 60 ? 'moderate' : 'weak',
-        direction: compositeScore >= 60 ? 'bullish' : compositeScore <= 40 ? 'bearish' : 'neutral',
-        news_impact: newsData.impact_level,
-        news_sentiment_label: newsData.sentiment_label
+        direction: technicalScore >= 60 ? 'bullish' : technicalScore <= 40 ? 'bearish' : 'neutral'
       }
     };
   } catch (error) {
@@ -308,15 +261,11 @@ const calculateTechnicalScore = (asset) => {
   else if (change > -8) score -= 5; // Correction
   else score -= 20; // Crash
 
-  // Volume analysis
+  // Volume analysis (real Binance quote volume)
   const avgVolume = 1500000000;
   if (asset.volume24h > avgVolume * 2) score += 15;
   else if (asset.volume24h > avgVolume) score += 10;
   else if (asset.volume24h < avgVolume / 2) score -= 10;
-
-  // Market cap (stability indicator)
-  if (asset.marketCap > 100000000000) score += 10;
-  else if (asset.marketCap > 10000000000) score += 5;
 
   // Volatility
   const volatility = Math.abs(change);
@@ -449,10 +398,7 @@ const generateBasicSignal = (asset) => {
     recommendation: basicScore > 70 ? 'buy' : basicScore < 40 ? 'sell' : 'hold',
     riskLevel: basicScore > 70 ? 'low' : basicScore > 50 ? 'medium' : 'high',
     breakdown: {
-      technical: basicScore,
-      news: generateSimulatedNewsSentiment(asset),
-      social: generateSimulatedSocialTrends(asset),
-      onchain: generateSimulatedOnChainData(asset)
+      technical: basicScore
     },
     signals: {
       strength: basicScore > 70 ? 'strong' : basicScore > 50 ? 'moderate' : 'weak',

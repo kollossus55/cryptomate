@@ -257,29 +257,25 @@ export default function Trading() {
 
   // Integrate WebSocket for real-time updates
   const symbolList = React.useMemo(() => initialAssets.map(a => a.symbol), []);
-  const { livePrices, isConnected: isWsConnected } = useBinanceWebSocket(symbolList);
+  const { livePrices, liveTickers, isConnected: isWsConnected } = useBinanceWebSocket(symbolList);
 
-  // Update assets when livePrices change
+  // Update assets from real Binance miniTicker stream (price, 24h change, quote volume)
   useEffect(() => {
-    if (Object.keys(livePrices).length > 0) {
+    if (Object.keys(liveTickers).length > 0) {
       setAssets(prevAssets => prevAssets.map(asset => {
-        if (livePrices[asset.symbol]) {
-          // Calculate change if we had previous data, or just update price
-          // Ideally change24h comes from ticker stream too, but miniTicker has it?
-          // miniTicker has: e:event type, E:event time, s:symbol, c:close price, o:open price, h:high, l:low, v:volume, q:quote volume
-          // change % = (c - o) / o * 100
-          
-          // livePrices currently only stores price (c) from my implementation.
-          // To get 24h change, I might need open price.
-          // For now, just updating price is a massive improvement.
-          // But wait, if I only update price, change24h will be stale relative to new price?
-          // Actually, let's stick to price updates for instantaneous feel.
-          return { ...asset, price: livePrices[asset.symbol] };
+        const t = liveTickers[asset.symbol];
+        if (t) {
+          return {
+            ...asset,
+            price: t.price ?? asset.price,
+            change24h: t.change24h ?? asset.change24h,
+            volume24h: t.volume24h ?? asset.volume24h
+          };
         }
         return asset;
       }));
     }
-  }, [livePrices]);
+  }, [liveTickers]);
 
   const { activeToast, clearToast } = useNotificationMonitor(assets);
 
@@ -1194,35 +1190,27 @@ export default function Trading() {
   };
 
   const calculateBasicConfidence = (asset) => {
-    // Boosted base score to 60 (from 50) to ensure more assets cross the 70% threshold for demo purposes
+    // Deterministic score from REAL Binance 24h change & quote volume.
+    // No random noise, no market cap (Binance doesn't provide it).
     let score = 60;
+    const change = asset.change24h || 0;
 
-    // Refined logic for V4: Reward moderate growth, penalize crash, allow dips
-    if (asset.change24h > 2 && asset.change24h <= 10) score += 15; // Sweet spot
-    else if (asset.change24h > 10) score += 5; // Overextended
-    else if (asset.change24h > 0) score += 10; // Grind up
-    else if (asset.change24h > -3) score += 5; // Dip/Consolidation
-    else if (asset.change24h > -8) score -= 5; // Moderate correction
-    else score -= 20; // Crash
+    if (change > 2 && change <= 10) score += 15; // Sweet spot
+    else if (change > 10) score += 5;            // Overextended
+    else if (change > 0) score += 10;           // Grind up
+    else if (change > -3) score += 5;            // Dip/Consolidation
+    else if (change > -8) score -= 5;           // Moderate correction
+    else score -= 20;                            // Crash
 
     const avgVolume = 1500000000;
-    if (asset.volume24h > avgVolume * 2) score += 10;
-    else if (asset.volume24h > avgVolume) score += 5;
-    else if (asset.volume24h < avgVolume / 2) score -= 5;
+    const vol = asset.volume24h || 0;
+    if (vol > avgVolume * 2) score += 10;
+    else if (vol > avgVolume) score += 5;
+    else if (vol < avgVolume / 2) score -= 5;
 
-    if (asset.marketCap > 100000000000) score += 10;
-    else if (asset.marketCap > 10000000000) score += 5;
-
-    const volatility = Math.abs(asset.change24h);
+    const volatility = Math.abs(change);
     if (volatility > 10) score -= 5;
     else if (volatility < 2) score += 5;
-
-    const aiBonus = Math.random() * 20 - 10;
-    score += aiBonus;
-
-    // Ensure we don't return low confidence for stable assets in demo
-    // If the score is close to 70 (e.g. 65+), nudge it up slightly to encourage trading
-    if (score >= 65 && score < 70) score += 5;
 
     return Math.max(30, Math.min(95, Math.round(score)));
   };
@@ -1237,44 +1225,44 @@ export default function Trading() {
     setPriceUpdateError(null);
 
     try {
-      const ids = Object.values(coinGeckoIds).join(',');
+      // Real Binance 24h ticker for ALL USDT pairs — one request, filtered
+      // client-side. No CoinGecko, no market cap (Binance doesn't provide it).
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const response = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true`,
-        {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json',
-          }
-        }
-      );
+      const response = await fetch('https://api.binance.com/api/v3/ticker/24hr', {
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' }
+      });
 
       clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
-        throw new Error(`API returned ${response.status}: ${errorText}`);
+        throw new Error(`Binance API returned ${response.status}: ${errorText}`);
       }
 
       const data = await response.json();
-
-      if (!data || typeof data !== 'object') {
-        throw new Error('Invalid data format received from API');
+      if (!Array.isArray(data)) {
+        throw new Error('Invalid data format received from Binance');
       }
 
-      const updatedAssets = initialAssets.map(asset => {
-        const coinId = coinGeckoIds[asset.symbol];
-        const liveData = data[coinId];
+      const tickerBySymbol = {};
+      data.forEach(t => {
+        if (t.symbol.endsWith('USDT')) {
+          tickerBySymbol[t.symbol.replace(/USDT$/, '')] = t;
+        }
+      });
 
-        if (liveData && liveData.usd) {
+      const updatedAssets = initialAssets.map(asset => {
+        const t = tickerBySymbol[asset.symbol];
+        if (t) {
           return {
             ...asset,
-            price: liveData.usd || asset.price,
-            change24h: liveData.usd_24h_change !== undefined ? liveData.usd_24h_change : asset.change24h,
-            volume24h: liveData.usd_24h_vol || asset.volume24h,
-            marketCap: liveData.usd_market_cap || asset.marketCap
+            price: parseFloat(t.lastPrice) || asset.price,
+            change24h: parseFloat(t.priceChangePercent) || asset.change24h,
+            volume24h: parseFloat(t.quoteVolume) || asset.volume24h
+            // marketCap intentionally left as the static seed value (Binance has none)
           };
         }
         return asset;
@@ -1285,17 +1273,17 @@ export default function Trading() {
       setConsecutiveFailures(0);
       setPriceUpdateError(null);
 
-      console.log('✅ Price data updated successfully from CoinGecko');
+      console.log('✅ Price data updated from Binance 24h ticker');
     } catch (error) {
       const errorMessage = error.name === 'AbortError'
-        ? 'Request timeout - API took too long to respond'
+        ? 'Request timeout - Binance took too long to respond'
         : error.message || 'Unknown error';
 
-      console.warn('⚠️ Failed to fetch live prices:', errorMessage);
+      console.warn('⚠️ Failed to fetch Binance prices:', errorMessage);
       setPriceUpdateError(errorMessage);
       setConsecutiveFailures(prev => prev + 1);
 
-      console.log('ℹ️ Continuing with cached price data');
+      console.log('ℹ️ Continuing with WebSocket price data');
 
       if (assets.length === 0) {
         setAssets(initialAssets);
