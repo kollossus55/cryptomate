@@ -178,6 +178,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
   // 3. Market data — real, or we do not trade
   // -------------------------------------------------------------------------
   let universe;
+  let usedFallbackUniverse = false;
   try {
     universe = await fetchUniverse({ topN: UNIVERSE_SIZE });
     log(`Universe: ${universe.length} liquid USDT pairs`);
@@ -202,6 +203,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
             trades24h: null,
           }));
         log(`Fallback universe: ${universe.length} symbols from scan @ ${latest.scanned_at}`);
+        usedFallbackUniverse = true;
       }
     } catch (e) {
       log(`ScanResult fallback read failed: ${e.message}`);
@@ -270,8 +272,12 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
   );
   log(`Candles retrieved for ${candlesBySymbol.size} symbols`);
 
-  // Re-check market-wide conditions now that we have breadth data.
-  const guards = evaluateAllGuards({ settings, counters, equity: startingEquity, universe, now });
+  // Re-check market-wide conditions now that we have breadth data. The fallback
+  // universe is the scanner's scored subset, not a clean market sample — running
+  // the broad-market breadth check on it produces false halts whenever the
+  // server is geo-blocked from Binance. Skip only that check in fallback mode;
+  // every other guard (kill switch, daily loss, trade cap, schedule) still runs.
+  const guards = evaluateAllGuards({ settings, counters, equity: startingEquity, universe: usedFallbackUniverse ? null : universe, now });
   const newEntriesAllowed = guards.allowed && guards.newEntriesAllowed !== false;
   if (!newEntriesAllowed) {
     log(`New entries blocked: ${guards.reason} — managing exits only`);
@@ -559,7 +565,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
           counters.trades_today += 1;
           counters.assets_traded_today.push(ticker.symbol);
           priceMap.set(ticker.symbol, costs.fillPrice);
-          heldReturns.set(ticker.symbol, logReturns(candles));
+          if (candles) heldReturns.set(ticker.symbol, logReturns(candles));
         } else {
           log(`Buy rejected for ${ticker.symbol}: ${buy.reason}`);
         }
