@@ -482,7 +482,15 @@ export default function Trading() {
     let updatedPositions = [...(portfolio.positions || [])];
 
     const assetSymbol = `${asset.symbol}/USDT`;
-    const positionIndex = updatedPositions.findIndex(p => p.asset_symbol === assetSymbol);
+    // Match positions regardless of symbol format:
+    //  - Frontend manual trades: "BTC/USDT" (with slash)
+    //  - Server worker trades:  "BTCUSDT"  (no slash)
+    //  - Legacy / edge cases:    raw "BTC"
+    const positionIndex = updatedPositions.findIndex(p =>
+      p.asset_symbol === assetSymbol ||
+      p.asset_symbol === `${asset.symbol}USDT` ||
+      p.asset_symbol === asset.symbol
+    );
     const existingPosition = positionIndex >= 0 ? updatedPositions[positionIndex] : null;
 
     if (tradeType === 'buy') {
