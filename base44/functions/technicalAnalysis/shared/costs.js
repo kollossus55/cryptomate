@@ -92,12 +92,31 @@ export function estimateFillFromBook(book, side, quoteAmount) {
 export function estimateSlippage({ quoteAmount, quoteVolume24h, atrPercent = 0.02 }) {
   if (!quoteVolume24h || quoteVolume24h <= 0) return 0.005; // 0.5% if unknown
 
-  const participation = quoteAmount / quoteVolume24h;
-  const base = 0.0005;                                  // ~5 bps of spread
-  const impact = Math.sqrt(participation) * 0.5;        // square-root impact law
-  const volAdjustment = Math.max(0, atrPercent - 0.01); // extra in fast markets
+  // Defensive unit normalisation. atrPercent is a FRACTION (0.02 = 2%), but
+  // some callers computed it on a 0-100 scale — the ticker-derived scanner
+  // path passed 5.0 meaning 5%. That made volAdjustment ~100x too large,
+  // pinned this function at its cap, and the max_slippage_percent gate then
+  // rejected every candidate. Anything above 1.0 cannot be a sane fraction
+  // (100% hourly volatility), so treat it as percent and convert.
+  let atr = atrPercent;
+  if (atr > 1) atr = atr / 100;
+  atr = Math.max(0, Math.min(atr, 0.5));
 
-  return Math.min(base + impact + volAdjustment, 0.05); // cap at 5%
+  const participation = quoteAmount / quoteVolume24h;
+
+  // Square-root market impact. The standard form is
+  //   impact ≈ coefficient × volatility × sqrt(order size / daily volume)
+  // The volatility term matters: the old version omitted it and used a bare
+  // sqrt(participation) × 0.5, which charged the same impact to a $1,000 order
+  // whether the asset was a placid major or a thin alt, and overstated both.
+  const impact = atr * Math.sqrt(participation) * 1.0;
+
+  // Spreads widen with volatility, but nowhere near one-for-one — a 3% hourly
+  // ATR typically comes with a spread in the single basis points, not 3%.
+  const base = 0.0005;              // ~5 bps baseline spread
+  const volSpread = atr * 0.02;     // widening in fast markets
+
+  return Math.min(base + volSpread + impact, 0.05); // cap at 5%
 }
 
 /**

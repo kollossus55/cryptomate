@@ -37,6 +37,9 @@ const CANDLE_INTERVAL = '1h';
 const CANDLE_LIMIT = 200;
 const UNIVERSE_SIZE = 60;
 const MAX_SCAN_CANDIDATES = 25;
+// Liquidity floor for symbols admitted from a scan that are outside this
+// worker's own volume-ranked universe. Matches the scanner's own floor.
+const MIN_ADMIT_QUOTE_VOLUME = 5_000_000;
 const LOCK_DURATION_MS = 5 * 60 * 1000;
 
 Deno.serve(async (req) => {
@@ -247,13 +250,47 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
     if (latest && !latest.error && Array.isArray(latest.opportunities) && latest.scanned_at
         && scanAgeMs < SCAN_STALE_MS) {
       scannerOppMap = new Map();
+      let admitted = 0;
       for (const opp of latest.opportunities) {
         if (!opp || !opp.symbol) continue;
         const pair = opp.symbol + 'USDT';
-        if (!universeBySymbol.has(pair)) continue;
+
+        // The scanner covers 100 symbols; this worker's own universe is only
+        // the top 60 by volume. Previously anything the scanner found outside
+        // that top 60 was DISCARDED here — which is exactly the altcoins the
+        // scanner exists to surface. The scan found them, scored them, and the
+        // worker silently dropped them for not being large enough.
+        //
+        // Scanner picks now EXTEND the universe rather than being filtered by
+        // it. A scanner opportunity carries its own price and 24h volume, so
+        // it can stand as a universe entry in its own right.
+        if (!universeBySymbol.has(pair)) {
+          const price = Number(opp.price);
+          const vol = Number(opp.volume24h);
+          // Still enforce the liquidity floor. Below it, modelled slippage is
+          // guesswork and the spread eats any edge the signal might have.
+          if (!Number.isFinite(price) || price <= 0) continue;
+          if (!Number.isFinite(vol) || vol < MIN_ADMIT_QUOTE_VOLUME) continue;
+
+          const entry = {
+            symbol: pair,
+            base: opp.symbol,
+            price,
+            change24h: Number(opp.momentum) || 0,
+            quoteVolume24h: vol,
+            high24h: null,
+            low24h: null,
+            trades24h: null,
+            fromScanner: true,
+          };
+          universe.push(entry);
+          universeBySymbol.set(pair, entry);
+          admitted++;
+        }
         scannerOppMap.set(pair, opp);
       }
-      log(`Using scanner candidates: ${scannerOppMap.size} from scan @ ${latest.scanned_at}`);
+      log(`Using scanner candidates: ${scannerOppMap.size} from scan @ ${latest.scanned_at}` +
+          (admitted ? ` (${admitted} admitted beyond the top-${UNIVERSE_SIZE} universe)` : ''));
     }
   } catch (e) {
     log(`ScanResult read failed: ${e.message}`);

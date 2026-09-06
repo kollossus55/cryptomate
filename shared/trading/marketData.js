@@ -73,6 +73,284 @@ async function mapLimit(items, limit, fn) {
   return results;
 }
 
+/**
+ * Data provider chain.
+ *
+ * Binance returns HTTP 451 to Base44's servers (geo-block). The workaround in
+ * place fed data from the browser, which meant the bot could only trade while
+ * someone had the Altcoin Scanner page open — overnight it had no data and
+ * placed no trades.
+ *
+ * This tries several exchanges in order and uses the first that answers. All
+ * of them expose free, unauthenticated spot endpoints, and all return the same
+ * normalised shape so nothing downstream needs to know which one replied.
+ *
+ * Order is deliberate: OKX first because its symbols map to Binance's almost
+ * one-to-one (BTCUSDT -> BTC-USDT), then Coinbase and Kraken, which quote
+ * against USD rather than USDT and need real mapping.
+ */
+
+const PROVIDER_TIMEOUT = 8000;
+
+// ---------------------------------------------------------------------------
+// OKX
+// ---------------------------------------------------------------------------
+
+const OKX = 'https://www.okx.com';
+
+const OKX_BAR = {
+  '1m': '1m', '3m': '3m', '5m': '5m', '15m': '15m', '30m': '30m',
+  '1h': '1H', '2h': '2H', '4h': '4H', '6h': '6H', '12h': '12H', '1d': '1D',
+};
+
+/** BTCUSDT -> BTC-USDT */
+function toOkxInst(symbol) {
+  if (!symbol.endsWith('USDT')) return null;
+  return `${symbol.slice(0, -4)}-USDT`;
+}
+
+const okxProvider = {
+  name: 'okx',
+
+  async tickers() {
+    const data = await fetchJson(`${OKX}/api/v5/market/tickers?instType=SPOT`, { timeoutMs: PROVIDER_TIMEOUT });
+    if (data.code !== '0' || !Array.isArray(data.data)) throw new Error('OKX tickers malformed');
+
+    return data.data
+      .filter((t) => t.instId.endsWith('-USDT'))
+      .map((t) => {
+        const open = parseFloat(t.open24h);
+        const price = parseFloat(t.last);
+        return {
+          // Normalise back to Binance-style symbols so the rest of the app,
+          // the stored positions and the ScanResult records all stay consistent.
+          symbol: t.instId.replace('-USDT', 'USDT'),
+          base: t.instId.split('-')[0],
+          price,
+          change24h: open > 0 ? ((price - open) / open) * 100 : 0,
+          quoteVolume24h: parseFloat(t.volCcy24h),
+          high24h: parseFloat(t.high24h),
+          low24h: parseFloat(t.low24h),
+          trades24h: null,
+        };
+      });
+  },
+
+  async candles(symbol, interval, limit) {
+    const instId = toOkxInst(symbol);
+    const bar = OKX_BAR[interval];
+    if (!instId || !bar) return null;
+
+    const data = await fetchJson(
+      `${OKX}/api/v5/market/candles?instId=${instId}&bar=${bar}&limit=${Math.min(limit + 1, 300)}`,
+      { timeoutMs: PROVIDER_TIMEOUT }
+    );
+    if (data.code !== '0' || !Array.isArray(data.data)) return null;
+
+    const intervalMs = INTERVAL_MS[interval];
+    // OKX returns newest first; everything downstream expects oldest first.
+    return data.data
+      .slice()
+      .reverse()
+      .map((k) => ({
+        openTime: Number(k[0]),
+        open: parseFloat(k[1]),
+        high: parseFloat(k[2]),
+        low: parseFloat(k[3]),
+        close: parseFloat(k[4]),
+        volume: parseFloat(k[5]),
+        closeTime: Number(k[0]) + intervalMs - 1,
+        quoteVolume: parseFloat(k[7] ?? k[6] ?? 0),
+        // k[8] === '1' means the bar is closed. Trust it when present.
+        _confirmed: k[8] === undefined ? null : k[8] === '1',
+      }));
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Coinbase
+// ---------------------------------------------------------------------------
+
+const COINBASE = 'https://api.exchange.coinbase.com';
+
+const COINBASE_GRANULARITY = {
+  '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '6h': 21600, '1d': 86400,
+};
+
+/** BTCUSDT -> BTC-USD (Coinbase quotes in USD, not USDT) */
+function toCoinbaseProduct(symbol) {
+  if (!symbol.endsWith('USDT')) return null;
+  return `${symbol.slice(0, -4)}-USD`;
+}
+
+const coinbaseProvider = {
+  name: 'coinbase',
+
+  async tickers() {
+    const products = await fetchJson(`${COINBASE}/products`, { timeoutMs: PROVIDER_TIMEOUT });
+    const usd = products.filter((p) => p.quote_currency === 'USD' && p.status === 'online' && !p.trading_disabled);
+
+    // Coinbase has no bulk ticker endpoint, so this would be one request per
+    // product. Cap it at the majors — enough to keep the bot alive when the
+    // other providers are unreachable, without hundreds of calls per cycle.
+    const majors = usd.slice(0, 40);
+    const stats = await mapLimit(majors, 6, async (p) => {
+      try {
+        const s = await fetchJson(`${COINBASE}/products/${p.id}/stats`, { timeoutMs: PROVIDER_TIMEOUT });
+        const open = parseFloat(s.open);
+        const price = parseFloat(s.last);
+        if (!Number.isFinite(price) || price <= 0) return null;
+        return {
+          symbol: `${p.base_currency}USDT`,
+          base: p.base_currency,
+          price,
+          change24h: open > 0 ? ((price - open) / open) * 100 : 0,
+          quoteVolume24h: parseFloat(s.volume) * price,
+          high24h: parseFloat(s.high),
+          low24h: parseFloat(s.low),
+          trades24h: null,
+        };
+      } catch {
+        return null;
+      }
+    });
+
+    return stats.filter((s) => s && !s.error);
+  },
+
+  async candles(symbol, interval, limit) {
+    const product = toCoinbaseProduct(symbol);
+    const granularity = COINBASE_GRANULARITY[interval];
+    if (!product || !granularity) return null;
+
+    const raw = await fetchJson(
+      `${COINBASE}/products/${product}/candles?granularity=${granularity}`,
+      { timeoutMs: PROVIDER_TIMEOUT }
+    );
+    if (!Array.isArray(raw)) return null;
+
+    // Coinbase: [time, low, high, open, close, volume], newest first, seconds.
+    return raw
+      .slice()
+      .reverse()
+      .slice(-(limit + 1))
+      .map((k) => ({
+        openTime: k[0] * 1000,
+        low: k[1],
+        high: k[2],
+        open: k[3],
+        close: k[4],
+        volume: k[5],
+        closeTime: k[0] * 1000 + granularity * 1000 - 1,
+        quoteVolume: k[5] * k[4],
+        _confirmed: null,
+      }));
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Binance (preferred when reachable)
+// ---------------------------------------------------------------------------
+
+const binanceProvider = {
+  name: 'binance',
+
+  async tickers() {
+    const [tickers, tradable] = await Promise.all([
+      fetchJson(`${BINANCE}/api/v3/ticker/24hr`, { timeoutMs: PROVIDER_TIMEOUT }),
+      fetchTradableUsdtSymbols(),
+    ]);
+    return tickers
+      .filter((t) => tradable.has(t.symbol))
+      .map((t) => ({
+        symbol: t.symbol,
+        base: t.symbol.replace(/USDT$/, ''),
+        price: parseFloat(t.lastPrice),
+        change24h: parseFloat(t.priceChangePercent),
+        quoteVolume24h: parseFloat(t.quoteVolume),
+        high24h: parseFloat(t.highPrice),
+        low24h: parseFloat(t.lowPrice),
+        trades24h: t.count,
+      }));
+  },
+
+  async candles(symbol, interval, limit) {
+    const raw = await fetchJson(
+      `${BINANCE}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit + 1}`,
+      { timeoutMs: PROVIDER_TIMEOUT }
+    );
+    if (!Array.isArray(raw)) return null;
+    const intervalMs = INTERVAL_MS[interval];
+    return raw.map((k) => ({
+      openTime: k[0],
+      open: parseFloat(k[1]),
+      high: parseFloat(k[2]),
+      low: parseFloat(k[3]),
+      close: parseFloat(k[4]),
+      volume: parseFloat(k[5]),
+      closeTime: k[6] ?? k[0] + intervalMs - 1,
+      quoteVolume: parseFloat(k[7]),
+      _confirmed: null,
+    }));
+  },
+};
+
+const PROVIDERS = [binanceProvider, okxProvider, coinbaseProvider];
+
+// Remember which provider last worked so a geo-blocked primary is not retried
+// on every symbol of every cycle. Re-probed after the TTL.
+let activeProvider = null;
+let activeProviderAt = 0;
+const PROVIDER_STICKY_MS = 10 * 60 * 1000;
+
+export function getActiveProvider() {
+  return activeProvider?.name ?? null;
+}
+
+/** Reset the sticky provider — call after a config change or for tests. */
+export function resetProvider() {
+  activeProvider = null;
+  activeProviderAt = 0;
+}
+
+function orderedProviders() {
+  if (activeProvider && Date.now() - activeProviderAt < PROVIDER_STICKY_MS) {
+    return [activeProvider, ...PROVIDERS.filter((p) => p !== activeProvider)];
+  }
+  return PROVIDERS;
+}
+
+/**
+ * Run an operation against each provider until one succeeds.
+ * Throws only when every provider has failed.
+ */
+async function withProvider(operation, describe) {
+  const errors = [];
+  for (const provider of orderedProviders()) {
+    try {
+      const result = await operation(provider);
+      if (result === null || (Array.isArray(result) && result.length === 0)) {
+        errors.push(`${provider.name}: empty`);
+        continue;
+      }
+      if (activeProvider !== provider) {
+        console.log(`[marketData] using provider: ${provider.name} (${describe})`);
+      }
+      activeProvider = provider;
+      activeProviderAt = Date.now();
+      return result;
+    } catch (err) {
+      errors.push(`${provider.name}: ${err.message}`);
+      // A geo-block or hard failure on the sticky provider means stop trusting
+      // it immediately rather than waiting out the TTL.
+      if (activeProvider === provider) {
+        activeProvider = null;
+      }
+    }
+  }
+  throw new Error(`All providers failed (${describe}) — ${errors.join(' | ')}`);
+}
+
 // ---------------------------------------------------------------------------
 // Candles
 // ---------------------------------------------------------------------------
@@ -101,12 +379,15 @@ export async function fetchCandles(symbol, interval = '1h', limit = 200) {
   const cached = candleCache.get(cacheKey);
   if (cached && cached.barId === currentBarId) return cached.candles;
 
-  // limit+1 because we discard the in-progress bar.
-  const url = `${BINANCE}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit + 1}`;
-
   let raw;
   try {
-    raw = await fetchJson(url);
+    // Provider chain: Binance when reachable, otherwise OKX or Coinbase.
+    // The server is geo-blocked from Binance (HTTP 451), so without this the
+    // bot could only trade while a browser fed it data.
+    raw = await withProvider(
+      (provider) => provider.candles(symbol, interval, limit),
+      `candles ${symbol} ${interval}`
+    );
   } catch (err) {
     console.warn(`[marketData] candles unavailable for ${symbol}: ${err.message}`);
     return null;
@@ -116,21 +397,12 @@ export async function fetchCandles(symbol, interval = '1h', limit = 200) {
 
   const now = Date.now();
   const candles = raw
-    .map((k) => ({
-      openTime: k[0],
-      open: parseFloat(k[1]),
-      high: parseFloat(k[2]),
-      low: parseFloat(k[3]),
-      close: parseFloat(k[4]),
-      volume: parseFloat(k[5]),
-      closeTime: k[6],
-      quoteVolume: parseFloat(k[7]),
-      trades: k[8],
-    }))
-    // Drop the forming bar, plus any row with a bad field.
-    .filter((c) => c.closeTime < now)
+    // Drop the forming bar, plus any row with a bad field. Providers that
+    // report confirmation explicitly are trusted over the clock comparison.
+    .filter((c) => (c._confirmed === false ? false : c.closeTime < now))
     .filter((c) => Number.isFinite(c.close) && Number.isFinite(c.high) &&
-                   Number.isFinite(c.low) && Number.isFinite(c.volume));
+                   Number.isFinite(c.low) && Number.isFinite(c.volume))
+    .map(({ _confirmed, ...c }) => c);
 
   if (candles.length === 0) return null;
 
@@ -187,27 +459,19 @@ export async function fetchTradableUsdtSymbols() {
  * treat "no market data" as "do not trade".
  */
 export async function fetchUniverse({ topN = 60, minQuoteVolume24h = 5_000_000 } = {}) {
-  const [tickers, tradable] = await Promise.all([
-    fetchJson(`${BINANCE}/api/v3/ticker/24hr`),
-    fetchTradableUsdtSymbols(),
-  ]);
+  // Provider chain rather than Binance alone. The server is geo-blocked from
+  // Binance (HTTP 451); falling back to OKX or Coinbase keeps the bot running
+  // autonomously instead of depending on a browser tab being open.
+  const tickers = await withProvider(
+    (provider) => provider.tickers(),
+    'universe tickers'
+  );
 
   return tickers
-    .filter((t) => tradable.has(t.symbol))
     // Leveraged tokens (BTCUP/BTCDOWN) and stable-to-stable pairs behave
     // nothing like spot and must not be scored as if they do.
     .filter((t) => !/(UP|DOWN|BULL|BEAR)USDT$/.test(t.symbol))
     .filter((t) => !/^(USDC|FDUSD|TUSD|BUSD|DAI|EUR|GBP|AEUR)USDT$/.test(t.symbol))
-    .map((t) => ({
-      symbol: t.symbol,
-      base: t.symbol.replace(/USDT$/, ''),
-      price: parseFloat(t.lastPrice),
-      change24h: parseFloat(t.priceChangePercent),
-      quoteVolume24h: parseFloat(t.quoteVolume),
-      high24h: parseFloat(t.highPrice),
-      low24h: parseFloat(t.lowPrice),
-      trades24h: t.count,
-    }))
     .filter((t) => Number.isFinite(t.price) && t.price > 0)
     // Liquidity floor. Below this, modelled slippage is guesswork and the
     // spread eats any edge the signal might have.

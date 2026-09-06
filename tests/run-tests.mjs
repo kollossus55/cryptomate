@@ -235,6 +235,51 @@ test('disabling indicators renormalises rather than dragging the score down', ()
   assert.ok(some.strength > 40, `renormalised score collapsed to ${some.strength}`);
 });
 
+test('REGRESSION: a strong uptrend must be able to clear the default threshold of 70', () => {
+  // The bug this pins: scoring components contradicted each other. Trend said
+  // "uptrend, good" while RSI/Stochastic/MFI/Bollinger all said "overbought,
+  // bad". Scores never exceeded 56 in ANY market condition, so the default
+  // min_confidence of 70 was unreachable and the bot never opened a position.
+  const strongUp = makeCandles(Array.from({ length: 200 }, (_, i) => 100 * Math.pow(1.004, i)));
+  const s = scoreAsset(strongUp, {
+    indicators: { rsi: true, macd: true, bollinger: true, ema: true, stoch: true, sp500ai: false },
+  });
+  assert.ok(s !== null, 'no score produced');
+  assert.ok(s.strength >= 70, `strong uptrend scored ${s.strength}, below the default threshold of 70`);
+  assert.strictEqual(s.direction, 'bullish');
+});
+
+test('REGRESSION: strength separates uptrends from downtrends by a wide margin', () => {
+  const up = makeCandles(Array.from({ length: 200 }, (_, i) => 100 * Math.pow(1.004, i)));
+  const down = makeCandles(Array.from({ length: 200 }, (_, i) => 300 * Math.pow(0.996, i)));
+  const su = scoreAsset(up);
+  const sd = scoreAsset(down);
+  assert.ok(su.strength - sd.strength >= 25,
+    `separation too narrow: up ${su.strength} vs down ${sd.strength}`);
+});
+
+test('overbought readings CONFIRM in an uptrend rather than penalising it', () => {
+  // Momentum strategies buy strength. A high RSI inside an established uptrend
+  // must not drag the score down — that was the core of the bug.
+  const up = makeCandles(Array.from({ length: 200 }, (_, i) => 100 * Math.pow(1.004, i)));
+  const s = scoreAsset(up, { indicators: { rsi: true, macd: false, bollinger: true, ema: true, stoch: true, sp500ai: false } });
+  assert.ok(s.components.momentum >= 50, `momentum scored ${s.components.momentum} in a clean uptrend`);
+  assert.ok(s.components.meanReversion >= 50, `bollinger scored ${s.components.meanReversion} riding the upper band`);
+});
+
+test('regime is detected and exposed on the result', () => {
+  const up = makeCandles(Array.from({ length: 200 }, (_, i) => 100 * Math.pow(1.004, i)));
+  const flatSeries = makeCandles(Array.from({ length: 200 }, () => 100));
+  assert.strictEqual(scoreAsset(up).regime, 'uptrend');
+  assert.strictEqual(scoreAsset(flatSeries).regime, 'range');
+});
+
+test('choppy markets are still rejected — the fix did not just inflate everything', () => {
+  const chop = makeCandles(Array.from({ length: 200 }, (_, i) => 100 + Math.sin(i / 4) * 3));
+  const s = scoreAsset(chop);
+  assert.ok(s.strength < 70, `choppy market scored ${s.strength} — threshold no longer selective`);
+});
+
 // ---------------------------------------------------------------------------
 
 section('Costs');
@@ -271,6 +316,35 @@ test('applyCosts makes a buy more expensive and a sell cheaper', () => {
 test('slippage rises with order size relative to volume', () => {
   const small = applyCosts({ side: 'buy', intendedPrice: 100, quoteAmount: 100, quoteVolume24h: 1e9 });
   const large = applyCosts({ side: 'buy', intendedPrice: 100, quoteAmount: 1e7, quoteVolume24h: 1e9 });
+  assert.ok(large.slippagePercent > small.slippagePercent);
+});
+
+test('REGRESSION: slippage estimate does not block ordinary liquid trades', () => {
+  // The bug: estimateSlippage added (atrPercent - 0.01) raw, so a 3% ATR
+  // contributed 2% slippage and every candidate failed the 0.5% gate.
+  const c = applyCosts({ side: 'buy', intendedPrice: 100, quoteAmount: 1000, book: null, quoteVolume24h: 5e7, atrPercent: 0.03 });
+  assert.ok(c.slippagePercent * 100 < 0.5,
+    `liquid $1k trade estimated at ${(c.slippagePercent * 100).toFixed(3)}% — would be blocked`);
+});
+
+test('REGRESSION: percent-scale atrPercent is normalised, not taken literally', () => {
+  // The scanner passed 5.0 meaning 5%. Anything above 1.0 cannot be a sane
+  // fraction, so it must be converted rather than blowing up the estimate.
+  const asFraction = applyCosts({ side: 'buy', intendedPrice: 100, quoteAmount: 1000, book: null, quoteVolume24h: 5e7, atrPercent: 0.05 });
+  const asPercent = applyCosts({ side: 'buy', intendedPrice: 100, quoteAmount: 1000, book: null, quoteVolume24h: 5e7, atrPercent: 5.0 });
+  assert.ok(Math.abs(asFraction.slippagePercent - asPercent.slippagePercent) < 1e-9,
+    'percent-scale input not normalised to match fraction input');
+});
+
+test('slippage still blocks genuinely illiquid trades', () => {
+  const thin = applyCosts({ side: 'buy', intendedPrice: 100, quoteAmount: 1000, book: null, quoteVolume24h: 2e5, atrPercent: 0.08 });
+  assert.ok(thin.slippagePercent * 100 > 0.5,
+    'a $1k order into a $200k/day market should be flagged');
+});
+
+test('slippage scales with order size', () => {
+  const small = applyCosts({ side: 'buy', intendedPrice: 100, quoteAmount: 1000, book: null, quoteVolume24h: 5e7, atrPercent: 0.03 });
+  const large = applyCosts({ side: 'buy', intendedPrice: 100, quoteAmount: 500000, book: null, quoteVolume24h: 5e7, atrPercent: 0.03 });
   assert.ok(large.slippagePercent > small.slippagePercent);
 });
 

@@ -70,8 +70,12 @@ function parseKlines(raw) {
 /** Ticker-derived score when OHLCV is unavailable (server geo-blocked). */
 function scoreFromTicker(u) {
   const momentum = u.change24h || 0;
+  // FRACTION, not percent. This is consumed as `atrPercent` by the cost model,
+  // which expects 0.05 for 5%. Returning 5.0 here made the slippage estimate
+  // ~100x too large, pinned it at its cap, and the max_slippage_percent gate
+  // then rejected every candidate the scanner produced.
   const volatility = (u.high24h && u.low24h && u.price)
-    ? ((u.high24h - u.low24h) / u.price) * 100 : 0;
+    ? (u.high24h - u.low24h) / u.price : 0;
   let strength = 50 + momentum * 1.5;
   strength = Math.max(5, Math.min(95, strength));
   const direction = momentum > 0.5 ? 'bullish' : momentum < -0.5 ? 'bearish' : 'neutral';
@@ -80,7 +84,7 @@ function scoreFromTicker(u) {
     direction,
     atrPercent: volatility,
     price: u.price,
-    reasons: [`Ticker momentum ${momentum.toFixed(2)}%`, `24h range ${volatility.toFixed(2)}%`],
+    reasons: [`Ticker momentum ${momentum.toFixed(2)}%`, `24h range ${(volatility * 100).toFixed(2)}%`],
     dataPoints: 2,
   };
 }

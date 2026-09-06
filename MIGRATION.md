@@ -187,3 +187,116 @@ The difference is that you can now find out. Run it in paper mode until you have
 reports for the same window and the same assets. If it does not beat that, the
 strategy needs changing — and now the numbers will actually tell you so, which
 before they could not.
+
+---
+
+# Update — auto-trades not firing
+
+Three independent bugs, each sufficient on its own to prevent every trade.
+
+## 1. The strength score could never reach the threshold (my bug)
+
+`min_confidence` defaults to **70**. Measured across every market regime, the
+scorer's ceiling was **56**. Zero trades was guaranteed by construction.
+
+The components contradicted each other. `trendComponent` correctly scored a
+strong uptrend at 75, but RSI above 70 took −15 as "overbought", Stochastic
+above 80 took −8, MFI above 80 took −10, and price in the upper Bollinger zone
+took −5. Three of four components penalised exactly the conditions a momentum
+strategy exists to buy. Everything landed near 50.
+
+Those penalties are right for mean reversion. Yours is a momentum strategy, and
+I gave it a scorer that flinched at strength.
+
+**Fix:** the engine is now regime-aware. `detectRegime()` runs first, and each
+oscillator is interpreted against it — in an established uptrend a high RSI
+confirms, price riding the upper Bollinger band is strength rather than
+over-extension, and strong money flow is confirmation. In a range, the
+mean-reverting reading applies. The two are blended by trend conviction so
+scores do not jump as the regime flips.
+
+The SP500-AI composite had the same flaw in its vote conditions: CMO between 0
+and 50, RSI between 50 and 70, MFI between 50 and 80. A strong uptrend exceeds
+all three upper bounds, so the composite scored powerful trends as *bearish*.
+Votes are now directional, excluding only genuine exhaustion.
+
+Measured on 300 realistic GBM samples:
+
+| Regime | mean | share clearing 70 |
+|---|---|---|
+| strong uptrend (+0.30%/hr) | 65.8 | 50% |
+| mild uptrend (+0.10%/hr) | 59.8 | 37% |
+| flat | 52.6 | 18% |
+| mild downtrend | 49.8 | 20% |
+| strong downtrend (−0.30%/hr) | 42.2 | 7% |
+
+Monotonic, with real separation. **Leave `min_confidence` at 70** — it is now
+both reachable and selective.
+
+## 2. The bot could only trade while a browser tab was open
+
+Binance returns HTTP 451 to Base44's servers. The workaround fed data from the
+browser, but the scheduled 15-minute scan hit the geo-block and returned
+without writing anything, so `ScanResult` was only ever written by
+`AltcoinScanner.jsx` while someone had that page open. Overnight the worker had
+no universe, no candles, and aborted every cycle.
+
+**Fix:** `marketData.js` now runs a provider chain — Binance, then OKX, then
+Coinbase — and uses whichever answers. OKX is the useful fallback: its symbols
+map almost one-to-one (`BTCUSDT` → `BTC-USDT`) and it lists USDT spot pairs, so
+results are normalised back to Binance-style symbols and nothing downstream
+needs to know which exchange replied. The working provider is cached for ten
+minutes so a blocked primary is not retried on every symbol.
+
+The browser-fed path still works and takes precedence when present. It is no
+longer the only path.
+
+## 3. The slippage gate rejected everything (unit bug)
+
+`scoreFromTicker` returned `atrPercent` as a percentage (`5.0` for 5%), but
+`estimateSlippage` expects a fraction (`0.05`). The volatility term came out
+~100× too large, pinned the estimate at its 5% cap, and every candidate failed
+the 0.5% gate.
+
+The formula was also wrong independently of units: it added `(atrPercent −
+0.01)` raw, so even a correct 3% ATR produced ~2% estimated slippage. And the
+impact term used a bare `sqrt(participation) × 0.5` with no volatility term,
+which is not the square-root impact law.
+
+**Fix:** unit corrected at source, with defensive normalisation in
+`estimateSlippage` (anything above 1.0 cannot be a sane fraction). Impact is now
+`atr × sqrt(participation)`, with spread widening as a small multiple of ATR.
+
+| Scenario | before | after | gate at 0.5% |
+|---|---|---|---|
+| $500M major, 2% ATR, $1k | 2.12% | 0.09% | passes |
+| $50M alt, 3% ATR, $1k | 2.27% | 0.12% | passes |
+| thin $200k, 8% ATR, $1k | 5.00% | 0.78% | blocks (correctly) |
+
+## Verification
+
+`npm test` — 83 tests, all passing. Includes regression tests that pin each of
+the three bugs, plus a provider-failover suite that verifies OKX and Coinbase
+parsing against captured response shapes with Binance stubbed to fail.
+
+End-to-end gate simulation: of 40 strong-uptrend candidates, 26 now open a
+position. The other 14 are stopped only by strength legitimately below 70 — no
+gate blocks spuriously.
+
+## Still worth watching
+
+**`max_correlation` at 0.8 is tight for crypto.** Majors routinely correlate
+above 0.8 on hourly returns, so this may block positions 2 through 5 even when
+each is a good setup. It was not a cause of zero trades — it only applies once
+you hold something — but watch for `Skip X: correlated_with_Y` in the logs and
+consider 0.85 if it fires constantly.
+
+**Only the top 15 movers get real candles** in the browser-fed scanner path;
+the rest fall back to `scoreFromTicker`, which needs a 24h move above 13.3% to
+clear 70. With the provider chain working server-side this matters less, but it
+is why scanner-sourced signals skew toward large movers.
+
+**I could not test live API calls.** My sandbox blocks all three exchanges, so
+provider parsing is verified against captured response shapes, not the live
+wire. Run one cycle with the kill switch on and confirm the log line
+`[marketData] using provider: okx` (or binance) before trusting it.
