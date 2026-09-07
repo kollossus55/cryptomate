@@ -35,7 +35,7 @@ import { logReturns } from './shared/indicators.js';
 
 const CANDLE_INTERVAL = '1h';
 const CANDLE_LIMIT = 200;
-const UNIVERSE_SIZE = 60;
+const UNIVERSE_SIZE = 100;
 const MAX_SCAN_CANDIDATES = 25;
 // Liquidity floor for symbols admitted from a scan that are outside this
 // worker's own volume-ranked universe. Matches the scanner's own floor.

@@ -425,6 +425,14 @@ export async function fetchCandlesBatch(symbols, interval = '1h', limit = 200, c
 // Universe
 // ---------------------------------------------------------------------------
 
+// Major/popular coins excluded from the trading universe — the bot trades
+// altcoins only. These dominate any pure volume ranking, so skipping them lets
+// the next tier of liquid altcoins through.
+const MAJORS = new Set([
+  'BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'DOGE', 'DOT', 'MATIC',
+  'LTC', 'BCH', 'LINK', 'AVAX', 'TRX', 'ATOM',
+]);
+
 let tradableSymbolsCache = { at: 0, set: null };
 
 /**
@@ -472,6 +480,8 @@ export async function fetchUniverse({ topN = 60, minQuoteVolume24h = 5_000_000 }
     // nothing like spot and must not be scored as if they do.
     .filter((t) => !/(UP|DOWN|BULL|BEAR)USDT$/.test(t.symbol))
     .filter((t) => !/^(USDC|FDUSD|TUSD|BUSD|DAI|EUR|GBP|AEUR)USDT$/.test(t.symbol))
+    // Exclude major/popular coins — trade altcoins only.
+    .filter((t) => !MAJORS.has(t.base))
     .filter((t) => Number.isFinite(t.price) && t.price > 0)
     // Liquidity floor. Below this, modelled slippage is guesswork and the
     // spread eats any edge the signal might have.

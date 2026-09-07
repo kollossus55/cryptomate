@@ -29,7 +29,7 @@
       "trigger_type": "scheduled",
       "events": [],
       "schedule_mode": "recurring",
-      "cron_expression": "*/5 * * * *",
+      "cron_expression": "*/10 * * * *",
       "one_time_date": null,
       "timezone": "UTC",
       "interval_value": null,
@@ -41,5 +41,5 @@
     }
   },
   "name": "Auto Trading Scheduler",
-  "description": "Runs the server-side auto-trading scheduler every 5 minutes so enabled portfolios are scanned and traded without any browser involvement."
+  "description": "Runs the server-side auto-trading scheduler every 10 minutes so enabled portfolios are scanned and traded without any browser involvement."
 }
