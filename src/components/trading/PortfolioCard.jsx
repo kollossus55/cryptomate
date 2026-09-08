@@ -7,8 +7,10 @@ import { Badge } from "@/components/ui/badge";
 export default function PortfolioCard({ portfolio, onClosePosition, assets = [], livePrices = {} }) {
   const [extraPrices, setExtraPrices] = useState({});
 
-  // Fetch prices for held positions whose symbols aren't in the assets list
-  // (server-side worker buys from top 250, frontend only tracks ~49)
+  // Fetch live prices for held positions whose symbols aren't in the
+  // websocket-tracked assets list. The server worker buys obscure altcoins
+  // (XSOXL, XINTC, PUMP, …) that CoinGecko doesn't list, but the browser CAN
+  // reach Binance — one ticker/price call returns every USDT pair.
   useEffect(() => {
     const positions = portfolio?.positions || [];
     if (positions.length === 0) return;
@@ -19,28 +21,27 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
 
     if (missingSymbols.length === 0) return;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    let cancelled = false;
+    const timeoutId = setTimeout(() => { cancelled = true; }, 10000);
 
-    fetch(
-      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=false`,
-      { signal: controller.signal, headers: { Accept: 'application/json' } }
-    )
+    fetch(`https://api.binance.com/api/v3/ticker/price`, { headers: { Accept: 'application/json' } })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`Status ${r.status}`)))
       .then(data => {
+        if (cancelled) return;
         const priceMap = {};
-        data.forEach(coin => {
-          const sym = coin.symbol.toUpperCase();
-          if (missingSymbols.includes(sym) && coin.current_price) {
-            priceMap[sym] = coin.current_price;
+        for (const t of data) {
+          if (typeof t.symbol !== 'string' || !t.symbol.endsWith('USDT')) continue;
+          const base = t.symbol.replace(/USDT$/, '');
+          if (missingSymbols.includes(base) && t.price) {
+            priceMap[base] = parseFloat(t.price);
           }
-        });
+        }
         setExtraPrices(prev => ({ ...prev, ...priceMap }));
       })
-      .catch(err => console.warn('PortfolioCard: failed to fetch extra position prices', err.message))
+      .catch(err => console.warn('PortfolioCard: failed to fetch Binance position prices', err.message))
       .finally(() => clearTimeout(timeoutId));
 
-    return () => clearTimeout(timeoutId);
+    return () => { cancelled = true; clearTimeout(timeoutId); };
   }, [portfolio?.positions, assets]);
 
   if (!portfolio) return null;
