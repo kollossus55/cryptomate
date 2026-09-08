@@ -9,8 +9,9 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
 
   // Fetch live prices for held positions whose symbols aren't in the
   // websocket-tracked assets list. The server worker buys obscure altcoins
-  // (XSOXL, XINTC, PUMP, …) that CoinGecko doesn't list, but the browser CAN
-  // reach Binance — one ticker/price call returns every USDT pair.
+  // (XSOXL, XINTC, PUMP, …) that CoinGecko and Binance don't serve from the
+  // UK, but OKX is reachable and lists nearly all of them. One call returns
+  // every spot ticker.
   useEffect(() => {
     const positions = portfolio?.positions || [];
     if (positions.length === 0) return;
@@ -24,21 +25,21 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
     let cancelled = false;
     const timeoutId = setTimeout(() => { cancelled = true; }, 10000);
 
-    fetch(`https://api.binance.com/api/v3/ticker/price`, { headers: { Accept: 'application/json' } })
+    fetch(`https://www.okx.com/api/v5/market/tickers?instType=SPOT`, { headers: { Accept: 'application/json' } })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`Status ${r.status}`)))
       .then(data => {
-        if (cancelled) return;
+        if (cancelled || !Array.isArray(data?.data)) return;
         const priceMap = {};
-        for (const t of data) {
-          if (typeof t.symbol !== 'string' || !t.symbol.endsWith('USDT')) continue;
-          const base = t.symbol.replace(/USDT$/, '');
-          if (missingSymbols.includes(base) && t.price) {
-            priceMap[base] = parseFloat(t.price);
+        for (const t of data.data) {
+          if (typeof t.instId !== 'string' || !t.instId.endsWith('-USDT')) continue;
+          const base = t.instId.replace(/-USDT$/, '');
+          if (missingSymbols.includes(base) && t.last) {
+            priceMap[base] = parseFloat(t.last);
           }
         }
         setExtraPrices(prev => ({ ...prev, ...priceMap }));
       })
-      .catch(err => console.warn('PortfolioCard: failed to fetch Binance position prices', err.message))
+      .catch(err => console.warn('PortfolioCard: failed to fetch OKX position prices', err.message))
       .finally(() => clearTimeout(timeoutId));
 
     return () => { cancelled = true; clearTimeout(timeoutId); };
