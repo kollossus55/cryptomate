@@ -17,7 +17,7 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
     if (positions.length === 0) return;
 
     const missingSymbols = positions
-      .map(p => p.asset_symbol.replace('/USDT', ''))
+      .map(p => p.asset_symbol.replace('/USDT', '').replace(/USDT$/, ''))
       .filter(sym => !assets.find(a => a.symbol === sym) && !extraPrices[sym]);
 
     if (missingSymbols.length === 0) return;
@@ -59,6 +59,13 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
     if (!currentPrices[key]) currentPrices[key] = price;
   });
 
+  // Normalize a position's asset_symbol (server stores "ZECUSDT", manual trades
+  // use "ZEC/USDT") to the "BASE/USDT" key used in currentPrices.
+  const lookupPrice = (assetSymbol) =>
+    currentPrices[assetSymbol] ||
+    currentPrices[assetSymbol.replace(/USDT$/, '/USDT')] ||
+    currentPrices[assetSymbol.replace('/USDT', 'USDT')];
+
   console.log('📊 PortfolioCard Price Debug:', {
     websocketConnected: Object.keys(livePrices).length > 0,
     assetsCount: assets.length,
@@ -85,7 +92,7 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
     console.log('🔴 Close Position Button Clicked:', position.asset_symbol);
     
     // Calculate live metrics for the confirmation dialog
-    const currentPrice = currentPrices[position.asset_symbol] || position.avg_entry_price;
+    const currentPrice = lookupPrice(position.asset_symbol) || position.avg_entry_price;
     const estimatedPnL = (currentPrice - position.avg_entry_price) * position.quantity;
     const estimatedValue = position.quantity * currentPrice;
     
@@ -188,7 +195,7 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
                 const avgEntryPrice = position.avg_entry_price || 0;
                 
                 // Calculate real-time P&L using current market prices
-                const currentPrice = currentPrices[position.asset_symbol] || avgEntryPrice;
+                const currentPrice = lookupPrice(position.asset_symbol) || avgEntryPrice;
                 const currentValue = quantity * currentPrice;
                 const profitLoss = (currentPrice - avgEntryPrice) * quantity;
                 const profitLossPercent = avgEntryPrice > 0 ? ((profitLoss / (quantity * avgEntryPrice)) * 100).toFixed(2) : 0;
