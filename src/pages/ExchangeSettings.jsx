@@ -20,9 +20,10 @@ export default function ExchangeSettings() {
   const [isAddingConnection, setIsAddingConnection] = useState(false);
   const [testingConnectionId, setTestingConnectionId] = useState(null);
   const [newConnection, setNewConnection] = useState({
-    exchange_name: "binance",
+    exchange_name: "okx",
     api_key: "",
     api_secret: "",
+    api_passphrase: "",
     is_testnet: true,
     is_active: true,
     connection_status: "pending",
@@ -63,9 +64,10 @@ export default function ExchangeSettings() {
 
   const resetForm = () => {
     setNewConnection({
-      exchange_name: "binance",
+      exchange_name: "okx",
       api_key: "",
       api_secret: "",
+      api_passphrase: "",
       is_testnet: true,
       is_active: true,
       connection_status: "pending",
@@ -93,12 +95,18 @@ export default function ExchangeSettings() {
       return;
     }
 
+    if (newConnection.exchange_name === 'okx' && !newConnection.api_passphrase) {
+      setCredentialError("OKX requires an API passphrase. Enter the passphrase you set when creating the API key.");
+      return;
+    }
+
     try {
       const response = await base44.functions.invoke('exchangeCredentials', {
         action: 'store',
         exchange_name: newConnection.exchange_name,
         api_key: newConnection.api_key,
         api_secret: newConnection.api_secret,
+        api_passphrase: newConnection.api_passphrase,
         is_testnet: newConnection.is_testnet,
       });
 
@@ -296,7 +304,7 @@ export default function ExchangeSettings() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-900 border-slate-700">
-                        <SelectItem value="binance">Binance</SelectItem>
+                        <SelectItem value="okx">OKX</SelectItem>
                         <SelectItem value="coinbase" disabled>Coinbase (Coming Soon)</SelectItem>
                         <SelectItem value="kraken" disabled>Kraken (Coming Soon)</SelectItem>
                         <SelectItem value="bybit" disabled>Bybit (Coming Soon)</SelectItem>
@@ -324,6 +332,18 @@ export default function ExchangeSettings() {
                       onChange={(e) => setNewConnection({...newConnection, api_secret: e.target.value})}
                       className="bg-slate-900 border-slate-700 text-white font-mono text-sm"
                     />
+                  </div>
+
+                  <div>
+                    <Label className="text-slate-300 mb-2 block">API Passphrase</Label>
+                    <Input
+                      type="password"
+                      placeholder="Enter your OKX API passphrase"
+                      value={newConnection.api_passphrase}
+                      onChange={(e) => setNewConnection({...newConnection, api_passphrase: e.target.value})}
+                      className="bg-slate-900 border-slate-700 text-white font-mono text-sm"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">OKX requires a passphrase set when you created the API key</p>
                   </div>
 
                   <div className="flex items-center justify-between p-4 bg-slate-900 rounded-lg">
@@ -363,7 +383,7 @@ export default function ExchangeSettings() {
                     </Button>
                     <Button
                       onClick={handleAddConnection}
-                      disabled={!newConnection.api_key || !newConnection.api_secret || createConnectionMutation.isPending}
+                      disabled={!newConnection.api_key || !newConnection.api_secret || (newConnection.exchange_name === 'okx' && !newConnection.api_passphrase) || createConnectionMutation.isPending}
                       className="flex-1 bg-indigo-600 hover:bg-indigo-700"
                     >
                       {createConnectionMutation.isPending ? 'Adding...' : 'Add Connection'}
@@ -389,8 +409,8 @@ export default function ExchangeSettings() {
                 </CardContent>
               </Card>
 
-              <PublicMarketData exchange="binance" symbol="BTCUSDT" />
-              <PublicMarketData exchange="binance" symbol="ETHUSDT" />
+              <PublicMarketData exchange="okx" symbol="BTCUSDT" />
+              <PublicMarketData exchange="okx" symbol="ETHUSDT" />
             </div>
           </TabsContent>
 
@@ -404,16 +424,16 @@ export default function ExchangeSettings() {
                 <CardContent className="space-y-6">
                   <div>
                     <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
-                      <span className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center text-black text-sm font-bold">1</span>
-                      Binance (Recommended for Testing)
+                      <span className="w-6 h-6 bg-slate-200 rounded-full flex items-center justify-center text-black text-sm font-bold">1</span>
+                      OKX (Recommended for Testing)
                     </h4>
                     <ol className="list-decimal list-inside space-y-2 text-slate-400 text-sm ml-8">
-                      <li>Sign up at <strong>testnet.binance.vision</strong> for testnet</li>
-                      <li>Or use <strong>binance.com</strong> for real trading (not recommended yet)</li>
-                      <li>Go to API Management in account settings</li>
-                      <li>Create new API key with <strong>Spot & Margin Trading</strong> permission</li>
+                      <li>Sign up at <strong>okx.com</strong> and enable Demo Trading for testnet</li>
+                      <li>Go to Profile → API Management</li>
+                      <li>Create new API key with <strong>Read</strong> and <strong>Trade</strong> permissions</li>
+                      <li>Set a strong passphrase when creating the key — you'll need it here</li>
                       <li><strong>Do NOT enable withdrawal permissions</strong></li>
-                      <li>Copy API Key and Secret Key</li>
+                      <li>Copy API Key, Secret Key, and Passphrase</li>
                       <li>Enable IP whitelist for added security</li>
                     </ol>
                   </div>

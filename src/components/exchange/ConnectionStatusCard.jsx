@@ -41,7 +41,7 @@ export default function ConnectionStatusCard({ connection, onTest, onManage, isT
   const StatusIcon = config.icon;
 
   const exchangeLogos = {
-    binance: { icon: "◆", color: "bg-yellow-500" },
+    okx: { icon: "◆", color: "bg-slate-200" },
     coinbase: { icon: "●", color: "bg-blue-500" },
     kraken: { icon: "✦", color: "bg-purple-500" },
     bybit: { icon: "◎", color: "bg-orange-500" }

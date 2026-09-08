@@ -17,9 +17,13 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.43';
  * This function:
  *   - takes credentials over an authenticated request and never returns them
  *   - VALIDATES them against the exchange with a real signed call
- *   - REJECTS any key with withdrawal permission, unconditionally
  *   - encrypts with AES-GCM using a key held in the server environment
  *   - stores only ciphertext plus non-sensitive metadata
+ *
+ * OKX note: OKX does not expose API key permissions (including withdrawal)
+ * through its API, so unlike Binance we cannot programmatically reject keys
+ * with withdrawal rights. The UI warns the user; the user must ensure this
+ * when creating the key on OKX's website.
  *
  * SETUP REQUIRED: set EXCHANGE_ENCRYPTION_KEY in your Base44 environment to a
  * base64-encoded 32 random bytes. Generate with:
@@ -28,8 +32,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.43';
  * the correct behaviour — it is not recoverable by design.
  */
 
-const BINANCE_LIVE = 'https://api.binance.com';
-const BINANCE_TESTNET = 'https://testnet.binance.vision';
+const OKX_URL = 'https://www.okx.com';
 
 // ---------------------------------------------------------------------------
 // Encryption
@@ -74,10 +77,23 @@ async function decrypt(payload: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// Real validation
+// OKX signed request
 // ---------------------------------------------------------------------------
 
-async function signQuery(secret: string, query: string): Promise<string> {
+/**
+ * Sign an OKX request.
+ *
+ * OKX signature = base64(HMAC-SHA256(timestamp + method + requestPath + body))
+ * timestamp must be ISO 8601 format.
+ */
+async function signOkxRequest(
+  timestamp: string,
+  method: string,
+  requestPath: string,
+  body: string,
+  secret: string
+): Promise<string> {
+  const prehash = timestamp + method + requestPath + body;
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
@@ -85,47 +101,70 @@ async function signQuery(secret: string, query: string): Promise<string> {
     false,
     ['sign']
   );
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(query));
-  return [...new Uint8Array(signature)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(prehash));
+  return btoa(String.fromCharCode(...new Uint8Array(signature)));
 }
 
 /**
- * Validate a Binance key by calling a signed, authenticated endpoint.
+ * Validate an OKX key by calling a signed, authenticated endpoint.
  *
- * The old handleTestConnection() fetched a PUBLIC ticker and, if it returned
- * 200, recorded permissions as ['read', 'trade'] — which tested nothing about
- * the key. Any string would have "passed". This makes a real signed call.
+ * OKX uses three credentials: API key, secret, and passphrase.
+ * Demo trading (testnet) is selected via the x-simulated-trading: 1 header.
  */
-async function validateBinanceKey(apiKey: string, apiSecret: string, isTestnet: boolean) {
-  const baseUrl = isTestnet ? BINANCE_TESTNET : BINANCE_LIVE;
-  const timestamp = Date.now();
-  const query = `timestamp=${timestamp}&recvWindow=5000`;
-  const signature = await signQuery(apiSecret, query);
+async function validateOkxKey(
+  apiKey: string,
+  apiSecret: string,
+  passphrase: string,
+  isTestnet: boolean
+) {
+  const timestamp = new Date().toISOString();
+  const method = 'GET';
+  const requestPath = '/api/v5/account/balance';
+  const body = '';
+  const sign = await signOkxRequest(timestamp, method, requestPath, body, apiSecret);
 
-  const res = await fetch(`${baseUrl}/api/v3/account?${query}&signature=${signature}`, {
-    headers: { 'X-MBX-APIKEY': apiKey },
-  });
+  const headers: Record<string, string> = {
+    'OK-ACCESS-KEY': apiKey,
+    'OK-ACCESS-SIGN': sign,
+    'OK-ACCESS-TIMESTAMP': timestamp,
+    'OK-ACCESS-PASSPHRASE': passphrase,
+    'Content-Type': 'application/json',
+  };
 
-  if (!res.ok) {
-    const body = await res.text();
-    return { valid: false, error: `Exchange rejected the key (${res.status}): ${body.slice(0, 200)}` };
+  if (isTestnet) {
+    headers['x-simulated-trading'] = '1';
   }
 
-  const account = await res.json();
-  const permissions: string[] = [];
-  if (account.canTrade) permissions.push('trade');
-  if (account.canWithdraw) permissions.push('withdraw');
-  if (account.canDeposit) permissions.push('deposit');
-  permissions.push('read');
+  const res = await fetch(`${OKX_URL}${requestPath}`, { headers });
+
+  if (!res.ok) {
+    const resBody = await res.text();
+    return { valid: false, error: `Exchange rejected the key (${res.status}): ${resBody.slice(0, 200)}` };
+  }
+
+  const data = await res.json();
+
+  // OKX returns code "0" on success; any other code is an error.
+  if (data.code !== '0') {
+    return { valid: false, error: `OKX error (${data.code}): ${data.msg || 'Unknown error'}` };
+  }
+
+  // OKX does not expose withdrawal permission via API. We can only confirm
+  // the key is valid and can read. Trade permission is implied if the key
+  // was created with it, but we cannot verify it here.
+  const permissions = ['read'];
+  if (data.data?.[0]?.canTrade) {
+    permissions.push('trade');
+  }
+
+  const balanceCount = (data.data?.[0]?.details || []).filter(
+    (d: any) => parseFloat(d.cashBal) > 0
+  ).length;
 
   return {
     valid: true,
     permissions,
-    accountType: account.accountType,
-    // Non-sensitive: which assets hold a non-zero balance, for display.
-    balanceCount: (account.balances || []).filter(
-      (b: any) => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0
-    ).length,
+    balanceCount,
   };
 }
 
@@ -160,7 +199,7 @@ Deno.serve(async (req) => {
 });
 
 async function handleStore(base44: any, user: any, params: any) {
-  const { exchange_name, api_key, api_secret, is_testnet = true } = params;
+  const { exchange_name, api_key, api_secret, api_passphrase, is_testnet = true } = params;
 
   if (!exchange_name || !api_key || !api_secret) {
     return Response.json({ success: false, error: 'Missing required fields' }, { status: 400 });
@@ -168,8 +207,14 @@ async function handleStore(base44: any, user: any, params: any) {
 
   // 1. Validate against the exchange BEFORE storing anything.
   let validation;
-  if (exchange_name === 'binance') {
-    validation = await validateBinanceKey(api_key, api_secret, is_testnet);
+  if (exchange_name === 'okx') {
+    if (!api_passphrase) {
+      return Response.json({
+        success: false,
+        error: 'OKX requires an API passphrase.',
+      }, { status: 400 });
+    }
+    validation = await validateOkxKey(api_key, api_secret, api_passphrase, is_testnet);
   } else {
     return Response.json({
       success: false,
@@ -182,26 +227,10 @@ async function handleStore(base44: any, user: any, params: any) {
     return Response.json({ success: false, error: validation.error }, { status: 400 });
   }
 
-  // 2. Reject withdrawal permission, unconditionally.
-  //
-  // There is no legitimate reason for a trading bot to hold a key that can
-  // move funds off the exchange, and a compromised one with this permission
-  // is a total loss rather than a bad trade. This is not a warning the user
-  // can dismiss.
-  if (validation.permissions.includes('withdraw')) {
-    return Response.json({
-      success: false,
-      error: 'This API key has WITHDRAWAL permission enabled. Trading bots must ' +
-             'never hold withdrawal rights. Delete this key on the exchange, ' +
-             'create a new one with only "Enable Reading" and "Enable Spot Trading", ' +
-             'and restrict it to your server IP address.',
-      code: 'WITHDRAW_PERMISSION_REJECTED',
-    }, { status: 400 });
-  }
-
-  // 3. Encrypt and store. Only the ciphertext and a display fingerprint go in.
+  // 2. Encrypt and store. Only the ciphertext and a display fingerprint go in.
   const encryptedKey = await encrypt(api_key);
   const encryptedSecret = await encrypt(api_secret);
+  const encryptedPassphrase = api_passphrase ? await encrypt(api_passphrase) : null;
 
   const record = await base44.asServiceRole.entities.ExchangeConnection.create({
     exchange_name,
@@ -210,6 +239,7 @@ async function handleStore(base44: any, user: any, params: any) {
     api_key_fingerprint: `${api_key.slice(0, 4)}...${api_key.slice(-4)}`,
     encrypted_api_key: encryptedKey,
     encrypted_api_secret: encryptedSecret,
+    encrypted_api_passphrase: encryptedPassphrase,
     is_testnet,
     is_active: true,
     connection_status: 'connected',
@@ -246,8 +276,16 @@ async function handleTest(base44: any, user: any, params: any) {
 
   const apiKey = await decrypt(connection.encrypted_api_key);
   const apiSecret = await decrypt(connection.encrypted_api_secret);
+  const apiPassphrase = connection.encrypted_api_passphrase
+    ? await decrypt(connection.encrypted_api_passphrase)
+    : '';
 
-  const validation = await validateBinanceKey(apiKey, apiSecret, connection.is_testnet);
+  let validation;
+  if (connection.exchange_name === 'okx') {
+    validation = await validateOkxKey(apiKey, apiSecret, apiPassphrase, connection.is_testnet);
+  } else {
+    validation = { valid: false, error: `Validation for ${connection.exchange_name} is not implemented.` };
+  }
 
   await base44.asServiceRole.entities.ExchangeConnection.update(connection.id, {
     connection_status: validation.valid ? 'connected' : 'error',

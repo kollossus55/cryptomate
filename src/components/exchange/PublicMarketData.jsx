@@ -21,13 +21,17 @@ export default function PublicMarketData({ exchange, symbol }) {
     setError(null);
 
     try {
-      let url;
       const cleanSymbol = symbol.replace('/', '');
 
       switch (exchange) {
-        case 'binance':
-          url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${cleanSymbol}`;
+        case 'okx': {
+          // OKX uses hyphenated instId format (BTC-USDT) not Binance's BTCUSDT
+          const instId = cleanSymbol.endsWith('USDT')
+            ? `${cleanSymbol.slice(0, -4)}-USDT`
+            : cleanSymbol;
+          url = `https://www.okx.com/api/v5/market/ticker?instId=${instId}`;
           break;
+        }
         default:
           setError('Exchange not supported for public data yet');
           return;
@@ -41,16 +45,26 @@ export default function PublicMarketData({ exchange, symbol }) {
 
       const data = await response.json();
 
+      // OKX returns { code: "0", data: [{ ... }] }
+      if (data.code !== '0' || !data.data?.[0]) {
+        throw new Error(data.msg || 'Failed to fetch market data');
+      }
+
+      const t = data.data[0];
+      const last = parseFloat(t.last);
+      const open24h = parseFloat(t.open24h);
+      const change24h = open24h > 0 ? ((last - open24h) / open24h) * 100 : 0;
+
       setMarketData({
-        symbol: data.symbol,
-        price: parseFloat(data.lastPrice),
-        change24h: parseFloat(data.priceChangePercent),
-        high24h: parseFloat(data.highPrice),
-        low24h: parseFloat(data.lowPrice),
-        volume24h: parseFloat(data.volume),
-        quoteVolume: parseFloat(data.quoteVolume),
-        bid: parseFloat(data.bidPrice),
-        ask: parseFloat(data.askPrice),
+        symbol: t.instId,
+        price: last,
+        change24h,
+        high24h: parseFloat(t.high24h),
+        low24h: parseFloat(t.low24h),
+        volume24h: parseFloat(t.vol24h),
+        quoteVolume: parseFloat(t.volCcy24h),
+        bid: parseFloat(t.bidPx),
+        ask: parseFloat(t.askPx),
         lastUpdate: Date.now()
       });
 

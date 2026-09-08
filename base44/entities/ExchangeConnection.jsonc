@@ -5,7 +5,7 @@
     "exchange_name": {
       "type": "string",
       "enum": [
-        "binance",
+        "okx",
         "coinbase",
         "kraken",
         "bybit"
@@ -20,7 +20,7 @@
     "is_testnet": {
       "type": "boolean",
       "default": true,
-      "description": "Whether this is a testnet connection"
+      "description": "Whether this is a testnet (demo trading) connection"
     },
     "connection_status": {
       "type": "string",
@@ -69,6 +69,10 @@
     "encrypted_api_secret": {
       "type": "string",
       "description": "AES-GCM ciphertext (IV prepended, base64). Written and read ONLY by the exchangeCredentials server function."
+    },
+    "encrypted_api_passphrase": {
+      "type": "string",
+      "description": "AES-GCM ciphertext (IV prepended, base64). OKX requires a passphrase in addition to key/secret. Written and read ONLY by the exchangeCredentials server function."
     }
   },
   "required": [
