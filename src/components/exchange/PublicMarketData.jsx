@@ -22,6 +22,7 @@ export default function PublicMarketData({ exchange, symbol }) {
 
     try {
       const cleanSymbol = symbol.replace('/', '');
+      let url;
 
       switch (exchange) {
         case 'okx': {

@@ -238,6 +238,30 @@ export default function ExchangeSettings() {
               </CardContent>
             </Card>
 
+            {/* OKX Market Data Status — always active, no API key needed */}
+            <Card className="bg-slate-800 border-2 border-green-500/40 mb-8">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <span className="text-2xl text-black font-bold">◆</span>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-bold text-white text-lg">OKX — Market Data Feed</h3>
+                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Active
+                      </Badge>
+                    </div>
+                    <p className="text-slate-300 text-sm leading-relaxed">
+                      Real-time prices and market data are streamed from OKX's public API. No API key required —
+                      this feed powers all charts, signals, and paper trading across the app.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Connection List */}
             {connections.length > 0 && (
               <div className="mb-8">
