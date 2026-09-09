@@ -494,6 +494,62 @@ export async function fetchUniverse({ topN = 60, minQuoteVolume24h = 5_000_000 }
 }
 
 /**
+ * Fetch current spot prices for a specific set of Binance-style symbols
+ * (e.g. "ZECUSDT", "PEPEUSDT") in a single bulk call.
+ *
+ * Used to mark held positions to market when they fall outside the trading
+ * universe (obscure altcoins below the liquidity floor or top-N cap). Without
+ * this, markToMarket leaves their current_value at the entry price and their
+ * profit_loss at just the entry fee, so the UI shows stale unrealized P&L.
+ *
+ * Returns a Map<string, number> of symbol -> live price. Symbols not found
+ * on any provider are simply absent from the map.
+ */
+export async function fetchPricesForSymbols(symbols) {
+  if (!symbols || symbols.length === 0) return new Map();
+  const usdtSymbols = symbols.filter((s) => typeof s === 'string' && s.endsWith('USDT'));
+  if (usdtSymbols.length === 0) return new Map();
+
+  const wanted = new Set(usdtSymbols);
+  const out = new Map();
+
+  // OKX is the most reliable bulk endpoint and maps cleanly to Binance symbols.
+  try {
+    const data = await fetchJson(`${OKX}/api/v5/market/tickers?instType=SPOT`, { timeoutMs: PROVIDER_TIMEOUT });
+    if (data.code === '0' && Array.isArray(data.data)) {
+      for (const t of data.data) {
+        if (typeof t.instId !== 'string' || !t.instId.endsWith('-USDT')) continue;
+        const binanceSymbol = t.instId.replace('-USDT', 'USDT');
+        if (wanted.has(binanceSymbol) && t.last) {
+          const price = parseFloat(t.last);
+          if (Number.isFinite(price) && price > 0) out.set(binanceSymbol, price);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`[marketData] fetchPricesForSymbols OKX failed: ${err.message}`);
+  }
+
+  // Fill any gaps from Binance single-ticker calls (best-effort, low concurrency).
+  const missing = usdtSymbols.filter((s) => !out.has(s));
+  if (missing.length > 0) {
+    const results = await mapLimit(missing, 4, async (sym) => {
+      try {
+        const t = await fetchJson(`${BINANCE}/api/v3/ticker/price?symbol=${sym}`, { timeoutMs: 5000 });
+        const price = parseFloat(t.price);
+        if (Number.isFinite(price) && price > 0) return [sym, price];
+      } catch { /* geo-blocked or not listed */ }
+      return null;
+    });
+    for (const r of results) {
+      if (r && !r.error) out.set(r[0], r[1]);
+    }
+  }
+
+  return out;
+}
+
+/**
  * Order book depth, used by the slippage model to size trades against real
  * liquidity rather than a flat percentage guess.
  */

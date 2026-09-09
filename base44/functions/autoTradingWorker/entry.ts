@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.43';
 
-import { fetchUniverse, fetchCandlesBatch, fetchOrderBook } from './shared/marketData.js';
+import { fetchUniverse, fetchCandlesBatch, fetchOrderBook, fetchPricesForSymbols } from './shared/marketData.js';
 import { scoreAsset, MIN_CANDLES } from './shared/signalEngine.js';
 import { applyCosts, roundTripCostPercent, isEdgeSufficient } from './shared/costs.js';
 import { calculatePositionSize, checkCorrelation, buildReturnsMap, checkPortfolioExposure } from './shared/sizing.js';
@@ -227,6 +227,30 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
   for (const pos of state.positions) {
     const ticker = universeBySymbol.get(pos.asset_symbol);
     if (ticker) priceMap.set(pos.asset_symbol, ticker.price);
+  }
+
+  // Held positions that aren't in the universe (obscure altcoins below the
+  // liquidity floor or top-N cap) still need live prices for markToMarket and
+  // exit decisions. Without this, their current_value stays at the entry
+  // notional and profit_loss shows only the entry fee — stale unrealized P&L.
+  const heldMissingPrice = state.positions
+    .filter((p) => {
+      const cached = priceMap.get(p.asset_symbol);
+      return cached === undefined || cached === p.avg_entry_price;
+    })
+    .map((p) => p.asset_symbol);
+  if (heldMissingPrice.length > 0) {
+    try {
+      const livePrices = await fetchPricesForSymbols(heldMissingPrice);
+      let found = 0;
+      for (const [sym, price] of livePrices) {
+        priceMap.set(sym, price);
+        found++;
+      }
+      if (found) log(`Fetched live prices for ${found}/${heldMissingPrice.length} held positions outside universe`);
+    } catch (e) {
+      log(`Live price fetch for held positions failed: ${e.message}`);
+    }
   }
 
   // Held symbols outside the top-N still need candles for exit decisions.
