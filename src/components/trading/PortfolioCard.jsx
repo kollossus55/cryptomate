@@ -3,9 +3,32 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Wallet, PieChart, Target, Award, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { base44 } from "@/api/base44Client";
 
 export default function PortfolioCard({ portfolio, onClosePosition, assets = [], livePrices = {} }) {
   const [extraPrices, setExtraPrices] = useState({});
+  const [winRate, setWinRate] = useState(0);
+
+  // Real win rate from completed sell trades with a non-zero P&L.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const trades = await base44.entities.Trade.filter(
+          { trade_type: 'sell', status: 'completed' },
+          '-created_date', 200
+        );
+        if (cancelled) return;
+        const closed = trades.filter(t => typeof t.profit_loss === 'number');
+        if (closed.length === 0) { setWinRate(0); return; }
+        const winners = closed.filter(t => t.profit_loss > 0).length;
+        setWinRate(Math.round((winners / closed.length) * 100));
+      } catch {
+        if (!cancelled) setWinRate(0);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [portfolio?.total_trades]);
 
   // Fetch live prices for held positions whose symbols aren't in the
   // websocket-tracked assets list. The server worker buys obscure altcoins
@@ -66,13 +89,6 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
     currentPrices[assetSymbol.replace(/USDT$/, '/USDT')] ||
     currentPrices[assetSymbol.replace('/USDT', 'USDT')];
 
-  console.log('📊 PortfolioCard Price Debug:', {
-    websocketConnected: Object.keys(livePrices).length > 0,
-    assetsCount: assets.length,
-    priceMapSize: Object.keys(currentPrices).length,
-    samplePrices: Object.entries(currentPrices).slice(0, 3)
-  });
-
   const totalBalance = portfolio.total_balance || 0;
   const availableBalance = portfolio.available_balance || 0;
   const totalProfitLoss = portfolio.total_profit_loss || 0;
@@ -83,15 +99,7 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
   const allocatedBalance = totalBalance - availableBalance;
   const allocationPercent = totalBalance > 0 ? ((allocatedBalance / totalBalance) * 100).toFixed(1) : "0.0";
 
-  // Calculate win rate
-  const completedTrades = totalTrades;
-  const winningTrades = Math.floor(completedTrades * 0.65); // Mock calculation
-  const winRate = completedTrades > 0 ? ((winningTrades / completedTrades) * 100).toFixed(0) : 0;
-
   const handleClosePosition = (position) => {
-    console.log('🔴 Close Position Button Clicked:', position.asset_symbol);
-    
-    // Calculate live metrics for the confirmation dialog
     const currentPrice = lookupPrice(position.asset_symbol) || position.avg_entry_price;
     const estimatedPnL = (currentPrice - position.avg_entry_price) * position.quantity;
     const estimatedValue = position.quantity * currentPrice;
@@ -102,15 +110,7 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
       `Current Value: $${estimatedValue.toFixed(2)}\n` +
       `Unrealized P&L: ${estimatedPnL >= 0 ? '+' : ''}$${estimatedPnL.toFixed(2)}`
     )) {
-      console.log('✅ User confirmed closing position');
-      if (onClosePosition) {
-        console.log('📞 Calling onClosePosition callback');
-        onClosePosition(position);
-      } else {
-        console.error('❌ onClosePosition callback is missing!');
-      }
-    } else {
-      console.log('❌ User cancelled closing position');
+      if (onClosePosition) onClosePosition(position);
     }
   };
 
@@ -199,17 +199,6 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
                 const currentValue = quantity * currentPrice;
                 const profitLoss = (currentPrice - avgEntryPrice) * quantity;
                 const profitLossPercent = avgEntryPrice > 0 ? ((profitLoss / (quantity * avgEntryPrice)) * 100).toFixed(2) : 0;
-                
-                // Debug logging for P&L calculation
-                console.log(`💰 Position P&L Debug [${position.asset_symbol}]:`, {
-                  quantity,
-                  avgEntryPrice,
-                  currentPrice,
-                  priceChange: (currentPrice - avgEntryPrice).toFixed(4),
-                  profitLoss: profitLoss.toFixed(2),
-                  profitLossPercent: profitLossPercent + '%',
-                  usingFallback: !currentPrices[position.asset_symbol]
-                });
                 
                 return (
                   <div key={idx} className="bg-slate-800 rounded-lg p-3">
