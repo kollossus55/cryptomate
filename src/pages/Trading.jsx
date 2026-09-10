@@ -33,7 +33,7 @@ import {
 
 import { executeSmartOrder } from "../components/trading/smartOrderExecution";
 import { scanAltcoins } from "../components/trading/AltcoinScanner";
-import { useBinanceWebSocket } from "../components/trading/useBinanceWebSocket";
+import { useOkxWebSocket } from "../components/trading/useOkxWebSocket";
 
 export default function Trading() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -257,7 +257,7 @@ export default function Trading() {
 
   // Integrate WebSocket for real-time updates
   const symbolList = React.useMemo(() => initialAssets.map(a => a.symbol), []);
-  const { livePrices, liveTickers, isConnected: isWsConnected } = useBinanceWebSocket(symbolList);
+  const { livePrices, liveTickers, isConnected: isWsConnected } = useOkxWebSocket(symbolList);
 
   // Update assets from real Binance miniTicker stream (price, 24h change, quote volume)
   useEffect(() => {
@@ -1233,12 +1233,12 @@ export default function Trading() {
     setPriceUpdateError(null);
 
     try {
-      // Real Binance 24h ticker for ALL USDT pairs — one request, filtered
-      // client-side. No CoinGecko, no market cap (Binance doesn't provide it).
+      // OKX spot tickers — one request for ALL USDT pairs, filtered client-side.
+      // OKX is reachable from the UK (Binance REST API is geo-blocked).
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const response = await fetch('https://api.binance.com/api/v3/ticker/24hr', {
+      const response = await fetch('https://www.okx.com/api/v5/market/tickers?instType=SPOT', {
         signal: controller.signal,
         headers: { 'Accept': 'application/json' }
       });
@@ -1247,30 +1247,32 @@ export default function Trading() {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
-        throw new Error(`Binance API returned ${response.status}: ${errorText}`);
+        throw new Error(`OKX API returned ${response.status}: ${errorText}`);
       }
 
       const data = await response.json();
-      if (!Array.isArray(data)) {
-        throw new Error('Invalid data format received from Binance');
+      if (!data || !Array.isArray(data.data)) {
+        throw new Error('Invalid data format received from OKX');
       }
 
       const tickerBySymbol = {};
-      data.forEach(t => {
-        if (t.symbol.endsWith('USDT')) {
-          tickerBySymbol[t.symbol.replace(/USDT$/, '')] = t;
+      data.data.forEach(t => {
+        if (typeof t.instId === 'string' && t.instId.endsWith('-USDT')) {
+          tickerBySymbol[t.instId.replace(/-USDT$/, '')] = t;
         }
       });
 
       const updatedAssets = initialAssets.map(asset => {
         const t = tickerBySymbol[asset.symbol];
         if (t) {
+          const last = parseFloat(t.last);
+          const open24h = parseFloat(t.open24h);
+          const change24h = open24h > 0 ? ((last - open24h) / open24h) * 100 : asset.change24h;
           return {
             ...asset,
-            price: parseFloat(t.lastPrice) || asset.price,
-            change24h: parseFloat(t.priceChangePercent) || asset.change24h,
-            volume24h: parseFloat(t.quoteVolume) || asset.volume24h
-            // marketCap intentionally left as the static seed value (Binance has none)
+            price: last || asset.price,
+            change24h: change24h || asset.change24h,
+            volume24h: parseFloat(t.volCcy24h) || asset.volume24h
           };
         }
         return asset;
@@ -1281,13 +1283,13 @@ export default function Trading() {
       setConsecutiveFailures(0);
       setPriceUpdateError(null);
 
-      console.log('✅ Price data updated from Binance 24h ticker');
+      console.log('✅ Price data updated from OKX spot tickers');
     } catch (error) {
       const errorMessage = error.name === 'AbortError'
-        ? 'Request timeout - Binance took too long to respond'
+        ? 'Request timeout - OKX took too long to respond'
         : error.message || 'Unknown error';
 
-      console.warn('⚠️ Failed to fetch Binance prices:', errorMessage);
+      console.warn('⚠️ Failed to fetch OKX prices:', errorMessage);
       setPriceUpdateError(errorMessage);
       setConsecutiveFailures(prev => prev + 1);
 
@@ -1704,8 +1706,8 @@ export default function Trading() {
                   Multiple attempts to fetch live prices failed. Using simulated data.
                 </p>
                 <p className="text-red-200 text-sm text-xs">
-                  This may be due to CoinGecko API rate limits, CORS restrictions, or network issues.
-                  Trading functionality continues with simulated prices.
+                  This may be due to OKX API rate limits, CORS restrictions, or network issues.
+                  Trading functionality continues with cached prices.
                 </p>
               </div>
               <Button
