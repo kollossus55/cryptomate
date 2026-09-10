@@ -100,32 +100,42 @@ export default function TradeSignals() {
   const fetchLivePrices = async () => {
     try {
       setPriceError(null);
-      const ids = Object.values(COINGECKO_IDS).join(",");
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       const response = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true`,
+        'https://www.okx.com/api/v5/market/tickers?instType=SPOT',
         { signal: controller.signal, headers: { Accept: "application/json" } }
       );
       clearTimeout(timeoutId);
 
-      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      if (!response.ok) throw new Error(`OKX API returned ${response.status}`);
       const data = await response.json();
+      if (!data || !Array.isArray(data.data)) throw new Error('Invalid data from OKX');
+
+      const tickerBySymbol = {};
+      data.data.forEach((t) => {
+        if (typeof t.instId === 'string' && t.instId.endsWith('-USDT')) {
+          tickerBySymbol[t.instId.replace(/-USDT$/, '')] = t;
+        }
+      });
 
       const liveAssets = TOP_ASSETS.map((a) => {
-        const coinId = COINGECKO_IDS[a.symbol];
-        const live = data[coinId];
+        const t = tickerBySymbol[a.symbol];
+        if (!t) return null;
+        const last = parseFloat(t.last);
+        const open24h = parseFloat(t.open24h);
+        const change24h = open24h > 0 ? ((last - open24h) / open24h) * 100 : 0;
         return {
           ...a,
-          price: live?.usd || 0,
-          change24h: live?.usd_24h_change || 0,
-          volume24h: live?.usd_24hr_vol || 0,
-          marketCap: live?.usd_market_cap || 0,
+          price: last || 0,
+          change24h,
+          volume24h: parseFloat(t.volCcy24h) || 0,
+          marketCap: 0,
           icon: a.symbol.charAt(0),
           color: "bg-indigo-500",
         };
-      }).filter((a) => a.price > 0);
+      }).filter((a) => a && a.price > 0);
 
       setAssets(liveAssets);
     } catch (error) {

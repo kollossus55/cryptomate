@@ -13,44 +13,49 @@ export default function RealTimeMarketDepth({ symbol }) {
   useEffect(() => {
     if (!symbol) return;
 
-    const pair = `${symbol.toLowerCase()}usdt`;
-    const wsUrl = `wss://stream.binance.com:9443/stream?streams=${pair}@depth10@100ms/${pair}@trade`;
-    
-    const ws = new WebSocket(wsUrl);
+    // OKX WebSocket — reachable from the UK (Binance WebSocket is geo-blocked)
+    const instId = `${symbol.toUpperCase()}-USDT`;
+    const ws = new WebSocket('wss://ws.okx.com:8443/ws/v5/public');
     wsRef.current = ws;
 
     ws.onopen = () => {
+      ws.send(JSON.stringify({
+        op: 'subscribe',
+        args: [
+          { channel: 'books5', instId },
+          { channel: 'trades', instId }
+        ]
+      }));
       setConnectionStatus('connected');
     };
 
     ws.onmessage = (event) => {
       try {
-        const message = JSON.parse(event.data);
-        const stream = message.stream;
-        const data = message.data;
+        const msg = JSON.parse(event.data);
+        // Ignore subscribe confirmations and non-data messages
+        if (msg.event || !msg.data || !Array.isArray(msg.data)) return;
 
-        if (stream.includes('depth')) {
-          // Depth update
+        if (msg.arg?.channel === 'books5') {
+          const book = msg.data[0];
+          if (!book) return;
           setDepth({
-            bids: data.bids.slice(0, 5).map(([price, qty]) => ({ price: parseFloat(price), qty: parseFloat(qty) })),
-            asks: data.asks.slice(0, 5).map(([price, qty]) => ({ price: parseFloat(price), qty: parseFloat(qty) })).reverse() // Show lowest ask at bottom visually? Standard is lowest ask at top of ask list.
-            // Actually typically asks are sorted ascending (lowest price first).
-            // Bids are sorted descending (highest price first).
-            // Binance sends them sorted.
+            bids: (book.bids || []).slice(0, 5).map(([price, qty]) => ({ price: parseFloat(price), qty: parseFloat(qty) })),
+            asks: (book.asks || []).slice(0, 5).map(([price, qty]) => ({ price: parseFloat(price), qty: parseFloat(qty) })).reverse()
           });
         }
 
-        if (stream.includes('trade')) {
-          // Trade update
-          const trade = {
-            id: data.t,
-            price: parseFloat(data.p),
-            qty: parseFloat(data.q),
-            time: data.T,
-            isBuyerMaker: data.m // true if sell order (buyer was maker)
-          };
-          setPrice(trade.price);
-          setRecentTrades(prev => [trade, ...prev].slice(0, 15));
+        if (msg.arg?.channel === 'trades') {
+          msg.data.forEach((t) => {
+            const trade = {
+              id: t.tradeId || t.ts,
+              price: parseFloat(t.px),
+              qty: parseFloat(t.sz),
+              time: parseInt(t.ts),
+              isBuyerMaker: t.side === 'sell' // OKX: side='sell' means taker sold → buyer was maker
+            };
+            setPrice(trade.price);
+            setRecentTrades(prev => [trade, ...prev].slice(0, 15));
+          });
         }
       } catch (err) {
         // ignore

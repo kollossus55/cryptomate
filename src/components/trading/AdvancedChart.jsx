@@ -28,65 +28,56 @@ export default function AdvancedChart({ asset }) {
 
   const tryFetchLiveData = async () => {
     try {
-      const coinGeckoIds = {
-        BTC: "bitcoin", ETH: "ethereum", BNB: "binancecoin", SOL: "solana",
-        XRP: "ripple", ADA: "cardano", AVAX: "avalanche-2", DOGE: "dogecoin",
-        DOT: "polkadot", MATIC: "matic-network", LTC: "litecoin", LINK: "chainlink",
-        UNI: "uniswap", ATOM: "cosmos", XLM: "stellar", ALGO: "algorand",
-        VET: "vechain", FIL: "filecoin", NEAR: "near", APT: "aptos"
-      };
-
-      const coinId = coinGeckoIds[asset.symbol];
-      if (!coinId) return;
-
-      // Map timeframes to CoinGecko days parameter
+      // OKX candlestick history — reachable from the UK (CoinGecko is not)
+      const instId = `${asset.symbol}-USDT`;
       const timeframeMap = {
-        '5M': { days: 1, interval: 'hourly' },
-        '15M': { days: 1, interval: 'hourly' },
-        '1H': { days: 1, interval: 'hourly' },
-        '4H': { days: 7, interval: 'hourly' },
-        '1D': { days: 30, interval: 'daily' },
-        '1W': { days: 90, interval: 'daily' }
+        '5M': '5m',
+        '15M': '15m',
+        '1H': '1H',
+        '4H': '4H',
+        '1D': '1D',
+        '1W': '1D'
       };
+      const bar = timeframeMap[timeframe] || '1H';
 
-      const { days, interval } = timeframeMap[timeframe] || timeframeMap['1H'];
-      
       const response = await fetch(
-        `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}&interval=${interval}`,
-        { 
-          method: 'GET',
-          headers: { 'Accept': 'application/json' }
-        }
+        `https://www.okx.com/api/v5/market/candles?instId=${instId}&bar=${bar}&limit=100`,
+        { headers: { Accept: 'application/json' } }
       );
-      
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
-      
-      const data = await response.json();
-      
-      if (data.prices && data.prices.length > 0) {
-        const processed = data.prices.map((price, idx) => {
-          const timestamp = price[0];
-          const value = price[1];
-          const volume = data.total_volumes?.[idx]?.[1] || 0;
-          const prevValue = idx > 0 ? data.prices[idx - 1][1] : value;
-          
-          return {
-            timestamp,
-            date: new Date(timestamp).toLocaleDateString(),
-            time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            price: value,
-            open: value, high: value, low: value, close: value,
-            candleRange: [value, value],
-            volume: volume / 1e9,
-            isPositive: value >= prevValue,
-            change: ((value - prevValue) / prevValue) * 100
-          };
-        });
 
-        const withIndicators = calculateIndicators(processed);
-        setPriceData(withIndicators);
-        setDataSource('live');
-      }
+      if (!response.ok) throw new Error(`OKX API error: ${response.status}`);
+
+      const data = await response.json();
+      if (data.code !== '0' || !Array.isArray(data.data) || data.data.length === 0) return;
+
+      // OKX returns newest-first; reverse to chronological order
+      const candles = data.data.reverse();
+
+      const processed = candles.map((c, idx) => {
+        const timestamp = parseInt(c[0]);
+        const open = parseFloat(c[1]);
+        const high = parseFloat(c[2]);
+        const low = parseFloat(c[3]);
+        const close = parseFloat(c[4]);
+        const volume = parseFloat(c[7]); // volCcyQuote (quote-asset volume)
+        const prevClose = idx > 0 ? parseFloat(candles[idx - 1][4]) : close;
+
+        return {
+          timestamp,
+          date: new Date(timestamp).toLocaleDateString(),
+          time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          price: close,
+          open, high, low, close,
+          candleRange: [low, high],
+          volume: volume / 1e9,
+          isPositive: close >= prevClose,
+          change: prevClose > 0 ? ((close - prevClose) / prevClose) * 100 : 0
+        };
+      });
+
+      const withIndicators = calculateIndicators(processed);
+      setPriceData(withIndicators);
+      setDataSource('live');
     } catch (error) {
       console.log("Live data unavailable, using simulated data:", error.message);
     }
