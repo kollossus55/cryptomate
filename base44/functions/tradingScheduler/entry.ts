@@ -54,34 +54,47 @@ Deno.serve(async (req) => {
           settings_id: settings.id,
           user_email: settings.created_by
         };
-        lastError.push({ stage: 'pre-invoke', args: invokeArgs, argsTypes: { settings_id: typeof settings.id, user_email: typeof settings.created_by } });
-        const result = await base44.asServiceRole.functions.invoke('autoTradingWorker', invokeArgs);
-        
+
+        // asServiceRole.functions.invoke does not transmit the body in this
+        // runtime (platform returns "Missing parameters"). Forward the request
+        // directly to the worker's HTTP endpoint, passing the same auth headers
+        // so the worker's createClientFromRequest inherits service-role access.
+        const apiUrl = req.headers.get('base44-api-url') || url.origin;
+        const workerUrl = `${apiUrl}/functions/autoTradingWorker`;
+        const fwdHeaders = { 'Content-Type': 'application/json' };
+        for (const h of ['base44-service-authorization', 'base44-app-id', 'authorization']) {
+          const v = req.headers.get(h);
+          if (v) fwdHeaders[h] = v;
+        }
+        const workerRes = await fetch(workerUrl, {
+          method: 'POST',
+          headers: fwdHeaders,
+          body: JSON.stringify(invokeArgs),
+        });
+        const result = await workerRes.json().catch(() => ({}));
+
         processed++;
-        
-        if (result.data?.success) {
-          if (result.data.executed) {
+
+        if (result?.success) {
+          if (result.executed) {
             executed++;
-            console.log(`✅ Trade executed for ${settings.created_by}: ${result.data.trade?.symbol} (${result.data.trade?.action})`);
+            console.log(`✅ Trade executed for ${settings.created_by}: ${result.trade?.symbol} (${result.trade?.action})`);
           } else {
-            console.log(`ℹ️ No trade for ${settings.created_by}: ${result.data.reason}`);
+            console.log(`ℹ️ No trade for ${settings.created_by}: ${result.reason}`);
           }
         } else {
-          console.error(`⚠️ Worker failed for ${settings.created_by}:`, result.data?.error || 'Unknown error');
+          console.error(`⚠️ Worker failed for ${settings.created_by}:`, result?.error || 'Unknown error');
+          lastError.push({ user: settings.created_by, error: result?.error || 'Unknown error', status: workerRes.status });
           errors++;
         }
-        
-      } catch (error) {
+        } catch (error) {
         errors++;
         console.error(`❌ Error processing user ${settings.created_by}:`, error.message);
         lastError.push({
           user: settings.created_by,
           message: error.message,
-          status: error.response?.status,
-          data: error.response?.data,
-          stack: error.stack?.split('\n').slice(0, 6),
         });
-      }
+        }
     }
     
     const summary = {
