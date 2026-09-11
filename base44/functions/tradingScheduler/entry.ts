@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
 /**
  * Trading Scheduler - Runs every 2 minutes
@@ -30,7 +30,8 @@ Deno.serve(async (req) => {
     let processed = 0;
     let executed = 0;
     let errors = 0;
-    
+    const lastError = [];
+
     for (const settings of enabledSettings) {
       try {
         // Get user's portfolio
@@ -49,10 +50,12 @@ Deno.serve(async (req) => {
         // and portfolio from the DB by ID — we only pass identifiers, never the
         // records themselves, so the worker cannot be fed crafted data.
         console.log(`⏳ Invoking worker for ${settings.created_by}...`);
-        const result = await base44.asServiceRole.functions.invoke('autoTradingWorker', {
+        const invokeArgs = {
           settings_id: settings.id,
           user_email: settings.created_by
-        });
+        };
+        lastError.push({ stage: 'pre-invoke', args: invokeArgs, argsTypes: { settings_id: typeof settings.id, user_email: typeof settings.created_by } });
+        const result = await base44.asServiceRole.functions.invoke('autoTradingWorker', invokeArgs);
         
         processed++;
         
@@ -71,6 +74,13 @@ Deno.serve(async (req) => {
       } catch (error) {
         errors++;
         console.error(`❌ Error processing user ${settings.created_by}:`, error.message);
+        lastError.push({
+          user: settings.created_by,
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+          stack: error.stack?.split('\n').slice(0, 6),
+        });
       }
     }
     
@@ -86,7 +96,8 @@ Deno.serve(async (req) => {
     
     return Response.json({
       success: true,
-      summary
+      summary,
+      lastError
     });
     
   } catch (error) {
