@@ -91,6 +91,24 @@ Deno.serve(async (req) => {
       return Response.json({ success: false, error: 'Portfolio not found' }, { status: 404 });
     }
 
+    // Fetch the user's AI signal config to get their selected indicators.
+    // The auto-trader must score with the indicators the user enabled on the
+    // AISignals page (RSI, MACD, Bollinger, EMA, Stochastic), not the scanner's
+    // SP500-AI composite.
+    let indicatorSettings = null;
+    try {
+      const configs = await base44.asServiceRole.entities.AISignalConfig.list();
+      const userConfigs = configs.filter(c => c.created_by === user_email);
+      const active = userConfigs.find(c => c.is_active) || userConfigs[0];
+      if (active?.indicator_settings) {
+        indicatorSettings = active.indicator_settings;
+        const enabled = Object.entries(indicatorSettings).filter(([, v]) => v).map(([k]) => k);
+        log(`Indicators from AISignalConfig "${active.config_name}": ${enabled.join(', ') || 'none'}`);
+      }
+    } catch (e) {
+      log(`AISignalConfig fetch failed: ${e.message}`);
+    }
+
     log(`Run start for ${user_email}`);
 
     // -----------------------------------------------------------------------
@@ -479,13 +497,21 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
 
         const candles = candlesBySymbol.get(ticker.symbol) || null;
         let signal;
-        if (scannerOppMap) {
+        // Score with the user's selected indicators (from AISignalConfig), not
+        // the scanner's SP500-AI composite. The scanner is a separate tool that
+        // uses SP500-AI by design; the auto-trader must respect the indicators
+        // the user enabled on the AISignals page (RSI, MACD, Bollinger, EMA,
+        // Stochastic). Candles come from the OKX provider chain when Binance is
+        // geo-blocked. Only fall back to the scanner's score when candles are
+        // truly unavailable.
+        if (candles && candles.length >= MIN_CANDLES) {
+          signal = scoreAsset(candles, {
+            indicators: indicatorSettings || settings.indicator_settings || undefined,
+          });
+          if (!signal) continue;
+        } else if (scannerOppMap) {
           const opp = scannerOppMap.get(ticker.symbol);
           if (!opp) continue;
-          // Reuse the scanner's SP500-AI score — one scan, shared candidate list.
-          // Candles are optional here: the server is geo-blocked from Binance
-          // (HTTP 451), so we may have a real scanner signal but no OHLCV. We
-          // still trade it on flat-percent sizing rather than skipping.
           signal = {
             strength: opp.score,
             direction: opp.direction,
@@ -493,14 +519,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
             atrPercent: opp.volatility ?? 0.02,
           };
         } else {
-          // Own-universe path needs real candles to score — no signal without them.
-          if (!candles || candles.length < MIN_CANDLES) continue;
-          signal = scoreAsset(candles, {
-            indicators: settings.indicator_settings || undefined,
-            // No sentiment provider wired up, so sentiment contributes nothing.
-            // See signalEngine.js — a random number is not sentiment analysis.
-          });
-          if (!signal) continue;
+          continue;
         }
 
         scanned.push({ symbol: ticker.symbol, strength: signal.strength });
