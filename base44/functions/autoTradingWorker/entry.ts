@@ -497,30 +497,15 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
 
         const candles = candlesBySymbol.get(ticker.symbol) || null;
         let signal;
-        // Score with the user's selected indicators (from AISignalConfig), not
-        // the scanner's SP500-AI composite. The scanner is a separate tool that
-        // uses SP500-AI by design; the auto-trader must respect the indicators
-        // the user enabled on the AISignals page (RSI, MACD, Bollinger, EMA,
-        // Stochastic). Candles come from the OKX provider chain when Binance is
-        // geo-blocked. Only fall back to the scanner's score when candles are
-        // truly unavailable.
-        if (candles && candles.length >= MIN_CANDLES) {
-          signal = scoreAsset(candles, {
-            indicators: indicatorSettings || settings.indicator_settings || undefined,
-          });
-          if (!signal) continue;
-        } else if (scannerOppMap) {
-          const opp = scannerOppMap.get(ticker.symbol);
-          if (!opp) continue;
-          signal = {
-            strength: opp.score,
-            direction: opp.direction,
-            reasons: opp.reasons || [],
-            atrPercent: opp.volatility ?? 0.02,
-          };
-        } else {
-          continue;
-        }
+        // Score ONLY with the user's selected indicators (from AISignalConfig).
+        // No SP500-AI fallback — the scanner's composite is a separate tool and
+        // must never drive auto-trader entries. If candles are unavailable,
+        // skip the asset: trading on no data is worse than not trading.
+        if (!candles || candles.length < MIN_CANDLES) continue;
+        signal = scoreAsset(candles, {
+          indicators: indicatorSettings || settings.indicator_settings || undefined,
+        });
+        if (!signal) continue;
 
         scanned.push({ symbol: ticker.symbol, strength: signal.strength });
 
