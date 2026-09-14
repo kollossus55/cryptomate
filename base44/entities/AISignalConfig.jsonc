@@ -240,6 +240,11 @@
       "type": "object",
       "description": "Enabled technical indicators for signal generation",
       "properties": {
+        "supply_demand": {
+          "type": "boolean",
+          "default": true,
+          "description": "Supply & Demand zones \u2014 detects consolidation bases preceding impulse moves and scores price interaction with unmitigated zones."
+        },
         "rsi": {
           "type": "boolean",
           "default": true
