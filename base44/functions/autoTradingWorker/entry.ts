@@ -54,16 +54,25 @@ Deno.serve(async (req) => {
       return Response.json({ success: false, error: 'Missing required parameters' }, { status: 400 });
     }
 
-    // If a user token is present, the caller may only act on their own settings.
-    // Service-role internal calls from the scheduler have no user token and fall
-    // through to the DB verification below.
+    // Authenticate the caller. Two legitimate paths exist:
+    //   1. A user token (browser/manual call) — may only act on their own settings.
+    //   2. The platform scheduler — no user token, but carries the internal
+    //      `base44-service-authorization` header that only the platform sets.
+    // An unauthenticated external request has neither and must be rejected;
+    // previously the catch block assumed every tokenless call was internal.
+    const hasServiceAuth = !!req.headers.get('base44-service-authorization');
+    let caller = null;
     try {
-      const caller = await base44.auth.me();
-      if (caller && caller.email !== user_email) {
+      caller = await base44.auth.me();
+    } catch {
+      // No user token — only allowed if the platform scheduler header is present.
+    }
+    if (caller) {
+      if (caller.email !== user_email) {
         return Response.json({ success: false, error: 'Forbidden: settings do not belong to caller' }, { status: 403 });
       }
-    } catch {
-      // No user token — service-role internal call. Proceed with DB verification.
+    } else if (!hasServiceAuth) {
+      return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     // NEVER trust caller-supplied settings/portfolio. Fetch the real records
