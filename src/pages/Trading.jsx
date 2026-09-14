@@ -24,6 +24,7 @@ import NewsWidget from "../components/trading/NewsWidget";
 import SystemHealthMonitor from "../components/trading/SystemHealthMonitor";
 import AITradingAdvisor from "../components/trading/AITradingAdvisor";
 import SignalAlertSettings from "../components/trading/SignalAlertSettings";
+import ConfluenceSignalScanner from "../components/trading/ConfluenceSignalScanner";
 
 import {
   executeAutoTradingCheckAdvanced,
@@ -1518,6 +1519,7 @@ export default function Trading() {
                 </span>
               </div>
             </div>
+            <ConfluenceSignalScanner assets={assets} indicatorSettings={indicatorSettings} />
             <Button
               onClick={() => setShowWatchlistModal(true)}
               size="lg"
