@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
     });
 
     try {
-      const result = await runTradingCycle({ base44, settings, portfolio, user_email, log, now });
+      const result = await runTradingCycle({ base44, settings, portfolio, user_email, log, now, indicatorSettings });
       return Response.json({ success: true, ...result });
     } finally {
       // Always release, even on error — a stuck lease silently halts trading.
@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function runTradingCycle({ base44, settings, portfolio, user_email, log, now }) {
+async function runTradingCycle({ base44, settings, portfolio, user_email, log, now, indicatorSettings }) {
   // -------------------------------------------------------------------------
   // 1. Daily counter rollover
   // -------------------------------------------------------------------------
