@@ -25,7 +25,10 @@ export const AuthProvider = ({ children }) => {
       // First, check app public settings (with token if available)
       // This will tell us if auth is required, user not registered, etc.
       const appClient = createAxiosClient({
-        baseURL: `${appParams.serverUrl}/api/apps/public`,
+        // Hardcode to the platform origin — never use a client-supplied
+        // serverUrl, or the user's Bearer token would be sent to an
+        // attacker-controlled origin.
+        baseURL: '/api/apps/public',
         headers: {
           'X-App-Id': appParams.appId
         },
