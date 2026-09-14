@@ -107,6 +107,22 @@ export default async function(req) {
     const providedUniverse = Array.isArray(body?.universe) ? body.universe : null;
     const providedCandles = body?.candles && typeof body.candles === 'object' ? body.candles : null;
 
+    // Browser-fed data overwrites the shared ScanResult that all users read
+    // (and that autoTradingWorker uses as its fallback universe). Require an
+    // authenticated admin to submit it — an unauthenticated caller must not
+    // be able to inject fake market data into the shared scan feed.
+    // Scheduled runs (no body) proceed without auth.
+    if (providedUniverse || providedCandles) {
+      try {
+        const caller = await base44.auth.me();
+        if (!caller || caller.role !== 'admin') {
+          return Response.json({ success: false, error: 'Forbidden: admin required to submit scan data' }, { status: 403 });
+        }
+      } catch {
+        return Response.json({ success: false, error: 'Forbidden: admin required to submit scan data' }, { status: 403 });
+      }
+    }
+
     let universe = [];
     if (providedUniverse) {
       universe = providedUniverse;

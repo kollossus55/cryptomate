@@ -18,6 +18,21 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Auth: allow the platform scheduler (service-authorization header) or an
+    // authenticated admin. Prevents unauthenticated callers from triggering the
+    // trading loop or probing internal endpoints via forwarded headers.
+    const hasServiceAuth = !!req.headers.get('base44-service-authorization');
+    if (!hasServiceAuth) {
+      try {
+        const caller = await base44.auth.me();
+        if (!caller || caller.role !== 'admin') {
+          return Response.json({ success: false, error: 'Forbidden' }, { status: 403 });
+        }
+      } catch {
+        return Response.json({ success: false, error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     console.log('🤖 Trading Scheduler: Starting auto-trading check for all users');
     
     // Get all users with auto-trading enabled (using service role)
@@ -59,8 +74,9 @@ Deno.serve(async (req) => {
         // runtime (platform returns "Missing parameters"). Forward the request
         // directly to the worker's HTTP endpoint, passing the same auth headers
         // so the worker's createClientFromRequest inherits service-role access.
-        const apiUrl = req.headers.get('base44-api-url') || url.origin;
-        const workerUrl = `${apiUrl}/functions/autoTradingWorker`;
+        // Hardcode the worker URL to the platform origin — never derive it from
+        // a request header (SSRF via client-controlled base44-api-url).
+        const workerUrl = `${url.origin}/functions/autoTradingWorker`;
         const fwdHeaders = { 'Content-Type': 'application/json' };
         for (const h of ['base44-service-authorization', 'base44-app-id', 'authorization']) {
           const v = req.headers.get(h);

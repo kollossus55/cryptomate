@@ -525,13 +525,26 @@ export function generateSignal(analysis) {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    // Allow public/server-side access for worker
-    // const user = await base44.auth.me();
+    
+    // Require authentication — this endpoint is not called by the server-side
+    // workers (they have their own signal engine), so there is no reason to
+    // leave it public.
+    try {
+      await base44.auth.me();
+    } catch {
+      return Response.json({ error: 'Authentication required' }, { status: 401 });
+    }
     
     const { coinId, symbol } = await req.json();
     
     if (!coinId || !symbol) {
       return Response.json({ error: 'coinId and symbol required' }, { status: 400 });
+    }
+    
+    // Validate coinId — CoinGecko IDs are lowercase alphanumeric with hyphens.
+    // Prevents path traversal / SSRF via crafted coinId segments.
+    if (!/^[a-z0-9-]+$/.test(String(coinId))) {
+      return Response.json({ error: 'Invalid coinId' }, { status: 400 });
     }
     
     const analysis = await analyzeAsset(coinId, symbol);
