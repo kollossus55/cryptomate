@@ -22,7 +22,7 @@ const CANDLE_LIMIT = 200;
 const BATCH_SIZE = 10;           // fetch this many symbols per batch
 const BATCH_CONCURRENCY = 5;    // parallel requests within a batch
 const BATCH_DELAY_MS = 300;     // pause between batches to respect rate limits
-const MIN_QUOTE_VOLUME_24H = 5_000_000;
+const MIN_QUOTE_VOLUME_24H = 400_000;
 
 // Static classification — a symbol→category map is a label, not market data.
 const NAME_MAP = {

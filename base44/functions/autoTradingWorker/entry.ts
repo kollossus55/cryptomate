@@ -36,10 +36,10 @@ import { logReturns } from './shared/indicators.js';
 const CANDLE_INTERVAL = '1h';
 const CANDLE_LIMIT = 200;
 const UNIVERSE_SIZE = 100;
-const MAX_SCAN_CANDIDATES = 25;
+const MAX_SCAN_CANDIDATES = 100;
 // Liquidity floor for symbols admitted from a scan that are outside this
 // worker's own volume-ranked universe. Matches the scanner's own floor.
-const MIN_ADMIT_QUOTE_VOLUME = 5_000_000;
+const MIN_ADMIT_QUOTE_VOLUME = 400_000;
 const LOCK_DURATION_MS = 5 * 60 * 1000;
 
 Deno.serve(async (req) => {
@@ -201,7 +201,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
   let universe;
   let usedFallbackUniverse = false;
   try {
-    universe = await fetchUniverse({ topN: UNIVERSE_SIZE });
+    universe = await fetchUniverse({ topN: UNIVERSE_SIZE, minQuoteVolume24h: 400_000 });
     log(`Universe: ${universe.length} liquid USDT pairs`);
   } catch (err) {
     // OKX (or Coinbase fallback) unreachable. Fall back to the latest
@@ -338,10 +338,11 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
     log(`ScanResult read failed: ${e.message}`);
   }
 
-  const scanSymbols = scannerOppMap
-    ? [...scannerOppMap.keys()].slice(0, MAX_SCAN_CANDIDATES)
-    : universe.slice(0, MAX_SCAN_CANDIDATES).map((u) => u.symbol);
-  if (!scannerOppMap) log(`No fresh scanner result — scanning ${scanSymbols.length} from own universe`);
+  // Always scan the top MAX_SCAN_CANDIDATES from the universe (own OKX fetch +
+  // scanner admits), scored with the user's indicators. The scanner's role is
+  // to surface candidates; the worker re-scores everything itself.
+  const scanSymbols = universe.slice(0, MAX_SCAN_CANDIDATES).map((u) => u.symbol);
+  log(`Scanning ${scanSymbols.length} candidates from universe of ${universe.length}`);
 
   const symbolsNeedingCandles = [...new Set([...heldSymbols, ...scanSymbols])];
 
@@ -486,9 +487,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
       }
       const heldReturns = buildReturnsMap(heldCandles);
 
-      const candidateTickers = scannerOppMap
-        ? scanSymbols.map((sym) => universeBySymbol.get(sym)).filter(Boolean)
-        : universe.slice(0, MAX_SCAN_CANDIDATES);
+      const candidateTickers = universe.slice(0, MAX_SCAN_CANDIDATES);
 
       const candidates = [];
       for (const ticker of candidateTickers) {
