@@ -204,9 +204,9 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
     universe = await fetchUniverse({ topN: UNIVERSE_SIZE });
     log(`Universe: ${universe.length} liquid USDT pairs`);
   } catch (err) {
-    // Server is geo-blocked from Binance (HTTP 451). Fall back to the latest
+    // OKX (or Coinbase fallback) unreachable. Fall back to the latest
     // browser-fed scanner result so trading continues on real data.
-    log(`Binance unreachable from server (${err.message}) — using scanner fallback`);
+    log(`Market data provider unreachable from server (${err.message}) — using scanner fallback`);
     try {
       const rows = await base44.asServiceRole.entities.ScanResult.list('-scanned_at', 1);
       const latest = rows?.[0];
@@ -700,7 +700,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
     feesPaid: state.fees_paid_this_run,
     openPositions: state.positions.length,
     newEntriesAllowed,
-    dataSource: 'binance_ohlcv',
+    dataSource: 'okx_ohlcv',
   };
 }
 

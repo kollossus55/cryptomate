@@ -298,7 +298,9 @@ const binanceProvider = {
   },
 };
 
-const PROVIDERS = [binanceProvider, okxProvider, coinbaseProvider];
+// Binance removed from the chain — the server is geo-blocked (HTTP 451) from
+// api.binance.com, so it never answered. OKX is the primary, Coinbase the fallback.
+const PROVIDERS = [okxProvider, coinbaseProvider];
 
 // Remember which provider last worked so a geo-blocked primary is not retried
 // on every symbol of every cycle. Re-probed after the TTL.
@@ -499,7 +501,11 @@ export async function fetchUniverse({ topN = 60, minQuoteVolume24h = 5_000_000 }
  */
 export async function fetchOrderBook(symbol, limit = 100) {
   try {
-    const book = await fetchJson(`${BINANCE}/api/v3/depth?symbol=${symbol}&limit=${limit}`);
+    const instId = toOkxInst(symbol);
+    if (!instId) return null;
+    const data = await fetchJson(`${OKX}/api/v5/market/books?instId=${instId}&sz=${limit}`, { timeoutMs: PROVIDER_TIMEOUT });
+    if (data.code !== '0' || !Array.isArray(data.data) || !data.data[0]) return null;
+    const book = data.data[0];
     return {
       bids: book.bids.map(([p, q]) => [parseFloat(p), parseFloat(q)]),
       asks: book.asks.map(([p, q]) => [parseFloat(p), parseFloat(q)]),
@@ -526,38 +532,44 @@ export async function fetchMarketCaps(perPage = 250) {
 
 /** Historical candles for backtesting — pages backwards past the 1000-row cap. */
 export async function fetchHistoricalCandles(symbol, interval, startTime, endTime) {
+  const instId = toOkxInst(symbol);
+  const bar = OKX_BAR[interval];
   const intervalMs = INTERVAL_MS[interval];
-  if (!intervalMs) throw new Error(`Unsupported interval: ${interval}`);
+  if (!instId || !bar || !intervalMs) throw new Error(`Unsupported symbol/interval: ${symbol} ${interval}`);
 
   const all = [];
-  let cursor = startTime;
+  let after = endTime; // OKX 'after' = records older than this timestamp (ms)
 
-  while (cursor < endTime) {
-    const url = `${BINANCE}/api/v3/klines?symbol=${symbol}&interval=${interval}` +
-                `&startTime=${cursor}&endTime=${endTime}&limit=1000`;
-    const raw = await fetchJson(url);
-    if (!Array.isArray(raw) || raw.length === 0) break;
+  while (after > startTime) {
+    const url = `${OKX}/api/v5/market/history-candles?instId=${instId}&bar=${bar}` +
+                `&after=${after}&limit=100`;
+    const data = await fetchJson(url, { timeoutMs: PROVIDER_TIMEOUT });
+    if (data.code !== '0' || !Array.isArray(data.data) || data.data.length === 0) break;
 
-    for (const k of raw) {
+    for (const k of data.data) {
+      const openTime = Number(k[0]);
+      if (openTime < startTime) continue;
       all.push({
-        openTime: k[0],
+        openTime,
         open: parseFloat(k[1]),
         high: parseFloat(k[2]),
         low: parseFloat(k[3]),
         close: parseFloat(k[4]),
         volume: parseFloat(k[5]),
-        closeTime: k[6],
-        quoteVolume: parseFloat(k[7]),
+        closeTime: openTime + intervalMs - 1,
+        quoteVolume: parseFloat(k[7] ?? 0),
       });
     }
 
-    const last = raw[raw.length - 1][0];
-    if (last <= cursor) break; // no forward progress; stop rather than loop
-    cursor = last + intervalMs;
+    // OKX returns newest first; the last entry is the oldest.
+    const oldest = Number(data.data[data.data.length - 1][0]);
+    if (oldest >= after) break; // no forward progress
+    after = oldest;
 
-    await sleep(120); // stay well inside the rate limit
+    await sleep(120);
   }
 
+  all.sort((a, b) => a.openTime - b.openTime);
   return all.filter((c) => c.closeTime <= endTime);
 }
 

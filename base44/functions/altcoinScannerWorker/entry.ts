@@ -4,7 +4,7 @@ import { scoreAsset, MIN_CANDLES } from './shared/signalEngine.js';
 import { relativeVolume } from './shared/indicators.js';
 
 /**
- * Altcoin Scanner Worker — server-side scan of the real Binance universe.
+ * Altcoin Scanner Worker — server-side scan of the real OKX universe.
  *
  * Runs entirely on the server so the browser never touches Binance: it fetches
  * the 24h ticker universe, pulls OHLCV candles for the top candidates in
