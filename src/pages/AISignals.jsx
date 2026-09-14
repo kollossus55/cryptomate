@@ -48,6 +48,7 @@ export default function AISignals() {
     aroon: true,
     candlestick: true,
     ichimoku: true,
+    supply_demand: true,
     sp500ai: true
   });
 

@@ -419,4 +419,71 @@ export function correlation(a, b) {
   return cov / Math.sqrt(varX * varY);
 }
 
+// ---------------------------------------------------------------------------
+// Supply & Demand zones — consolidation bases preceding impulse moves
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect Supply & Demand zones from OHLCV.
+ *
+ * A demand zone is a tight consolidation (base) followed by a strong bullish
+ * impulse; a supply zone is the mirror. The zone's price range is the base's
+ * high–low. It stays "fresh" (unmitigated) until price revisits it.
+ *
+ * Returns the nearest unmitigated demand and supply zones relative to the
+ * current price, plus all detected zones for inspection.
+ */
+export function supplyDemandZones(candles, opts = {}) {
+  const n = candles.length;
+  if (n < 30) return null;
+
+  const baseMax = opts.baseMax ?? 4;
+  const baseRangePct = opts.baseRangePct ?? 0.015;
+  const impulseMinPct = opts.impulseMinPct ?? 0.03;
+  const lookback = opts.lookback ?? 60;
+
+  const price = candles[n - 1].close;
+  const start = Math.max(0, n - lookback);
+  const zones = [];
+
+  for (let i = start; i < n - baseMax; i++) {
+    for (let baseLen = 2; baseLen <= baseMax; baseLen++) {
+      const baseEnd = i + baseLen - 1;
+      if (baseEnd >= n - 1) continue;
+      const base = candles.slice(i, i + baseLen);
+      const baseHigh = Math.max(...base.map(high));
+      const baseLow = Math.min(...base.map(low));
+      const baseMid = (baseHigh + baseLow) / 2;
+      if (baseMid === 0) continue;
+      if ((baseHigh - baseLow) / baseMid > baseRangePct) continue;
+
+      const impulse = candles[baseEnd + 1];
+      const impulseMove = impulse.close - baseMid;
+      const impulsePct = Math.abs(impulseMove) / baseMid;
+      if (impulsePct < impulseMinPct) continue;
+
+      const isDemand = impulseMove > 0;
+      let mitigated = false;
+      for (let j = baseEnd + 2; j < n; j++) {
+        const c = candles[j];
+        if (isDemand && c.low <= baseHigh) { mitigated = true; break; }
+        if (!isDemand && c.high >= baseLow) { mitigated = true; break; }
+      }
+      zones.push({ type: isDemand ? 'demand' : 'supply', top: baseHigh, bottom: baseLow, index: i, impulsePct, mitigated });
+      break;
+    }
+  }
+
+  if (zones.length === 0) return null;
+
+  const freshDemand = zones
+    .filter((z) => z.type === 'demand' && !z.mitigated)
+    .sort((a, b) => Math.abs(price - a.top) - Math.abs(price - b.top))[0];
+  const freshSupply = zones
+    .filter((z) => z.type === 'supply' && !z.mitigated)
+    .sort((a, b) => Math.abs(price - a.bottom) - Math.abs(price - b.bottom))[0];
+
+  return { zones, nearestDemand: freshDemand || null, nearestSupply: freshSupply || null, price };
+}
+
 export { last as _last };

@@ -21,7 +21,7 @@
 
 import {
   rsi, macd, bollingerBands, stochastic, ema, atrPercent,
-  heikinAshi, sslChannel, mfi, cmo, tmo, relativeVolume, _last as last,
+  heikinAshi, sslChannel, mfi, cmo, tmo, relativeVolume, supplyDemandZones, _last as last,
 } from './indicators.js';
 
 /** Minimum closed bars before any score is meaningful. */
@@ -32,7 +32,8 @@ export const DEFAULT_WEIGHTS = {
   momentum: 20,
   meanReversion: 15,
   volume: 15,
-  composite: 25,
+  supplyDemand: 10,
+  composite: 15,
 };
 
 export const DEFAULT_INDICATORS = {
@@ -41,6 +42,7 @@ export const DEFAULT_INDICATORS = {
   bollinger: true,
   ema: true,
   stoch: true,
+  supply_demand: false,
   sp500ai: false,
 };
 
@@ -353,6 +355,63 @@ function compositeComponent(candles) {
   };
 }
 
+/**
+ * Supply & Demand zones — price-level confluence.
+ *
+ * Scores based on how price relates to the nearest unmitigated zones:
+ *  - Bouncing up from a fresh demand zone → bullish.
+ *  - Rejected down from a fresh supply zone → bullish (overhead supply held).
+ *  - Pressing into fresh supply → bearish (overhead resistance).
+ *  - Breaking down through fresh demand → bearish (support lost).
+ *
+ * Confluence contributor: only moves the score when price is near a zone
+ * (within ~2 ATR). No zone nearby → returns null (no contribution).
+ */
+function supplyDemandComponent(candles, ctx) {
+  const sd = supplyDemandZones(candles);
+  if (!sd) return null;
+
+  const { nearestDemand, nearestSupply, price } = sd;
+  if (!nearestDemand && !nearestSupply) return null;
+
+  const vol = atrPercent(candles) ?? 0.02;
+  const proximity = 2 * vol;
+
+  let score = 50;
+  const reasons = [];
+
+  if (nearestDemand) {
+    const dist = (price - nearestDemand.top) / price;
+    const distAtr = Math.abs(dist) / vol;
+    if (distAtr <= proximity) {
+      if (dist >= 0 && dist < vol) {
+        score += 18;
+        reasons.push('Price bouncing off unmitigated demand zone');
+      } else if (dist < 0) {
+        score -= 16;
+        reasons.push('Price below unmitigated demand zone — support broken');
+      }
+    }
+  }
+
+  if (nearestSupply) {
+    const dist = (price - nearestSupply.bottom) / price;
+    const distAtr = Math.abs(dist) / vol;
+    if (distAtr <= proximity) {
+      if (dist <= 0 && dist > -vol) {
+        score += 14;
+        reasons.push('Price rejected from unmitigated supply zone');
+      } else if (dist > 0) {
+        score += 8;
+        reasons.push('Price above unmitigated supply zone — resistance broken');
+      }
+    }
+  }
+
+  if (reasons.length === 0) return null;
+  return { score: clamp(score, 0, 100), reasons };
+}
+
 export function scoreAsset(candles, opts = {}) {
   if (!Array.isArray(candles) || candles.length < MIN_CANDLES) {
     return null;
@@ -375,6 +434,7 @@ export function scoreAsset(candles, opts = {}) {
     momentum: momentumComponent(candles, indicators, ctx),
     meanReversion: meanReversionComponent(candles, indicators, ctx),
     volume: classicOn ? volumeComponent(candles, ctx) : null,
+    supplyDemand: indicators.supply_demand ? supplyDemandComponent(candles, ctx) : null,
     composite: indicators.sp500ai ? compositeComponent(candles) : null,
   };
 

@@ -3,7 +3,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/com
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Activity, BarChart2, TrendingUp, Zap, Waves, Signal, LineChart, ArrowUpDown, Sparkles, CandlestickChart, Cloud, Brain } from "lucide-react";
+import { Activity, BarChart2, TrendingUp, Zap, Waves, Signal, LineChart, ArrowUpDown, Sparkles, CandlestickChart, Cloud, Brain, Layers } from "lucide-react";
 
 export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUpdate, onSave }) {
   const handleToggle = (key) => {
@@ -106,6 +106,13 @@ export default function IndicatorSettingsModal({ isOpen, onClose, settings, onUp
       description: 'Comprehensive indicator showing support/resistance, trend, and momentum.',
       icon: Cloud,
       color: 'text-violet-400'
+    },
+    {
+      id: 'supply_demand',
+      name: 'Supply & Demand Zones',
+      description: 'Detects consolidation bases preceding strong impulse moves. Scores price interaction with unmitigated demand (support) and supply (resistance) zones as a confluence contributor.',
+      icon: Layers,
+      color: 'text-emerald-400'
     },
     {
       id: 'sp500ai',
