@@ -194,11 +194,22 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
                 const quantity = position.quantity || 0;
                 const avgEntryPrice = position.avg_entry_price || 0;
                 
-                // Calculate real-time P&L using current market prices
-                const currentPrice = lookupPrice(position.asset_symbol) || avgEntryPrice;
-                const currentValue = quantity * currentPrice;
-                const profitLoss = (currentPrice - avgEntryPrice) * quantity;
-                const profitLossPercent = avgEntryPrice > 0 ? ((profitLoss / (quantity * avgEntryPrice)) * 100).toFixed(2) : 0;
+                // Calculate real-time P&L using current market prices. When no
+                // live price is available (obscure altcoins not on the websocket
+                // or OKX spot feed), fall back to the server-stored current_value
+                // and profit_loss so the real P&L shows instead of 0.00.
+                const livePrice = lookupPrice(position.asset_symbol);
+                let currentValue, profitLoss, profitLossPercent;
+                if (livePrice) {
+                  currentValue = quantity * livePrice;
+                  profitLoss = (livePrice - avgEntryPrice) * quantity;
+                  profitLossPercent = avgEntryPrice > 0 ? ((profitLoss / (quantity * avgEntryPrice)) * 100).toFixed(2) : 0;
+                } else {
+                  currentValue = position.current_value ?? quantity * avgEntryPrice;
+                  profitLoss = position.profit_loss ?? 0;
+                  const costBasis = quantity * avgEntryPrice;
+                  profitLossPercent = costBasis > 0 ? ((profitLoss / costBasis) * 100).toFixed(2) : 0;
+                }
                 
                 return (
                   <div key={idx} className="bg-slate-800 rounded-lg p-3">
