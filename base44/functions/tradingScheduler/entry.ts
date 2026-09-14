@@ -76,11 +76,18 @@ Deno.serve(async (req) => {
         processed++;
 
         if (result?.success) {
-          if (result.executed) {
-            executed++;
-            console.log(`✅ Trade executed for ${settings.created_by}: ${result.trade?.symbol} (${result.trade?.action})`);
+          const tradeCount = result.trades?.length ?? 0;
+          if (tradeCount > 0) {
+            executed += tradeCount;
+            const buys = result.trades.filter(t => t.action === 'buy').length;
+            const sells = result.trades.filter(t => t.action === 'sell').length;
+            console.log(`✅ ${tradeCount} trade(s) for ${settings.created_by}: ${buys} buy, ${sells} sell`);
+          } else if (result.halted) {
+            console.log(`🛑 Halted for ${settings.created_by}: ${result.reason}`);
+          } else if (result.skipped) {
+            console.log(`⏭️ Skipped for ${settings.created_by}: ${result.reason}`);
           } else {
-            console.log(`ℹ️ No trade for ${settings.created_by}: ${result.reason}`);
+            console.log(`ℹ️ No trade for ${settings.created_by} (scanned ${result.scanned ?? 0})`);
           }
         } else {
           console.error(`⚠️ Worker failed for ${settings.created_by}:`, result?.error || 'Unknown error');
