@@ -412,9 +412,10 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
       exitReason = `Take-profit at ${pnl.netPercent.toFixed(2)}% net`;
     }
 
-    // Signal-based exit: sell when S&D turns bearish AND SP500 agrees on
-    // direction. Mirrors the entry gate — both must agree to exit, so a
-    // single component flipping does not whipsaw the position.
+    // Signal-based exit: sell when the enabled confluence indicators turn
+    // bearish. S&D (if enabled) must be bearish; SP500-AI (if enabled) must be
+    // bearish. Mirrors the entry gate — only enabled indicators gate, so a
+    // single-indicator setup can still exit on its own signal.
     if (!exitReason) {
       const heldCandles = candlesBySymbol.get(symbol);
       if (heldCandles && heldCandles.length >= MIN_CANDLES) {
@@ -422,12 +423,13 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
           indicators: indicatorSettings || settings.indicator_settings || undefined,
         });
         if (heldSignal) {
+          const effInd = indicatorSettings || settings.indicator_settings || {};
           const sdScore = heldSignal.components?.supplyDemand;
           const sp500Score = heldSignal.components?.composite;
-          const sdBearish = sdScore !== null && sdScore !== undefined && sdScore < 50;
-          const sp500Bearish = sp500Score !== null && sp500Score !== undefined && sp500Score < 50;
+          const sdBearish = !effInd.supply_demand || (sdScore !== null && sdScore !== undefined && sdScore < 50);
+          const sp500Bearish = !effInd.sp500ai || (sp500Score !== null && sp500Score !== undefined && sp500Score < 50);
           if (sdBearish && sp500Bearish) {
-            exitReason = `S&D + SP500 bearish confluence (SD=${sdScore}, SP500=${sp500Score})`;
+            exitReason = `Bearish confluence exit (SD=${sdScore ?? 'null'}, SP500=${sp500Score ?? 'null'})`;
           }
         }
       }
@@ -543,20 +545,20 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
 
         scanned.push({ symbol: ticker.symbol, strength: signal.strength });
 
-        // Confluence gate: a buy requires BOTH (a) an active, bullish Supply &
-        // Demand zone interaction (price near a fresh zone) AND (b) the SP500-AI
-        // composite agreeing on direction. Either missing → skip, no matter how
-        // high the overall strength is. This enforces real confluence instead of
-        // letting momentum alone drive entries.
+        // Confluence gate: each enabled confluence indicator must agree on
+        // direction. S&D (if enabled) must be bullish; SP500-AI (if enabled)
+        // must be bullish. Indicators that are turned off don't gate — so S&D
+        // can drive trades on its own when SP500-AI is off, and vice versa.
+        const effInd = indicatorSettings || settings.indicator_settings || {};
         const sdScore = signal.components?.supplyDemand;
         const sp500Score = signal.components?.composite;
-        const sdConfluence = sdScore !== null && sdScore !== undefined && sdScore > 50;
-        const sp500Agree = sp500Score !== null && sp500Score !== undefined && sp500Score > 50;
+        const sdGate = !effInd.supply_demand || (sdScore !== null && sdScore !== undefined && sdScore > 50);
+        const sp500Gate = !effInd.sp500ai || (sp500Score !== null && sp500Score !== undefined && sp500Score > 50);
 
-        if (signal.strength >= minStrength && signal.direction === 'bullish' && sdConfluence && sp500Agree) {
+        if (signal.strength >= minStrength && signal.direction === 'bullish' && sdGate && sp500Gate) {
           candidates.push({ ticker, candles, signal });
         } else if (signal.strength >= minStrength && signal.direction === 'bullish') {
-          log(`Skip ${ticker.symbol}: no S&D/SP500 confluence (SD=${sdScore ?? 'null'}, SP500=${sp500Score ?? 'null'})`);
+          log(`Skip ${ticker.symbol}: confluence gate failed (SD=${sdScore ?? 'null'}, SP500=${sp500Score ?? 'null'})`);
         }
       }
 
