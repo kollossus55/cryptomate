@@ -522,8 +522,20 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
 
         scanned.push({ symbol: ticker.symbol, strength: signal.strength });
 
-        if (signal.strength >= minStrength && signal.direction === 'bullish') {
+        // Confluence gate: a buy requires BOTH (a) an active, bullish Supply &
+        // Demand zone interaction (price near a fresh zone) AND (b) the SP500-AI
+        // composite agreeing on direction. Either missing → skip, no matter how
+        // high the overall strength is. This enforces real confluence instead of
+        // letting momentum alone drive entries.
+        const sdScore = signal.components?.supplyDemand;
+        const sp500Score = signal.components?.composite;
+        const sdConfluence = sdScore !== null && sdScore !== undefined && sdScore > 50;
+        const sp500Agree = sp500Score !== null && sp500Score !== undefined && sp500Score > 50;
+
+        if (signal.strength >= minStrength && signal.direction === 'bullish' && sdConfluence && sp500Agree) {
           candidates.push({ ticker, candles, signal });
+        } else if (signal.strength >= minStrength && signal.direction === 'bullish') {
+          log(`Skip ${ticker.symbol}: no S&D/SP500 confluence (SD=${sdScore ?? 'null'}, SP500=${sp500Score ?? 'null'})`);
         }
       }
 
