@@ -1241,6 +1241,11 @@ export default function Trading() {
       };
     });
 
+    // Force the popup's analyzeTopAssets to take the rate-limited fast path
+    // (generateBasicRecommendations) instead of calling the LLM, which would
+    // overwrite the test data we just injected.
+    localStorage.setItem('last_llm_recommendation_call', Date.now().toString());
+
     console.log('🧪 Test signal data injected for:', testAssets.map(a => a.symbol).join(', '));
     setShowRecommendations(true);
   };
