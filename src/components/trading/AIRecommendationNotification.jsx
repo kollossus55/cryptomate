@@ -72,6 +72,18 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
         console.log('🪙 Altcoins found:', window.altcoinOpportunities.map(a => `${a.symbol} (${a.confidence}%)`).join(', '));
       }
       analyzeTopAssets();
+
+      // calculateAIConfidence (in Trading.jsx) runs ~5s after page load and
+      // takes several seconds to populate window.assetSignalData with the
+      // technical indicator breakdown (including SP500 AI). The popup's
+      // initial analyzeTopAssets runs before that data exists. Re-run the
+      // basic recommendations path after a delay so the popup picks up the
+      // freshly-computed indicator signals on first open.
+      const reanalyzeTimer = setTimeout(() => {
+        console.log('🔄 Re-analyzing after indicator data should be ready...');
+        generateBasicRecommendations();
+      }, 12000);
+      return () => clearTimeout(reanalyzeTimer);
     }
   }, []);
 
