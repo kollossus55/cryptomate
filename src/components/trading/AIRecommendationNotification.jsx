@@ -21,8 +21,8 @@ const altcoinToAsset = (opp) => ({
   color: "bg-cyan-500"
 });
 
-export default function AIRecommendationNotification({ assets, onTradeAsset, onExecuteTrade, portfolio, autoTradingSettings, onClose, useAltcoinScanner = false }) {
-  const [recommendations, setRecommendations] = useState(null);
+export default function AIRecommendationNotification({ assets, onTradeAsset, onExecuteTrade, portfolio, autoTradingSettings, onClose, useAltcoinScanner = false, testRecommendations = null }) {
+  const [recommendations, setRecommendations] = useState(testRecommendations);
   const [isLoading, setIsLoading] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -64,6 +64,11 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
 
   // Initial analysis on mount
   useEffect(() => {
+    // Test mode: recommendations passed directly as a prop — skip analysis.
+    if (testRecommendations) {
+      console.log('🧪 Test mode: using provided test recommendations');
+      return;
+    }
     if (assetsRef.current && assetsRef.current.length > 0) {
       console.log('🎬 AI Signals popup opened');
       console.log('📊 Main assets available:', assetsRef.current.length);

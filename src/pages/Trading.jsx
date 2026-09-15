@@ -44,6 +44,7 @@ export default function Trading() {
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [analysisAsset, setAnalysisAsset] = useState(null);
   const [showRecommendations, setShowRecommendations] = useState(false);
+  const [testRecommendations, setTestRecommendations] = useState(null);
   const [showAltcoinScanner, setShowAltcoinScanner] = useState(false);
   const [altcoinScannerEnabled, setAltcoinScannerEnabled] = useState(() => {
     const saved = localStorage.getItem('altcoin_scanner_enabled');
@@ -1198,55 +1199,47 @@ export default function Trading() {
     setAssetConfidence(confidence);
   };
 
-  // Test helper: injects sample signal data (including SP500 AI indicator)
-  // into window.assetSignalData and opens the popup so we can verify the
-  // popup renders recommendations + SP500 reasoning correctly.
+  // Test helper: builds sample recommendations (including SP500 AI indicator
+  // data) and passes them directly to the popup as a prop, bypassing the
+  // popup's internal LLM/assetSignalData flow so we can verify rendering.
   const runPopupTest = () => {
     if (!assets || assets.length === 0) {
       console.warn('No assets loaded yet for popup test');
       return;
     }
-    if (!window.assetSignalData) window.assetSignalData = {};
 
-    // Pick top 3 assets by volume and inject strong buy signals with SP500 AI data
     const testAssets = [...assets].sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0)).slice(0, 3);
-    testAssets.forEach((asset, i) => {
-      window.assetSignalData[asset.symbol] = {
-        confidence: 78 + i * 3, // 78, 81, 84
-        recommendation: 'buy',
-        riskLevel: 'medium',
-        timestamp: Date.now(),
-        source: 'test_run',
-        reasoning: `TEST: ${asset.symbol} shows BUY signal with SP500 AI confirmation.`,
-        breakdown: {
-          technical: 72 + i * 2,
-          news: { sentiment_label: 'positive' },
-          social: { social_score: 15 },
-          onchain: { signal: 'bullish' },
-          advanced_indicators: {
-            sp500ai: {
-              longSignal: true,
-              shortSignal: false,
-              bullish: true,
-              bearish: false,
-              strength: 5,
-              maxStrength: 6,
-              components: {
-                haBullish: true, sslBullish: true, cmoOverboughtCond: false,
-                aiRSIBullish: true, tmoBullish: true, mfBullish: true
-              }
-            }
-          }
+    const recommendations = testAssets.map((asset, i) => ({
+      symbol: asset.symbol,
+      action: 'buy',
+      confidence: 78 + i * 3,
+      reasoning: `TEST: ${asset.symbol} shows BUY signal with SP500 AI confirmation. SP500 AI indicator: LONG signal (strength 5/6).`,
+      risk_level: 'medium',
+      target_price: asset.price * 1.08,
+      data_sources: {
+        technical_score: 72 + i * 2,
+        news_sentiment: 'positive',
+        social_score: 15,
+        onchain_signal: 'bullish'
+      },
+      _test_sp500: {
+        longSignal: true,
+        shortSignal: false,
+        bullish: true,
+        bearish: false,
+        strength: 5,
+        maxStrength: 6,
+        components: {
+          haBullish: true, sslBullish: true, cmoOverboughtCond: false,
+          aiRSIBullish: true, tmoBullish: true, mfBullish: true
         }
-      };
+      }
+    }));
+
+    setTestRecommendations({
+      recommendations,
+      market_summary: `🧪 TEST MODE: ${recommendations.length} sample buy signals with SP500 AI confirmation.`
     });
-
-    // Force the popup's analyzeTopAssets to take the rate-limited fast path
-    // (generateBasicRecommendations) instead of calling the LLM, which would
-    // overwrite the test data we just injected.
-    localStorage.setItem('last_llm_recommendation_call', Date.now().toString());
-
-    console.log('🧪 Test signal data injected for:', testAssets.map(a => a.symbol).join(', '));
     setShowRecommendations(true);
   };
 
@@ -1998,7 +1991,11 @@ export default function Trading() {
           onExecuteTrade={handleExecuteTrade}
           portfolio={portfolio}
           autoTradingSettings={autoTradingSettings}
-          onClose={() => setShowRecommendations(false)}
+          testRecommendations={testRecommendations}
+          onClose={() => {
+            setShowRecommendations(false);
+            setTestRecommendations(null);
+          }}
         />
       )}
 
