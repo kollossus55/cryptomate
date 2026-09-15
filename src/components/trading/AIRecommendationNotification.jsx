@@ -318,10 +318,16 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
       setRecommendations(result);
       
       // 🔥 SYNC SIGNALS TO AUTO-TRADING ENGINE
+      // MERGE with existing signal data — never overwrite the technical
+      // indicator breakdown (including SP500 AI) that calculateAIConfidence
+      // computed. Overwriting destroys the indicator data the popup needs
+      // to surface on subsequent runs.
       if (result?.recommendations) {
         result.recommendations.forEach(rec => {
           if (!window.assetSignalData) window.assetSignalData = {};
+          const existing = window.assetSignalData[rec.symbol] || {};
           window.assetSignalData[rec.symbol] = {
+            ...existing,
             confidence: rec.confidence,
             recommendation: rec.action,
             riskLevel: rec.risk_level,
@@ -329,14 +335,15 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
             source: 'ai_popup',
             reasoning: rec.reasoning,
             breakdown: {
-              technical: rec.data_sources?.technical_score || 0,
-              news: { sentiment_label: rec.data_sources?.news_sentiment || 'neutral' },
-              social: { social_score: rec.data_sources?.social_score || 0 },
-              onchain: { signal: rec.data_sources?.onchain_signal || 'neutral' }
-            }
+              ...existing.breakdown,
+              technical: rec.data_sources?.technical_score || existing.breakdown?.technical || 0,
+              news: { sentiment_label: rec.data_sources?.news_sentiment || existing.breakdown?.news?.sentiment_label || 'neutral' },
+              social: { social_score: rec.data_sources?.social_score || existing.breakdown?.social?.social_score || 0 },
+              onchain: { signal: rec.data_sources?.onchain_signal || existing.breakdown?.onchain?.signal || 'neutral' },
+            },
           };
         });
-        console.log('✅ Synced', result.recommendations.length, 'signals to auto-trading engine');
+        console.log('✅ Synced', result.recommendations.length, 'signals to auto-trading engine (merged)');
       }
       
       // Cache the recommendations
@@ -464,11 +471,13 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
       market_summary: `Market analysis based on cached signal data${window.altcoinOpportunities?.length ? ' including altcoin scanner' : ''}. ${recommendations.length} opportunities identified.`
     };
     
-    // 🔥 SYNC SIGNALS TO AUTO-TRADING ENGINE
+    // 🔥 SYNC SIGNALS TO AUTO-TRADING ENGINE — merge, don't overwrite
     if (recommendations) {
       recommendations.forEach(rec => {
         if (!window.assetSignalData) window.assetSignalData = {};
+        const existing = window.assetSignalData[rec.symbol] || {};
         window.assetSignalData[rec.symbol] = {
+          ...existing,
           confidence: rec.confidence,
           recommendation: rec.action,
           riskLevel: rec.risk_level,
@@ -476,14 +485,15 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
           source: 'basic_analysis',
           reasoning: rec.reasoning,
           breakdown: {
-            technical: rec.data_sources?.technical_score || 0,
-            news: { sentiment_label: rec.data_sources?.news_sentiment || 'neutral' },
-            social: { social_score: rec.data_sources?.social_score || 0 },
-            onchain: { signal: rec.data_sources?.onchain_signal || 'neutral' }
-          }
+            ...existing.breakdown,
+            technical: rec.data_sources?.technical_score || existing.breakdown?.technical || 0,
+            news: { sentiment_label: rec.data_sources?.news_sentiment || existing.breakdown?.news?.sentiment_label || 'neutral' },
+            social: { social_score: rec.data_sources?.social_score || existing.breakdown?.social?.social_score || 0 },
+            onchain: { signal: rec.data_sources?.onchain_signal || existing.breakdown?.onchain?.signal || 'neutral' },
+          },
         };
       });
-      console.log('✅ Synced', recommendations.length, 'basic signals to auto-trading engine');
+      console.log('✅ Synced', recommendations.length, 'basic signals to auto-trading engine (merged)');
     }
     
     setRecommendations(result);
