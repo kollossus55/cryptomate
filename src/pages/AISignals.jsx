@@ -72,14 +72,18 @@ export default function AISignals() {
   const { data: assets = [], isLoading: isLoadingAssets } = useQuery({
     queryKey: ['assets-for-signals'],
     queryFn: async () => {
-      const universe = await fetchTickerUniverse({ topN: 20, minQuoteVolume24h: 5_000_000 });
-      return universe.map((t) => ({
-        symbol: t.base,
-        name: t.base,
-        price: t.price,
-        change24h: t.change24h,
-        volume24h: t.quoteVolume24h,
-      }));
+      const majors = new Set(['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'USDT', 'USDC', 'TRX', 'DOGE']);
+      const universe = await fetchTickerUniverse({ topN: 60, minQuoteVolume24h: 5_000_000 });
+      return universe
+        .filter((t) => !majors.has(t.base))
+        .slice(0, 20)
+        .map((t) => ({
+          symbol: t.base,
+          name: t.base,
+          price: t.price,
+          change24h: t.change24h,
+          volume24h: t.quoteVolume24h,
+        }));
     },
     staleTime: 60_000,
   });
