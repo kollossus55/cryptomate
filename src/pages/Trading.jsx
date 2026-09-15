@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, TrendingUp, Sparkles, RefreshCw, AlertCircle, Settings, Eye, EyeOff, Newspaper, Scan, Star } from "lucide-react";
+import { Search, TrendingUp, Sparkles, RefreshCw, AlertCircle, Settings, Eye, EyeOff, Newspaper, Scan, Star, FlaskConical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 
@@ -1198,6 +1198,53 @@ export default function Trading() {
     setAssetConfidence(confidence);
   };
 
+  // Test helper: injects sample signal data (including SP500 AI indicator)
+  // into window.assetSignalData and opens the popup so we can verify the
+  // popup renders recommendations + SP500 reasoning correctly.
+  const runPopupTest = () => {
+    if (!assets || assets.length === 0) {
+      console.warn('No assets loaded yet for popup test');
+      return;
+    }
+    if (!window.assetSignalData) window.assetSignalData = {};
+
+    // Pick top 3 assets by volume and inject strong buy signals with SP500 AI data
+    const testAssets = [...assets].sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0)).slice(0, 3);
+    testAssets.forEach((asset, i) => {
+      window.assetSignalData[asset.symbol] = {
+        confidence: 78 + i * 3, // 78, 81, 84
+        recommendation: 'buy',
+        riskLevel: 'medium',
+        timestamp: Date.now(),
+        source: 'test_run',
+        reasoning: `TEST: ${asset.symbol} shows BUY signal with SP500 AI confirmation.`,
+        breakdown: {
+          technical: 72 + i * 2,
+          news: { sentiment_label: 'positive' },
+          social: { social_score: 15 },
+          onchain: { signal: 'bullish' },
+          advanced_indicators: {
+            sp500ai: {
+              longSignal: true,
+              shortSignal: false,
+              bullish: true,
+              bearish: false,
+              strength: 5,
+              maxStrength: 6,
+              components: {
+                haBullish: true, sslBullish: true, cmoOverboughtCond: false,
+                aiRSIBullish: true, tmoBullish: true, mfBullish: true
+              }
+            }
+          }
+        }
+      };
+    });
+
+    console.log('🧪 Test signal data injected for:', testAssets.map(a => a.symbol).join(', '));
+    setShowRecommendations(true);
+  };
+
   const calculateBasicConfidence = (asset) => {
     // Deterministic score from REAL Binance 24h change & quote volume.
     // No random noise, no market cap (Binance doesn't provide it).
@@ -1497,6 +1544,15 @@ export default function Trading() {
                 title="Configure Indicators"
               >
                 <Settings className="w-5 h-5" />
+              </Button>
+              <Button
+                onClick={runPopupTest}
+                size="lg"
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
+                title="Inject test signal data and open the popup"
+              >
+                <FlaskConical className="w-5 h-5 mr-2" />
+                Test Popup
               </Button>
             </div>
             <div className="flex items-center gap-2">
