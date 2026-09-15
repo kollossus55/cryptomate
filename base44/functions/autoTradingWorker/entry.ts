@@ -412,6 +412,27 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
       exitReason = `Take-profit at ${pnl.netPercent.toFixed(2)}% net`;
     }
 
+    // Signal-based exit: sell when S&D turns bearish AND SP500 agrees on
+    // direction. Mirrors the entry gate — both must agree to exit, so a
+    // single component flipping does not whipsaw the position.
+    if (!exitReason) {
+      const heldCandles = candlesBySymbol.get(symbol);
+      if (heldCandles && heldCandles.length >= MIN_CANDLES) {
+        const heldSignal = scoreAsset(heldCandles, {
+          indicators: indicatorSettings || settings.indicator_settings || undefined,
+        });
+        if (heldSignal) {
+          const sdScore = heldSignal.components?.supplyDemand;
+          const sp500Score = heldSignal.components?.composite;
+          const sdBearish = sdScore !== null && sdScore !== undefined && sdScore < 50;
+          const sp500Bearish = sp500Score !== null && sp500Score !== undefined && sp500Score < 50;
+          if (sdBearish && sp500Bearish) {
+            exitReason = `S&D + SP500 bearish confluence (SD=${sdScore}, SP500=${sp500Score})`;
+          }
+        }
+      }
+    }
+
     if (exitReason) {
       const notional = position.quantity * currentPrice;
       const book = await fetchOrderBook(symbol, 100);
