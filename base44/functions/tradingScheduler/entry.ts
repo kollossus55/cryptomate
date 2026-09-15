@@ -22,11 +22,9 @@ Deno.serve(async (req) => {
     // authenticated admin. Prevents unauthenticated callers from triggering the
     // trading loop or probing internal endpoints via forwarded headers.
     const hasServiceAuth = !!req.headers.get('base44-service-authorization');
-    let debugCaller = null;
     if (!hasServiceAuth) {
       try {
         const caller = await base44.auth.me();
-        debugCaller = { email: caller?.email, role: caller?.role };
         if (!caller || caller.role !== 'admin') {
           return Response.json({ success: false, error: 'Forbidden' }, { status: 403 });
         }
@@ -72,23 +70,31 @@ Deno.serve(async (req) => {
           user_email: settings.created_by
         };
 
-        // Use the SDK's function invoke — the documented way to call one
-        // backend function from another. The service-role context from
-        // createClientFromRequest is passed through automatically, so the
-        // worker's asServiceRole calls succeed without header forwarding.
+        // Call the worker via the app's public function URL. The SDK's
+        // asServiceRole.functions.invoke caches stale function versions; a
+        // direct fetch to the public endpoint always runs the latest deploy.
+        // Forward the service-authorization header so the worker trusts the
+        // call as a platform service request.
         let result;
         try {
-          const res = await base44.asServiceRole.functions.invoke('autoTradingWorker', invokeArgs);
-          result = res.data;
-          // Debug: return diagnostic info on first iteration
-          if (processed === 0) {
-            result._debug = { reqUrl: req.url, origin: new URL(req.url).origin, hasServiceAuth, debugCaller };
+          const workerUrl = 'https://crypto-mate-win.base44.app/functions/autoTradingWorker';
+          const workerRes = await fetch(workerUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(hasServiceAuth ? { 'base44-service-authorization': req.headers.get('base44-service-authorization') } : {}),
+            },
+            body: JSON.stringify(invokeArgs),
+          });
+          result = await workerRes.json();
+          if (!workerRes.ok) {
+            throw { response: { status: workerRes.status, data: result } };
           }
         } catch (invokeErr) {
           const status = invokeErr.response?.status ?? 500;
           const body = invokeErr.response?.data ?? {};
-          console.error(`⚠️ Worker failed for ${settings.created_by}:`, body?.error || invokeErr.message, 'status:', status, 'body:', JSON.stringify(body));
-          lastError.push({ user: settings.created_by, error: body?.error || invokeErr.message, status, debug: { reqUrl: req.url, origin: new URL(req.url).origin, hasServiceAuth, debugCaller, errBody: body } });
+          console.error(`⚠️ Worker failed for ${settings.created_by}:`, body?.error || invokeErr.message, 'status:', status);
+          lastError.push({ user: settings.created_by, error: body?.error || invokeErr.message, status });
           errors++;
           processed++;
           continue;
