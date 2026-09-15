@@ -28,6 +28,7 @@ import { generatePredictiveSignal, detectMarketRegime } from "../components/trad
 import { detectAnomalies, detectCorrelationAnomalies } from "../components/trading/AnomalyDetection";
 import { generateAdvancedSignal } from "../components/trading/AdvancedSignalGenerator";
 import IndicatorSettingsModal from "../components/trading/IndicatorSettingsModal";
+import { fetchTickerUniverse } from "../lib/binanceMarketData";
 
 export default function AISignals() {
   const queryClient = useQueryClient();
@@ -67,24 +68,29 @@ export default function AISignals() {
     }
   }, [activeConfig?.id]);
 
-  // Fetch assets for analysis
-  const { data: assets = [] } = useQuery({
+  // Fetch the latest altcoins from OKX (top by 24h quote volume)
+  const { data: assets = [], isLoading: isLoadingAssets } = useQuery({
     queryKey: ['assets-for-signals'],
     queryFn: async () => {
-      // Use window.assetSignalData or create mock data
-      const symbols = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'AVAX', 'DOGE', 'DOT', 'MATIC'];
-      return symbols.map(symbol => {
-        const cached = window.assetSignalData?.[symbol];
-        return {
-          symbol,
-          name: symbol,
-          price: cached?.price || 0,
-          change24h: cached?.change24h || 0,
-          volume24h: cached?.volume24h || 0,
-        };
-      });
+      const universe = await fetchTickerUniverse({ topN: 20, minQuoteVolume24h: 5_000_000 });
+      return universe.map((t) => ({
+        symbol: t.base,
+        name: t.base,
+        price: t.price,
+        change24h: t.change24h,
+        volume24h: t.quoteVolume24h,
+      }));
     },
+    staleTime: 60_000,
   });
+
+  // Live signal: auto-analyze the strongest opportunity in the universe
+  const runLiveSignal = async () => {
+    if (!assets || assets.length === 0) return;
+    // Pick the top mover (highest absolute 24h change) as the live opportunity
+    const top = [...assets].sort((a, b) => Math.abs(b.change24h) - Math.abs(a.change24h))[0];
+    await analyzeAsset(top);
+  };
 
   // Config mutations
   const createConfigMutation = useMutation({
@@ -293,13 +299,23 @@ export default function AISignals() {
               </p>
             </div>
           </div>
-          <Button 
-            onClick={() => setShowIndicatorSettings(true)}
-            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 shadow-lg shadow-indigo-500/20"
-          >
-            <Settings className="w-4 h-4 mr-2" />
-            Configure Indicators
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={runLiveSignal}
+              disabled={isAnalyzing || isLoadingAssets || !assets.length}
+              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white border-0 shadow-lg shadow-green-500/20"
+            >
+              <Zap className={`w-4 h-4 mr-2 ${isAnalyzing ? 'animate-pulse' : ''}`} />
+              Live Signal
+            </Button>
+            <Button
+              onClick={() => setShowIndicatorSettings(true)}
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0 shadow-lg shadow-indigo-500/20"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Configure Indicators
+            </Button>
+          </div>
         </div>
 
         {/* Market Regime Banner */}
@@ -349,6 +365,12 @@ export default function AISignals() {
               <CardContent>
                 <ScrollArea className="h-[600px]">
                   <div className="space-y-2">
+                    {isLoadingAssets && (
+                      <div className="py-8 text-center">
+                        <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                        <p className="text-slate-400 text-sm">Loading latest altcoins…</p>
+                      </div>
+                    )}
                     {assets.map((asset) => (
                       <motion.div
                         key={asset.symbol}
