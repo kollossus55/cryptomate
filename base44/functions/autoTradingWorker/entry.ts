@@ -67,11 +67,16 @@ Deno.serve(async (req) => {
     } catch {
       // No user token — only allowed if the platform scheduler header is present.
     }
-    if (caller) {
-      if (caller.email !== user_email) {
+    // Service role (platform scheduler or asServiceRole.functions.invoke from
+    // another backend function) is trusted to act on any user's behalf. A
+    // user token is only accepted for the caller's own settings or by an admin.
+    if (hasServiceAuth) {
+      log('Authorized via service role');
+    } else if (caller) {
+      if (caller.email !== user_email && caller.role !== 'admin') {
         return Response.json({ success: false, error: 'Forbidden: settings do not belong to caller' }, { status: 403 });
       }
-    } else if (!hasServiceAuth) {
+    } else {
       return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 

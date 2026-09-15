@@ -22,9 +22,11 @@ Deno.serve(async (req) => {
     // authenticated admin. Prevents unauthenticated callers from triggering the
     // trading loop or probing internal endpoints via forwarded headers.
     const hasServiceAuth = !!req.headers.get('base44-service-authorization');
+    let debugCaller = null;
     if (!hasServiceAuth) {
       try {
         const caller = await base44.auth.me();
+        debugCaller = { email: caller?.email, role: caller?.role };
         if (!caller || caller.role !== 'admin') {
           return Response.json({ success: false, error: 'Forbidden' }, { status: 403 });
         }
@@ -70,24 +72,27 @@ Deno.serve(async (req) => {
           user_email: settings.created_by
         };
 
-        // asServiceRole.functions.invoke does not transmit the body in this
-        // runtime (platform returns "Missing parameters"). Forward the request
-        // directly to the worker's HTTP endpoint, passing the same auth headers
-        // so the worker's createClientFromRequest inherits service-role access.
-        // Hardcode the worker URL to the platform origin — never derive it from
-        // a request header (SSRF via client-controlled base44-api-url).
-        const workerUrl = `${url.origin}/functions/autoTradingWorker`;
-        const fwdHeaders = { 'Content-Type': 'application/json' };
-        for (const h of ['base44-service-authorization', 'base44-app-id', 'authorization']) {
-          const v = req.headers.get(h);
-          if (v) fwdHeaders[h] = v;
+        // Use the SDK's function invoke — the documented way to call one
+        // backend function from another. The service-role context from
+        // createClientFromRequest is passed through automatically, so the
+        // worker's asServiceRole calls succeed without header forwarding.
+        let result;
+        try {
+          const res = await base44.asServiceRole.functions.invoke('autoTradingWorker', invokeArgs);
+          result = res.data;
+          // Debug: return diagnostic info on first iteration
+          if (processed === 0) {
+            result._debug = { reqUrl: req.url, origin: new URL(req.url).origin, hasServiceAuth, debugCaller };
+          }
+        } catch (invokeErr) {
+          const status = invokeErr.response?.status ?? 500;
+          const body = invokeErr.response?.data ?? {};
+          console.error(`⚠️ Worker failed for ${settings.created_by}:`, body?.error || invokeErr.message, 'status:', status, 'body:', JSON.stringify(body));
+          lastError.push({ user: settings.created_by, error: body?.error || invokeErr.message, status, debug: { reqUrl: req.url, origin: new URL(req.url).origin, hasServiceAuth, debugCaller, errBody: body } });
+          errors++;
+          processed++;
+          continue;
         }
-        const workerRes = await fetch(workerUrl, {
-          method: 'POST',
-          headers: fwdHeaders,
-          body: JSON.stringify(invokeArgs),
-        });
-        const result = await workerRes.json().catch(() => ({}));
 
         processed++;
 
@@ -107,7 +112,7 @@ Deno.serve(async (req) => {
           }
         } else {
           console.error(`⚠️ Worker failed for ${settings.created_by}:`, result?.error || 'Unknown error');
-          lastError.push({ user: settings.created_by, error: result?.error || 'Unknown error', status: workerRes.status });
+          lastError.push({ user: settings.created_by, error: result?.error || 'Unknown error', status: 500 });
           errors++;
         }
         } catch (error) {
