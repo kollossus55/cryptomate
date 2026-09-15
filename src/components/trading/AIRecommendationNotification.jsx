@@ -206,7 +206,13 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
       const assetsData = topAssets.map(asset => {
         const signalData = window.assetSignalData?.[asset.symbol];
         const prediction = signalData?.prediction;
-        return `${asset.name} (${asset.symbol}): Price $${asset.price}, 24h Change ${asset.change24h}%, Volume $${(asset.volume24h / 1e9).toFixed(2)}B${prediction ? `, Predicted 24h: ${prediction.predicted_change > 0 ? '+' : ''}${prediction.predicted_change.toFixed(2)}%` : ''}`;
+        const indicators = signalData?.breakdown?.advanced_indicators;
+        const sp500 = indicators?.sp500ai;
+        const sp500Str = sp500
+          ? `, SP500 AI: ${sp500.longSignal ? 'LONG' : sp500.shortSignal ? 'SHORT' : 'neutral'} (strength ${sp500.strength}/${sp500.maxStrength})${sp500.sp500ai_blocked ? ' [BLOCKED]' : ''}`
+          : '';
+        const confStr = signalData?.confidence ? `, Tech Confidence: ${signalData.confidence}% (${signalData.recommendation || 'hold'})` : '';
+        return `${asset.name} (${asset.symbol}): Price $${asset.price}, 24h Change ${asset.change24h}%, Volume $${(asset.volume24h / 1e9).toFixed(2)}B${prediction ? `, Predicted 24h: ${prediction.predicted_change > 0 ? '+' : ''}${prediction.predicted_change.toFixed(2)}%` : ''}${sp500Str}${confStr}`;
       }).join('\n');
 
       // Get current positions for sell analysis
@@ -237,7 +243,7 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
       Alert Thresholds: Buy signals minimum ${minConfidenceBuy}% confidence, Sell signals minimum ${minConfidenceSell}% confidence
 
       Use comprehensive data sources:
-      1. **Technical Analysis**: Price momentum, volume, volatility patterns
+      1. **Technical Analysis**: Price momentum, volume, volatility patterns, AND the pre-computed SP500 AI indicator signals (Heikin Ashi, SSL Channel, CMO, AI RSI, TMO, AI Money Flow) shown per asset as "SP500 AI: LONG/SHORT/neutral (strength X/Y)". Prioritise assets where SP500 AI shows a LONG or SHORT signal with high strength. If an asset shows "SP500 AI: [BLOCKED]", do NOT recommend a buy on that asset.
       2. **Predictive Analysis**: 24-hour price movement forecasts (minimum ${minPredictedGain}% gain for buy signals)
       3. **News Sentiment**: Recent headlines, regulatory news, partnerships
       4. **Social Media Trends**: Twitter/Reddit sentiment, influencer opinions, trending topics
@@ -431,11 +437,15 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
     }
 
     const recommendations = assetsWithSignals.map(({ asset, signalData }) => {
+      const sp500 = signalData.breakdown?.advanced_indicators?.sp500ai;
+      const sp500Reason = sp500
+        ? ` SP500 AI indicator: ${sp500.longSignal ? 'LONG' : sp500.shortSignal ? 'SHORT' : 'neutral'} signal (strength ${sp500.strength}/${sp500.maxStrength}).`
+        : '';
       const rec = {
         symbol: asset.symbol,
         action: signalData.recommendation === 'sell' ? 'sell' : 'buy',
         confidence: signalData.confidence,
-        reasoning: `${asset.symbol} shows ${signalData.recommendation.toUpperCase()} signal with ${signalData.confidence}% confidence based on ${signalData.source === 'altcoin_scanner' ? 'real Binance technical indicator analysis (RSI, MACD, EMA, Bollinger, volume)' : 'technical analysis'}.`,
+        reasoning: `${asset.symbol} shows ${signalData.recommendation.toUpperCase()} signal with ${signalData.confidence}% confidence based on ${signalData.source === 'altcoin_scanner' ? 'real Binance technical indicator analysis (RSI, MACD, EMA, Bollinger, volume)' : 'technical analysis'}.${sp500Reason}`,
         risk_level: signalData.riskLevel || 'medium',
         target_price: asset.price * (signalData.recommendation === 'buy' ? 1.08 : 0.92),
         data_sources: {
