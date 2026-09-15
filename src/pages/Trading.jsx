@@ -1241,6 +1241,7 @@ export default function Trading() {
       market_summary: `🧪 TEST MODE: ${recommendations.length} sample buy signals with SP500 AI confirmation.`
     });
     setShowRecommendations(true);
+    alert(`🧪 Test: ${recommendations.length} recommendations created for ${testAssets.map(a => a.symbol).join(', ')}`);
   };
 
   const calculateBasicConfidence = (asset) => {
