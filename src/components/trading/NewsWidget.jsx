@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Newspaper, TrendingUp, TrendingDown, Clock, ExternalLink, Bell, Filter, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
-import { analyzeNewsSentiment } from "./AdvancedSignalGenerator";
+import { fetchMarketIntelligence } from "./AdvancedSignalGenerator";
 
 export default function NewsWidget({ assets, onNewsAlert, isCompact = false }) {
   const [newsFeed, setNewsFeed] = useState([]);
@@ -51,8 +51,9 @@ export default function NewsWidget({ assets, onNewsAlert, isCompact = false }) {
       const fetchedAt = new Date().toISOString(); // honest "retrieved at" time
 
       for (const asset of assetsToFetch) {
-        // Real news only — live web search via LLM. No simulated fallback.
-        const newsData = await analyzeNewsSentiment(asset);
+        // Real news only — live web search via backend function. No simulated fallback.
+        const intelligence = await fetchMarketIntelligence(asset);
+        const newsData = intelligence?.news || null;
 
         if (newsData && newsData.key_headlines?.length > 0) {
           newsData.key_headlines.forEach((headline, idx) => {
