@@ -111,7 +111,7 @@ export default function AltcoinScanner() {
       // it to the server worker for scoring + persistence.
       const universe = await fetchTickerUniverse({ topN: 100, minQuoteVolume24h: 5_000_000 });
       if (!universe.length) {
-        setScanError("Binance returned no symbols. Try again in a moment.");
+        setScanError("OKX returned no symbols. Try again in a moment.");
         return;
       }
       // Enrich the top movers with klines for full indicator scoring (bounded —
@@ -269,7 +269,7 @@ export default function AltcoinScanner() {
                   Altcoin Scanner
                 </h1>
                 <p className="text-slate-400 text-sm">
-                  Server-side scan of 100+ altcoins on real Binance data • Cached results refresh on demand
+                  Server-side scan of 100+ altcoins on real OKX data • Cached results refresh on demand
                 </p>
               </div>
             </div>
@@ -341,7 +341,7 @@ export default function AltcoinScanner() {
           <Card className="bg-slate-800 border-slate-700">
             <CardContent className="py-16 text-center">
               <RefreshCw className="w-8 h-8 text-cyan-400 animate-spin mx-auto mb-4" />
-              <p className="text-slate-300 font-medium">Scanning altcoins on Binance...</p>
+              <p className="text-slate-300 font-medium">Scanning altcoins on OKX...</p>
               <p className="text-slate-500 text-sm mt-1">Fetching real OHLCV data and scoring indicators</p>
             </CardContent>
           </Card>
