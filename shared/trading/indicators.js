@@ -435,9 +435,9 @@ export function supplyDemandZones(candles, opts = {}) {
   if (n < 30) return null;
 
   const baseMax = opts.baseMax ?? 4;
-  const baseRangePct = opts.baseRangePct ?? 0.015;
-  const impulseMinPct = opts.impulseMinPct ?? 0.03;
-  const lookback = opts.lookback ?? 60;
+  const baseRangePct = opts.baseRangePct ?? 0.04;
+  const impulseMinPct = opts.impulseMinPct ?? 0.02;
+  const lookback = opts.lookback ?? 100;
 
   const price = candles[n - 1].close;
   const start = Math.max(0, n - lookback);

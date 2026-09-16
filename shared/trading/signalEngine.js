@@ -375,7 +375,10 @@ function supplyDemandComponent(candles, ctx) {
   if (!nearestDemand && !nearestSupply) return null;
 
   const vol = atrPercent(candles) ?? 0.02;
-  const proximity = 2 * vol;
+  // proximity is in ATR multiples — distAtr is also in ATR units, so compare
+  // directly. (The old `2 * vol` was a price fraction, making this check almost
+  // impossible to pass and silencing every S&D signal.)
+  const proximity = 2;
 
   let score = 50;
   const reasons = [];
@@ -385,10 +388,10 @@ function supplyDemandComponent(candles, ctx) {
     const distAtr = Math.abs(dist) / vol;
     if (distAtr <= proximity) {
       if (dist >= 0 && dist < vol) {
-        score += 18;
+        score += 25;
         reasons.push('Price bouncing off unmitigated demand zone');
       } else if (dist < 0) {
-        score -= 16;
+        score -= 20;
         reasons.push('Price below unmitigated demand zone — support broken');
       }
     }
@@ -399,10 +402,10 @@ function supplyDemandComponent(candles, ctx) {
     const distAtr = Math.abs(dist) / vol;
     if (distAtr <= proximity) {
       if (dist <= 0 && dist > -vol) {
-        score += 14;
+        score += 20;
         reasons.push('Price rejected from unmitigated supply zone');
       } else if (dist > 0) {
-        score += 8;
+        score += 12;
         reasons.push('Price above unmitigated supply zone — resistance broken');
       }
     }

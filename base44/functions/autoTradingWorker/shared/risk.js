@@ -152,7 +152,7 @@ export function checkSchedule(settings, now = new Date()) {
  * informative — everything correlates to one and the strategy is just long
  * beta into a crash.
  */
-export function checkMarketConditions(universe, { crashThreshold = -8, breadthThreshold = 0.7 } = {}) {
+export function checkMarketConditions(universe, { crashThreshold = -12, breadthThreshold = 0.9 } = {}) {
   if (!universe || universe.length < 10) {
     return { halt: false, reason: 'insufficient_universe_data' };
   }
