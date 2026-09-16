@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { base44 } from "@/api/base44Client";
 import { Sparkles, TrendingUp, TrendingDown, Activity, Target, AlertTriangle, BarChart3, Newspaper, MessageSquare, Database } from "lucide-react";
 import { motion } from "framer-motion";
@@ -180,7 +179,7 @@ export default function AIAnalysisModal({ isOpen, onClose, asset }) {
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-1">
+        <div className="flex-1 overflow-y-auto px-1 pr-2" style={{ scrollbarColor: "#475569 transparent", scrollbarWidth: "thin" }}>
           <Tabs defaultValue="overview" className="w-full pr-4">
           <TabsList className="bg-slate-800 border-slate-700 w-full justify-start">
             <TabsTrigger value="overview" className="data-[state=active]:bg-indigo-600">
@@ -531,7 +530,7 @@ export default function AIAnalysisModal({ isOpen, onClose, asset }) {
             {asset && <AdvancedChart asset={asset} />}
           </TabsContent>
         </Tabs>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
