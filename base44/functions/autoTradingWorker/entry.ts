@@ -525,13 +525,38 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
       const candidateTickers = universe.slice(0, MAX_SCAN_CANDIDATES);
 
       const candidates = [];
+      let scannerAdmitted = 0;
       for (const ticker of candidateTickers) {
         if (heldNow.includes(ticker.symbol)) continue;
         if (counters.assets_traded_today.includes(ticker.symbol)) continue;
 
         const candles = candlesBySymbol.get(ticker.symbol) || null;
+
+        // Scanner-surfaced picks: the Altcoin Scanner already scored real OHLCV
+        // (SP500-AI composite) and passed its own quality filters (score ≥ 65,
+        // volume surge ≥ 1.5x, |momentum| ≥ 2%). Trust that signal directly so
+        // the scanner's picks actually trade — bypass the worker's confluence
+        // gate and min-strength threshold. Every risk control below (sizing,
+        // exposure, correlation, liquidity, slippage, daily limits) still runs.
+        const scannerOpp = scannerOppMap?.get(ticker.symbol);
+        const scannerIsBuy = scannerOpp && (scannerOpp.signal === 'strong_buy' || scannerOpp.signal === 'buy');
+
         let signal;
-        // Score ONLY with the user's selected indicators (from AISignalConfig).
+        if (scannerIsBuy) {
+          signal = {
+            strength: scannerOpp.score,
+            direction: 'bullish',
+            reasons: scannerOpp.reasons || [`Scanner score ${scannerOpp.score}/100`],
+            atrPercent: (scannerOpp.volatility || 0) / 100,
+            components: { supplyDemand: null, composite: scannerOpp.score },
+          };
+          scanned.push({ symbol: ticker.symbol, strength: signal.strength });
+          candidates.push({ ticker, candles, signal });
+          scannerAdmitted++;
+          continue;
+        }
+
+        // Own-universe candidates: score with the user's selected indicators.
         // No SP500-AI fallback — the scanner's composite is a separate tool and
         // must never drive auto-trader entries. If candles are unavailable,
         // skip the asset: trading on no data is worse than not trading.
@@ -560,8 +585,10 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
         }
       }
 
-      candidates.sort((a, b) => b.signal.strength - a.signal.strength);
-      log(`${scanned.length} scanned, ${candidates.length} above strength ${minStrength}`);
+      // Scanner picks first (they are the user's explicit opportunity list),
+      // then own-universe picks by strength.
+      candidates.sort((a, b) => (b.signal.strength || 0) - (a.signal.strength || 0));
+      log(`${scanned.length} scanned, ${candidates.length} candidates (${scannerAdmitted} from scanner, ${candidates.length - scannerAdmitted} own-universe)`);
 
       const equityNow = calculateEquity(state, priceMap).equity;
 
