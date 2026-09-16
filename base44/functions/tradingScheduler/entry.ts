@@ -45,54 +45,46 @@ Deno.serve(async (req) => {
     let errors = 0;
     const lastError = [];
 
-    for (const settings of enabledSettings) {
+    for (let i = 0; i < enabledSettings.length; i++) {
+      const settings = enabledSettings[i];
       try {
         // Get user's portfolio
         const portfolios = await base44.asServiceRole.entities.Portfolio.filter({
           created_by: settings.created_by
         });
-        
+
         if (!portfolios || portfolios.length === 0) {
-          console.log(`⚠️ No portfolio found for user ${settings.created_by}`);
+          console.log(`⚠️ No portfolio found for user ${i}`);
           continue;
         }
-        
+
         const portfolio = portfolios[0];
-        
+
         // Invoke auto-trading worker for this user. The worker fetches settings
         // and portfolio from the DB by ID — we only pass identifiers, never the
         // records themselves, so the worker cannot be fed crafted data.
-        console.log(`⏳ Invoking worker for ${settings.created_by}...`);
+        console.log(`⏳ Invoking worker for user ${i}...`);
         const invokeArgs = {
           settings_id: settings.id,
           user_email: settings.created_by
         };
 
-        // Call the worker via the app's public function URL. The SDK's
-        // asServiceRole.functions.invoke caches stale function versions; a
-        // direct fetch to the public endpoint always runs the latest deploy.
-        // Forward the service-authorization header so the worker trusts the
-        // call as a platform service request.
+        // Call the worker via the platform's user-scoped invocation mechanism.
+        // base44.functions.invoke passes through the admin caller's identity so
+        // the worker can authenticate it — a raw fetch to the public URL with a
+        // forwarded header was spoofable and a security vulnerability.
         let result;
         try {
-          const workerUrl = 'https://crypto-mate-win.base44.app/functions/autoTradingWorker';
-          const workerRes = await fetch(workerUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(hasServiceAuth ? { 'base44-service-authorization': req.headers.get('base44-service-authorization') } : {}),
-            },
-            body: JSON.stringify(invokeArgs),
-          });
-          result = await workerRes.json();
-          if (!workerRes.ok) {
-            throw { response: { status: workerRes.status, data: result } };
+          const response = await base44.functions.invoke('autoTradingWorker', invokeArgs);
+          result = response?.data ?? response;
+          if (response?.status && response.status >= 400) {
+            throw { response: { status: response.status, data: result } };
           }
         } catch (invokeErr) {
           const status = invokeErr.response?.status ?? 500;
           const body = invokeErr.response?.data ?? {};
-          console.error(`⚠️ Worker failed for ${settings.created_by}:`, body?.error || invokeErr.message, 'status:', status);
-          lastError.push({ user: settings.created_by, error: body?.error || invokeErr.message, status });
+          console.error(`⚠️ Worker failed for user ${i}:`, body?.error || invokeErr.message, 'status:', status);
+          lastError.push({ user_index: i, error: body?.error || invokeErr.message, status });
           errors++;
           processed++;
           continue;
@@ -106,27 +98,27 @@ Deno.serve(async (req) => {
             executed += tradeCount;
             const buys = result.trades.filter(t => t.action === 'buy').length;
             const sells = result.trades.filter(t => t.action === 'sell').length;
-            console.log(`✅ ${tradeCount} trade(s) for ${settings.created_by}: ${buys} buy, ${sells} sell`);
+            console.log(`✅ ${tradeCount} trade(s) for user ${i}: ${buys} buy, ${sells} sell`);
           } else if (result.halted) {
-            console.log(`🛑 Halted for ${settings.created_by}: ${result.reason}`);
+            console.log(`🛑 Halted for user ${i}: ${result.reason}`);
           } else if (result.skipped) {
-            console.log(`⏭️ Skipped for ${settings.created_by}: ${result.reason}`);
+            console.log(`⏭️ Skipped for user ${i}: ${result.reason}`);
           } else {
-            console.log(`ℹ️ No trade for ${settings.created_by} (scanned ${result.scanned ?? 0})`);
+            console.log(`ℹ️ No trade for user ${i} (scanned ${result.scanned ?? 0})`);
           }
         } else {
-          console.error(`⚠️ Worker failed for ${settings.created_by}:`, result?.error || 'Unknown error');
-          lastError.push({ user: settings.created_by, error: result?.error || 'Unknown error', status: 500 });
+          console.error(`⚠️ Worker failed for user ${i}:`, result?.error || 'Unknown error');
+          lastError.push({ user_index: i, error: result?.error || 'Unknown error', status: 500 });
           errors++;
         }
-        } catch (error) {
+      } catch (error) {
         errors++;
-        console.error(`❌ Error processing user ${settings.created_by}:`, error.message);
+        console.error(`❌ Error processing user ${i}:`, error.message);
         lastError.push({
-          user: settings.created_by,
+          user_index: i,
           message: error.message,
         });
-        }
+      }
     }
     
     const summary = {
