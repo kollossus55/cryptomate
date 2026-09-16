@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Scan, RefreshCw, TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
 import TradeModal from "../components/trading/TradeModal";
 import { getCategories } from "../components/trading/AltcoinScanner";
-import { fetchTickerUniverse, fetchKlines } from "@/lib/binanceMarketData";
 
 const CATEGORY_COLORS = {
   DeFi: "bg-blue-500",
@@ -102,31 +101,13 @@ export default function AltcoinScanner() {
     }
   };
 
-  // Trigger the server-side worker, then re-read the persisted record.
+  // Trigger the server-side worker (fetches OKX data server-side), then
+  // re-read the persisted record.
   const runScan = async () => {
     setIsLoading(true);
     setScanError(null);
     try {
-      // Browser fetches real Binance data (server is geo-blocked), then hands
-      // it to the server worker for scoring + persistence.
-      const universe = await fetchTickerUniverse({ topN: 100, minQuoteVolume24h: 5_000_000 });
-      if (!universe.length) {
-        setScanError("OKX returned no symbols. Try again in a moment.");
-        return;
-      }
-      // Enrich the top movers with klines for full indicator scoring (bounded —
-      // not the 100-coin fetch that froze the browser before).
-      const preRanked = [...universe]
-        .sort((a, b) => Math.abs(b.change24h) - Math.abs(a.change24h))
-        .slice(0, 15);
-      const candles = {};
-      await Promise.all(preRanked.map(async (u) => {
-        try {
-          const raw = await fetchKlines(u.symbol, "1h", 201);
-          if (raw && raw.length) candles[u.symbol] = raw;
-        } catch (e) { /* skip individual failures */ }
-      }));
-      const res = await base44.functions.invoke("altcoinScannerWorker", { universe, candles });
+      const res = await base44.functions.invoke("altcoinScannerWorker", {});
       const data = res.data || {};
       if (data.success === false) {
         setScanError(data.error || "Server scan failed.");

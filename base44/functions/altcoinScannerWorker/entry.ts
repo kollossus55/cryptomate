@@ -148,14 +148,16 @@ export default async function(req) {
       }
       console.log(`📥 Browser-fed candles: ${candleMap.size} symbols`);
     } else {
-      for (let i = 0; i < universe.length; i += BATCH_SIZE) {
-        const batch = universe.slice(i, i + BATCH_SIZE);
-        const fetched = await fetchCandlesBatch(
-          batch.map((u) => u.symbol), CANDLE_INTERVAL, CANDLE_LIMIT, BATCH_CONCURRENCY
-        );
-        for (const [sym, c] of fetched.entries()) candleMap.set(sym, c);
-        if (i + BATCH_SIZE < universe.length) await sleep(BATCH_DELAY_MS);
-      }
+      // Fetch candles for only the top movers by |change24h|, not all 100.
+      // Fetching all 100 triggers OKX rate limits (429) and makes the scan
+      // take 50+ seconds. The remaining symbols use the ticker fallback score.
+      const candidates = [...universe]
+        .sort((a, b) => Math.abs(b.change24h) - Math.abs(a.change24h))
+        .slice(0, 20);
+      const fetched = await fetchCandlesBatch(
+        candidates.map((u) => u.symbol), CANDLE_INTERVAL, CANDLE_LIMIT, BATCH_CONCURRENCY
+      );
+      for (const [sym, c] of fetched.entries()) candleMap.set(sym, c);
     }
 
     // 3. Score every universe symbol. Full SP500-AI on OHLCV where available,
