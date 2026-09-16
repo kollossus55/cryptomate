@@ -200,91 +200,37 @@ export default function AITradingAdvisor({
         ? generatePersonalizedPrompt(metrics, issues, assetAnalysis, preferences)
         : '';
 
-      const prompt = `As an expert trading advisor, analyze this trader's performance and provide actionable insights:
-
-**Performance Metrics:**
-- Total Trades: ${metrics.totalTrades}
-- Win Rate: ${metrics.winRate}%
-- Profit Factor: ${metrics.profitFactor}
-- Net P&L: $${metrics.netPnL}
-- Max Drawdown: ${metrics.maxDrawdown}%
-- Average Win: $${metrics.avgWin}
-- Average Loss: $${metrics.avgLoss}
-
-**Current Issues:**
-${issues.map(i => `- ${i.description}`).join('\n')}
-
-**Top Performing Assets:**
-${assetAnalysis.bestPerformers.map(a => `- ${a.symbol}: ${a.trades} trades, $${a.totalPnL.toFixed(2)} P&L, ${a.winRate.toFixed(0)}% win rate`).join('\n')}
-
-**Worst Performing Assets:**
-${assetAnalysis.worstPerformers.map(a => `- ${a.symbol}: ${a.trades} trades, $${a.totalPnL.toFixed(2)} P&L, ${a.winRate.toFixed(0)}% win rate`).join('\n')}
-
-**Current Settings:**
-- Min Confidence: ${settings?.min_confidence || 70}%
-- Stop Loss: ${settings?.stop_loss_percent || 3}%
-- Take Profit: ${settings?.take_profit_percent || 8}%
-- Position Size: ${settings?.max_position_size_percent || 10}%
-- Trailing Stop: ${settings?.use_trailing_stop ? 'Enabled' : 'Disabled'}
-
-${personalizedContext ? `**User Preferences:**\n${personalizedContext}` : ''}
-
-Provide:
-1. A clear assessment of trading performance (2-3 sentences) - tailor it to their trading style and preferences
-2. Top 3 specific actions to improve results - aligned with their risk tolerance and goals
-3. Asset allocation recommendations - consider their preferred and excluded assets
-4. Risk management advice - match their risk tolerance level
-5. New market opportunities - filtered by their preferences (market cap, volatility, etc.)`;
-
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt,
-        add_context_from_internet: false,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            title: { type: "string" },
-            summary: { type: "string" },
-            performance_grade: { type: "string", enum: ["excellent", "good", "fair", "poor", "critical"] },
-            key_strengths: { type: "array", items: { type: "string" } },
-            critical_issues: { type: "array", items: { type: "string" } },
-            top_3_actions: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  action: { type: "string" },
-                  reason: { type: "string" },
-                  expected_impact: { type: "string" }
-                }
-              }
-            },
-            asset_recommendations: {
-              type: "object",
-              properties: {
-                focus_on: { type: "array", items: { type: "string" } },
-                avoid: { type: "array", items: { type: "string" } },
-                reasoning: { type: "string" }
-              }
-            },
-            risk_advice: { type: "string" },
-            opportunities: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  asset: { type: "string" },
-                  opportunity_type: { type: "string" },
-                  confidence: { type: "number" },
-                  reasoning: { type: "string" }
-                }
-              }
-            },
-            personalization_note: {
-              type: "string",
-              description: "A note about how recommendations were tailored to user preferences"
-            }
-          }
-        }
+      const result = await base44.functions.invoke('aiPerformanceInsights', {
+        metrics: {
+          totalTrades: metrics.totalTrades,
+          winRate: metrics.winRate,
+          profitFactor: metrics.profitFactor,
+          netPnL: metrics.netPnL,
+          maxDrawdown: metrics.maxDrawdown,
+          avgWin: metrics.avgWin,
+          avgLoss: metrics.avgLoss,
+        },
+        issues: issues.map(i => ({ description: i.description })),
+        bestPerformers: assetAnalysis.bestPerformers.map(a => ({
+          symbol: a.symbol,
+          trades: a.trades,
+          totalPnL: a.totalPnL,
+          winRate: a.winRate,
+        })),
+        worstPerformers: assetAnalysis.worstPerformers.map(a => ({
+          symbol: a.symbol,
+          trades: a.trades,
+          totalPnL: a.totalPnL,
+          winRate: a.winRate,
+        })),
+        settings: {
+          min_confidence: settings?.min_confidence,
+          stop_loss_percent: settings?.stop_loss_percent,
+          take_profit_percent: settings?.take_profit_percent,
+          max_position_size_percent: settings?.max_position_size_percent,
+          use_trailing_stop: settings?.use_trailing_stop,
+        },
+        personalizedContext,
       });
 
       return result;

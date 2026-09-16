@@ -6,206 +6,60 @@
 import { base44 } from "@/api/base44Client";
 import { analyzeIndicators } from "./TechnicalAnalysisEngine";
 
-// Cache for API results to prevent rate limiting
+// Cache for market intelligence results to prevent rate limiting
 const cache = {
-  news: new Map(),
-  social: new Map(),
-  onchain: new Map()
+  intelligence: new Map()
 };
 
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
-// Per-type rate limit — each live data source gets its own budget so fetching
-// news doesn't exhaust the quota for social / on-chain.
-const RATE_LIMIT_PER_TYPE = 8; // max live web-search calls per minute per type
-const rateLimitTrackers = {
-  news: { callCount: 0, windowStart: Date.now() },
-  social: { callCount: 0, windowStart: Date.now() },
-  onchain: { callCount: 0, windowStart: Date.now() }
-};
+// Rate limit — max live web-search calls per minute
+const RATE_LIMIT = 8;
+const rateLimitTracker = { callCount: 0, windowStart: Date.now() };
 
-const checkRateLimit = (type) => {
+const checkRateLimit = () => {
   const now = Date.now();
   const oneMinute = 60 * 1000;
-  const tracker = rateLimitTrackers[type] || (rateLimitTrackers[type] = { callCount: 0, windowStart: now });
-
-  if (now - tracker.windowStart > oneMinute) {
-    tracker.windowStart = now;
-    tracker.callCount = 0;
+  if (now - rateLimitTracker.windowStart > oneMinute) {
+    rateLimitTracker.windowStart = now;
+    rateLimitTracker.callCount = 0;
   }
-
-  if (tracker.callCount >= RATE_LIMIT_PER_TYPE) {
-    console.warn(`⚠️ Rate limit (${type}): skipping live fetch, no data returned`);
+  if (rateLimitTracker.callCount >= RATE_LIMIT) {
+    console.warn('⚠️ Rate limit: skipping market intelligence fetch');
     return false;
   }
-
-  tracker.callCount++;
+  rateLimitTracker.callCount++;
   return true;
 };
 
-// Get cached result or return null
-const getCached = (type, assetSymbol) => {
-  const cached = cache[type].get(assetSymbol);
+// Real-time market intelligence (news, social, on-chain) via server-side
+// backend function with live web search. Returns null when rate-limited or
+// unavailable — never fabricated data.
+export const fetchMarketIntelligence = async (asset) => {
+  const cached = cache.intelligence.get(asset.symbol);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
     return cached.data;
   }
-  return null;
-};
 
-// Set cache
-const setCache = (type, assetSymbol, data) => {
-  cache[type].set(assetSymbol, {
-    data,
-    timestamp: Date.now()
-  });
-};
-
-// Real-time news sentiment via live web search (Gemini). Returns null when
-// rate-limited or unavailable — never fabricated data.
-export const analyzeNewsSentiment = async (asset) => {
-  const cached = getCached('news', asset.symbol);
-  if (cached) return cached;
-
-  if (!checkRateLimit('news')) return null;
+  if (!checkRateLimit()) return null;
 
   try {
-    const response = await base44.integrations.Core.InvokeLLM({
-      prompt: `Search the web for the latest real news about the cryptocurrency ${asset.name} (${asset.symbol}) from the last 24 hours. Return 3 actual recent headlines you found via web search, an overall sentiment score from -1 (very bearish) to 1 (very bullish), a sentiment label, the impact level, a brief summary, and the source name for each headline. Only use real, verifiable headlines — do not invent any.`,
-      add_context_from_internet: true,
-      model: "gemini_3_flash",
-      response_json_schema: {
-        type: "object",
-        properties: {
-          sentiment_score: { type: "number" },
-          sentiment_label: { type: "string", enum: ["very_bearish", "bearish", "neutral", "bullish", "very_bullish"] },
-          key_headlines: { type: "array", items: { type: "string" } },
-          impact_level: { type: "string", enum: ["low", "medium", "high"] },
-          summary: { type: "string" },
-          sources: { type: "array", items: { type: "string" } }
-        }
-      }
+    const response = await base44.functions.invoke('aiMarketIntelligence', {
+      symbol: asset.symbol,
+      name: asset.name,
     });
 
-    const result = {
-      sentiment_score: Math.max(-1, Math.min(1, response.sentiment_score || 0)),
-      sentiment_label: response.sentiment_label || 'neutral',
-      key_headlines: (response.key_headlines || []).slice(0, 3),
-      impact_level: response.impact_level || 'medium',
-      summary: response.summary || '',
-      sources: response.sources || []
-    };
-    setCache('news', asset.symbol, result);
-    return result;
-  } catch (error) {
-    console.error("Live news fetch failed:", error);
-    return null;
-  }
-};
-
-// Real social media sentiment via live web search (Gemini). Returns null when
-// rate-limited or unavailable — never fabricated data.
-export const analyzeSocialTrends = async (asset) => {
-  const cached = getCached('social', asset.symbol);
-  if (cached) return cached;
-
-  if (!checkRateLimit('social')) return null;
-
-  try {
-    const response = await base44.integrations.Core.InvokeLLM({
-      prompt: `Search the web for real-time social media sentiment about the cryptocurrency ${asset.name} (${asset.symbol}) from the last 24 hours — Twitter/X, Reddit, and crypto forums. Based only on what you actually find, return a social score (0-100), mention volume, a sentiment breakdown (positive/neutral/negative percentages summing to 100), up to 3 real trending topics or hashtags, influencer sentiment, and engagement level. Do not invent data; if little is found, reflect that in lower scores.`,
-      add_context_from_internet: true,
-      model: "gemini_3_flash",
-      response_json_schema: {
-        type: "object",
-        properties: {
-          social_score: { type: "number" },
-          mention_volume: { type: "string", enum: ["high", "moderate", "low"] },
-          sentiment_breakdown: {
-            type: "object",
-            properties: {
-              positive: { type: "number" },
-              neutral: { type: "number" },
-              negative: { type: "number" }
-            }
-          },
-          trending_topics: { type: "array", items: { type: "string" } },
-          influencer_sentiment: { type: "string", enum: ["bullish", "mixed", "bearish"] },
-          engagement_level: { type: "string", enum: ["viral", "high", "moderate", "low"] }
-        }
-      }
-    });
+    if (!response?.success) return null;
 
     const result = {
-      social_score: Math.max(0, Math.min(100, response.social_score || 50)),
-      mention_volume: response.mention_volume || 'low',
-      sentiment_breakdown: {
-        positive: Math.round(response.sentiment_breakdown?.positive ?? 33),
-        neutral: Math.round(response.sentiment_breakdown?.neutral ?? 34),
-        negative: Math.round(response.sentiment_breakdown?.negative ?? 33)
-      },
-      trending_topics: (response.trending_topics || []).slice(0, 3),
-      influencer_sentiment: response.influencer_sentiment || 'mixed',
-      engagement_level: response.engagement_level || 'low'
+      news: response.news,
+      social: response.social,
+      onchain: response.onchain,
     };
-    setCache('social', asset.symbol, result);
+    cache.intelligence.set(asset.symbol, { data: result, timestamp: Date.now() });
     return result;
   } catch (error) {
-    console.error("Live social trends fetch failed:", error);
-    return null;
-  }
-};
-
-// Real on-chain metrics via live web search (Gemini). Returns null when
-// rate-limited or unavailable — never fabricated data.
-export const analyzeOnChainData = async (asset) => {
-  const cached = getCached('onchain', asset.symbol);
-  if (cached) return cached;
-
-  if (!checkRateLimit('onchain')) return null;
-
-  try {
-    const response = await base44.integrations.Core.InvokeLLM({
-      prompt: `Search the web for real on-chain metrics for the cryptocurrency ${asset.name} (${asset.symbol}) from the last 24 hours — whale activity, exchange inflows/outflows, active addresses, large transactions, and network health. Based only on what you actually find, return an on-chain score (0-100), whale activity, exchange flow, network health %, a holder distribution summary, key metrics (active addresses, transaction volume in USD, large tx count), and an overall on-chain signal. Do not invent data; if little is found, reflect that in conservative values.`,
-      add_context_from_internet: true,
-      model: "gemini_3_flash",
-      response_json_schema: {
-        type: "object",
-        properties: {
-          onchain_score: { type: "number" },
-          whale_activity: { type: "string", enum: ["accumulating", "distributing", "neutral"] },
-          exchange_flow: { type: "string", enum: ["net_inflow", "net_outflow", "balanced"] },
-          network_health: { type: "number" },
-          holder_distribution: { type: "string" },
-          key_metrics: {
-            type: "object",
-            properties: {
-              active_addresses: { type: "number" },
-              transaction_volume: { type: "number" },
-              large_transactions: { type: "number" }
-            }
-          },
-          signal: { type: "string", enum: ["bullish", "bearish", "neutral"] }
-        }
-      }
-    });
-
-    const result = {
-      onchain_score: Math.max(0, Math.min(100, response.onchain_score || 50)),
-      whale_activity: response.whale_activity || 'neutral',
-      exchange_flow: response.exchange_flow || 'balanced',
-      network_health: Math.max(0, Math.min(100, response.network_health ?? 70)),
-      holder_distribution: response.holder_distribution || 'No distribution data available from live sources.',
-      key_metrics: {
-        active_addresses: response.key_metrics?.active_addresses || 0,
-        transaction_volume: response.key_metrics?.transaction_volume || 0,
-        large_transactions: response.key_metrics?.large_transactions || 0
-      },
-      signal: response.signal || 'neutral'
-    };
-    setCache('onchain', asset.symbol, result);
-    return result;
-  } catch (error) {
-    console.error("Live on-chain fetch failed:", error);
+    console.error("Market intelligence fetch failed:", error);
     return null;
   }
 };

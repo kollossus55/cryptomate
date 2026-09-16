@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
 import AdvancedChart from "./AdvancedChart";
-import { analyzeNewsSentiment, analyzeSocialTrends, analyzeOnChainData } from "./AdvancedSignalGenerator";
+import { fetchMarketIntelligence } from "./AdvancedSignalGenerator";
 
 export default function AIAnalysisModal({ isOpen, onClose, asset }) {
   const [analysis, setAnalysis] = useState(null);
@@ -81,11 +81,10 @@ export default function AIAnalysisModal({ isOpen, onClose, asset }) {
       } else {
         // Fetch fresh real data via live web search
         setAdvancedLoading(true);
-        const [newsData, socialData, onChainData] = await Promise.all([
-          analyzeNewsSentiment(asset),
-          analyzeSocialTrends(asset),
-          analyzeOnChainData(asset)
-        ]);
+        const intelligence = await fetchMarketIntelligence(asset);
+        const newsData = intelligence?.news || null;
+        const socialData = intelligence?.social || null;
+        const onChainData = intelligence?.onchain || null;
 
         setAdvancedData({
           news: newsData,
@@ -112,51 +111,18 @@ export default function AIAnalysisModal({ isOpen, onClose, asset }) {
         return;
       }
 
-      // Run comprehensive analysis with all data sources
-      const prompt = `Provide a comprehensive trading analysis for ${asset.name} (${asset.symbol}).
-      
-Current market data:
-- Price: $${asset.price}
-- 24h Change: ${asset.change24h}%
-- Volume: $${asset.volume24h}
-- Market Cap: $${asset.marketCap}
-
-Analyze:
-1. Technical indicators and chart patterns
-2. Recent news and market sentiment
-3. Social media trends and community sentiment
-4. On-chain metrics and whale activity
-5. Overall market conditions
-
-Provide detailed trading recommendations with confidence scores.`;
-
-      const aiAnalysis = await base44.integrations.Core.InvokeLLM({
-        prompt,
-        add_context_from_internet: false, // Disable to avoid rate limits / unnecessary costs
-        response_json_schema: {
-          type: "object",
-          properties: {
-            sentiment: { type: "string", enum: ["bullish", "bearish", "neutral"] },
-            confidence: { type: "number" },
-            recommendation: { type: "string", enum: ["buy", "sell", "hold"] },
-            technical_indicators: { type: "array", items: { type: "string" } },
-            support_level: { type: "number" },
-            resistance_level: { type: "number" },
-            price_targets: {
-              type: "object",
-              properties: {
-                short_term: { type: "number" },
-                medium_term: { type: "number" }
-              }
-            },
-            risk_level: { type: "string", enum: ["low", "medium", "high"] },
-            key_insights: { type: "array", items: { type: "string" } },
-            summary: { type: "string" }
-          }
-        }
+      // Comprehensive analysis runs server-side — the prompt is constructed
+      // in the backend function, never from the client.
+      const response = await base44.functions.invoke('aiAssetAnalysis', {
+        name: asset.name,
+        symbol: asset.symbol,
+        price: asset.price,
+        change24h: asset.change24h,
+        volume24h: asset.volume24h,
+        marketCap: asset.marketCap,
       });
 
-      setAnalysis(aiAnalysis);
+      setAnalysis(response?.analysis || null);
       localStorage.setItem('last_llm_analysis_call', Date.now().toString()); // Store timestamp after successful call
     } catch (error) {
       console.error("AI analysis failed:", error);

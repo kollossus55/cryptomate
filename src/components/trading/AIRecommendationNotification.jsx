@@ -220,117 +220,41 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
         .slice(0, 10)
         .map(item => item.asset);
       
-      const assetsData = topAssets.map(asset => {
+      // Build structured asset data for the backend function — the prompt
+      // is constructed server-side, never from the client.
+      const assetsForBackend = topAssets.map(asset => {
         const signalData = window.assetSignalData?.[asset.symbol];
-        const prediction = signalData?.prediction;
-        const indicators = signalData?.breakdown?.advanced_indicators;
-        const sp500 = indicators?.sp500ai;
-        const sp500Str = sp500
-          ? `, SP500 AI: ${sp500.longSignal ? 'LONG' : sp500.shortSignal ? 'SHORT' : 'neutral'} (strength ${sp500.strength}/${sp500.maxStrength})${sp500.sp500ai_blocked ? ' [BLOCKED]' : ''}`
-          : '';
-        const confStr = signalData?.confidence ? `, Tech Confidence: ${signalData.confidence}% (${signalData.recommendation || 'hold'})` : '';
-        return `${asset.name} (${asset.symbol}): Price $${asset.price}, 24h Change ${asset.change24h}%, Volume $${(asset.volume24h / 1e9).toFixed(2)}B${prediction ? `, Predicted 24h: ${prediction.predicted_change > 0 ? '+' : ''}${prediction.predicted_change.toFixed(2)}%` : ''}${sp500Str}${confStr}`;
-      }).join('\n');
-
-      // Get current positions for sell analysis
-      const positionsData = portfolio?.positions?.map(pos => {
-        const symbol = pos.asset_symbol.replace('/USDT', '');
-        const asset = topAssets.find(a => a.symbol === symbol);
-        const currentPrice = asset?.price || 0;
-        const profitPercent = pos.avg_entry_price > 0 ? ((currentPrice - pos.avg_entry_price) / pos.avg_entry_price * 100).toFixed(2) : 0;
-        return `${symbol}: Holding ${pos.quantity.toFixed(6)} @ $${pos.avg_entry_price.toFixed(2)} entry, Current $${currentPrice.toFixed(2)} (${profitPercent >= 0 ? '+' : ''}${profitPercent}% P&L)`;
-      }).join('\n') || 'No open positions';
-
-      // Get user thresholds
-      const minConfidenceBuy = userPreferences?.signal_alert_thresholds?.min_confidence_buy ?? 70;
-      const minConfidenceSell = userPreferences?.signal_alert_thresholds?.min_confidence_sell ?? 65;
-      const minPredictedGain = userPreferences?.signal_alert_thresholds?.min_predicted_gain ?? 5;
-
-      const prompt = `As an advanced AI trading system, analyze these top cryptocurrencies using multi-factor analysis:
-
-      CURRENT PORTFOLIO POSITIONS:
-      ${positionsData}
-
-      MARKET DATA:
-
-      ${assetsData}
-
-      User Risk Tolerance: ${userPreferences?.risk_tolerance || 'moderate'}
-      User Trading Style: ${userPreferences?.trading_style || 'balanced'}
-      Alert Thresholds: Buy signals minimum ${minConfidenceBuy}% confidence, Sell signals minimum ${minConfidenceSell}% confidence
-
-      Use comprehensive data sources:
-      1. **Technical Analysis**: Price momentum, volume, volatility patterns, AND the pre-computed SP500 AI indicator signals (Heikin Ashi, SSL Channel, CMO, AI RSI, TMO, AI Money Flow) shown per asset as "SP500 AI: LONG/SHORT/neutral (strength X/Y)". Prioritise assets where SP500 AI shows a LONG or SHORT signal with high strength. If an asset shows "SP500 AI: [BLOCKED]", do NOT recommend a buy on that asset.
-      2. **Predictive Analysis**: 24-hour price movement forecasts (minimum ${minPredictedGain}% gain for buy signals)
-      3. **News Sentiment**: Recent headlines, regulatory news, partnerships
-      4. **Social Media Trends**: Twitter/Reddit sentiment, influencer opinions, trending topics
-      5. **On-Chain Metrics**: Whale movements, exchange flows, network activity
-
-      Recommend the BEST 3 trading opportunities with:
-      - PRIORITIZE: Sell signals for assets user currently holds if they show weakness or profit-taking opportunity
-      - High conviction trades based on multiple confirming signals
-      - Detailed reasoning incorporating all data sources including predictive analysis
-      - For held positions: Consider profit targets, risk of reversal, and optimal exit timing
-      - For new positions: Only recommend buy signals with predicted gains above ${minPredictedGain}%
-      - Risk assessment considering volatility and market conditions
-      - Realistic target prices based on support/resistance levels and predictions
-      - Ensure confidence levels meet user thresholds (${minConfidenceBuy}% for buys, ${minConfidenceSell}% for sells)
-
-      IMPORTANT: 
-      - Include SELL opportunities for held positions if technical/sentiment signals indicate exits
-      - Return confidence as a percentage from 0-100 (e.g., 85 not 0.85)
-      - Balance recommendations between buy/sell based on market conditions and portfolio
-
-      Return ONLY the top 3 highest-conviction opportunities (can be mix of buy/sell).`;
-
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt,
-        // Enable REAL web context so news / social / on-chain analysis is
-        // grounded in live data instead of hallucinated. Uses gemini_3_flash
-        // (web-search capable). Costs more integration credits per call.
-        add_context_from_internet: true,
-        model: 'gemini_3_flash',
-        response_json_schema: {
-          type: "object",
-          properties: {
-            recommendations: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  symbol: { type: "string" },
-                  action: { type: "string", enum: ["buy", "sell"] },
-                  confidence: { type: "number" },
-                  reasoning: { type: "string" },
-                  risk_level: { type: "string", enum: ["low", "medium", "high"] },
-                  target_price: { type: "number" },
-                  predicted_change_24h: { type: "number" },
-                  prediction_confidence: { type: "number" },
-                  data_sources: {
-                    type: "object",
-                    properties: {
-                      technical_score: { type: "number" },
-                      news_sentiment: { type: "string" },
-                      social_score: { type: "number" },
-                      onchain_signal: { type: "string" },
-                      predictive_score: { type: "number" }
-                    }
-                  }
-                }
-              }
-            },
-            market_summary: { type: "string" }
-          }
-        }
+        return {
+          symbol: asset.symbol,
+          name: asset.name,
+          price: asset.price,
+          change24h: asset.change24h,
+          volume24h: asset.volume24h,
+          prediction: signalData?.prediction,
+          sp500ai: signalData?.breakdown?.advanced_indicators?.sp500ai,
+          confidence: signalData?.confidence,
+          recommendation: signalData?.recommendation,
+        };
       });
 
-      // Normalize confidence values - if they're decimals (< 1), convert to percentage
-      if (result?.recommendations) {
-        result.recommendations = result.recommendations.map(rec => ({
-          ...rec,
-          confidence: rec.confidence < 1 ? Math.round(rec.confidence * 100) : Math.round(rec.confidence)
-        }));
-      }
+      const positionsForBackend = (portfolio?.positions || []).map(pos => {
+        const symbol = pos.asset_symbol.replace('/USDT', '');
+        const asset = topAssets.find(a => a.symbol === symbol);
+        return {
+          asset_symbol: pos.asset_symbol,
+          quantity: pos.quantity,
+          avg_entry_price: pos.avg_entry_price,
+          current_price: asset?.price || 0,
+        };
+      });
+
+      const result = await base44.functions.invoke('aiTradingRecommendations', {
+        assets: assetsForBackend,
+        positions: positionsForBackend,
+        preferences: userPreferences || {},
+        maxRecommendations: 3,
+        useWebSearch: true,
+      });
 
       setRecommendations(result);
       
