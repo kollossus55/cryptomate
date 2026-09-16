@@ -18,19 +18,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Auth: allow the platform scheduler (service-authorization header) or an
-    // authenticated admin. Prevents unauthenticated callers from triggering the
-    // trading loop or probing internal endpoints via forwarded headers.
-    const hasServiceAuth = !!req.headers.get('base44-service-authorization');
-    if (!hasServiceAuth) {
-      try {
-        const caller = await base44.auth.me();
-        if (!caller || caller.role !== 'admin') {
-          return Response.json({ success: false, error: 'Forbidden' }, { status: 403 });
-        }
-      } catch {
+    // Auth: require an authenticated admin. The platform scheduler's
+    // invoke_backend_function provides the service-role auth context
+    // (admin-level). The base44-service-authorization header is NOT trusted
+    // — it can be spoofed by any external caller.
+    try {
+      const caller = await base44.auth.me();
+      if (!caller || caller.role !== 'admin') {
         return Response.json({ success: false, error: 'Forbidden' }, { status: 403 });
       }
+    } catch {
+      return Response.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     console.log('🤖 Trading Scheduler: Starting auto-trading check for all users');

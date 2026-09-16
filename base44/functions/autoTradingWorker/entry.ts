@@ -60,24 +60,22 @@ Deno.serve(async (req) => {
     //      `base44-service-authorization` header that only the platform sets.
     // An unauthenticated external request has neither and must be rejected;
     // previously the catch block assumed every tokenless call was internal.
-    const hasServiceAuth = !!req.headers.get('base44-service-authorization');
-    let caller = null;
+    // Authenticate the caller. The platform scheduler invokes this worker via
+    // asServiceRole.functions.invoke, which provides the service-role auth
+    // context (admin-level). A user token is accepted only for the caller's
+    // own settings or by an admin. The base44-service-authorization header is
+    // NOT trusted — it can be spoofed by any external caller.
+    let caller;
     try {
       caller = await base44.auth.me();
     } catch {
-      // No user token — only allowed if the platform scheduler header is present.
-    }
-    // Service role (platform scheduler or asServiceRole.functions.invoke from
-    // another backend function) is trusted to act on any user's behalf. A
-    // user token is only accepted for the caller's own settings or by an admin.
-    if (hasServiceAuth) {
-      log('Authorized via service role');
-    } else if (caller) {
-      if (caller.email !== user_email && caller.role !== 'admin') {
-        return Response.json({ success: false, error: 'Forbidden: settings do not belong to caller' }, { status: 403 });
-      }
-    } else {
       return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!caller) {
+      return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    if (caller.email !== user_email && caller.role !== 'admin') {
+      return Response.json({ success: false, error: 'Forbidden: settings do not belong to caller' }, { status: 403 });
     }
 
     // NEVER trust caller-supplied settings/portfolio. Fetch the real records
