@@ -100,14 +100,22 @@ export default function PortfolioCard({ portfolio, onClosePosition, assets = [],
   const allocationPercent = totalBalance > 0 ? ((allocatedBalance / totalBalance) * 100).toFixed(1) : "0.0";
 
   const handleClosePosition = (position) => {
-    const currentPrice = lookupPrice(position.asset_symbol) || position.avg_entry_price;
-    const estimatedPnL = (currentPrice - position.avg_entry_price) * position.quantity;
-    const estimatedValue = position.quantity * currentPrice;
-    
+    const livePrice = lookupPrice(position.asset_symbol);
+    // Match the position-row fallback: when no live price is available
+    // (server-bought altcoins not on the websocket/OKX feed), use the
+    // server-stored current_value and profit_loss so the real P&L shows
+    // instead of $0.00.
+    const currentValue = livePrice
+      ? position.quantity * livePrice
+      : (position.current_value ?? position.quantity * position.avg_entry_price);
+    const estimatedPnL = livePrice
+      ? (livePrice - position.avg_entry_price) * position.quantity
+      : (position.profit_loss ?? 0);
+
     if (window.confirm(
       `Close position for ${position.asset_symbol}?\n\n` +
       `Quantity: ${position.quantity?.toFixed(6)}\n` +
-      `Current Value: $${estimatedValue.toFixed(2)}\n` +
+      `Current Value: $${currentValue.toFixed(2)}\n` +
       `Unrealized P&L: ${estimatedPnL >= 0 ? '+' : ''}$${estimatedPnL.toFixed(2)}`
     )) {
       if (onClosePosition) onClosePosition(position);
