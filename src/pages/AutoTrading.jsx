@@ -20,6 +20,8 @@ export default function AutoTrading() {
     max_position_size_percent: 10,
     max_open_positions: 5, // Default limit
     max_daily_loss_percent: 5,
+    use_portfolio_take_profit: false,
+    portfolio_take_profit_percent: 5,
     allowed_risk_levels: ["low", "medium"],
     trade_types: ["buy", "sell"],
     max_trades_per_day: 10,
@@ -150,6 +152,8 @@ export default function AutoTrading() {
         high_volatility_threshold: savedSettings.high_volatility_threshold ?? 5,
         extreme_volatility_threshold: savedSettings.extreme_volatility_threshold ?? 10,
         volatility_position_reduction: savedSettings.volatility_position_reduction ?? 50,
+        use_portfolio_take_profit: savedSettings.use_portfolio_take_profit ?? false,
+        portfolio_take_profit_percent: savedSettings.portfolio_take_profit_percent ?? 5,
         // NEW: Trading Schedule
         trading_schedule: savedSettings.trading_schedule || {
           enabled: false,
@@ -568,6 +572,43 @@ export default function AutoTrading() {
                   className="mb-2 [&>.relative>.bg-primary]:bg-rose-500 [&>.block]:border-rose-500"
                 />
                 <p className="text-xs text-rose-300/60">Stop trading if daily loss exceeds this %</p>
+              </div>
+
+              <div className="bg-slate-900/50 rounded-xl p-4 border border-green-500/30">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h4 className="text-green-100 font-semibold flex items-center gap-2">
+                      <Target className="w-4 h-4 text-green-400" />
+                      Portfolio Take-Profit
+                    </h4>
+                    <p className="text-xs text-green-400/60 mt-1">
+                      Close all positions and halt for the day at a target account profit
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.use_portfolio_take_profit}
+                    onCheckedChange={(checked) => setSettings({...settings, use_portfolio_take_profit: checked})}
+                    className="data-[state=checked]:bg-green-500"
+                  />
+                </div>
+                {settings.use_portfolio_take_profit && (
+                  <div className="pt-3 border-t border-green-500/20">
+                    <Label className="text-green-200 mb-3 block font-medium">
+                      Close All at: <span className="text-green-400 font-bold">{settings.portfolio_take_profit_percent}%</span>
+                    </Label>
+                    <Slider
+                      value={[settings.portfolio_take_profit_percent]}
+                      onValueChange={(value) => setSettings({...settings, portfolio_take_profit_percent: value[0]})}
+                      min={1}
+                      max={50}
+                      step={1}
+                      className="mb-2 [&>.relative>.bg-primary]:bg-green-500 [&>.block]:border-green-500"
+                    />
+                    <p className="text-xs text-green-400/60">
+                      When the account's daily profit hits this %, every open position is closed and new entries are blocked until the next UTC day.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div>

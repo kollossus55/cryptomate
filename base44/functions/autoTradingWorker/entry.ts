@@ -4,7 +4,7 @@ import { fetchUniverse, fetchCandlesBatch, fetchOrderBook, fetchPricesForSymbols
 import { scoreAsset, MIN_CANDLES } from './shared/signalEngine.js';
 import { applyCosts, roundTripCostPercent, isEdgeSufficient } from './shared/costs.js';
 import { calculatePositionSize, checkCorrelation, buildReturnsMap, checkPortfolioExposure } from './shared/sizing.js';
-import { rollDailyCounters, evaluateAllGuards, utcDayKey } from './shared/risk.js';
+import { rollDailyCounters, evaluateAllGuards, utcDayKey, checkPortfolioTakeProfit, checkPortfolioTakeProfitCooldown } from './shared/risk.js';
 import {
   createPortfolioState, calculateEquity, positionPnL, applyBuy, applySell,
   markToMarket, updateTrailingStop, activateBreakeven,
@@ -370,12 +370,41 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
   // server is geo-blocked from Binance. Skip only that check in fallback mode;
   // every other guard (kill switch, daily loss, trade cap, schedule) still runs.
   const guards = evaluateAllGuards({ settings, counters, equity: startingEquity, universe: usedFallbackUniverse ? null : universe, now });
-  const newEntriesAllowed = guards.allowed && guards.newEntriesAllowed !== false;
+  let newEntriesAllowed = guards.allowed && guards.newEntriesAllowed !== false;
   if (!newEntriesAllowed) {
     log(`New entries blocked: ${guards.reason} — managing exits only`);
   }
 
   markToMarket(state, priceMap);
+
+  // -------------------------------------------------------------------------
+  // 3b. Portfolio take-profit — close everything when the account's daily
+  // profit crosses the configured threshold, then halt new entries for the
+  // rest of the UTC day. Mirrors the daily-loss circuit breaker on the
+  // profit side. Baseline is daily_start_equity, same as the loss limit.
+  // -------------------------------------------------------------------------
+  let portfolioTpTriggered = false;
+  let portfolioTpReason = null;
+  if (settings.use_portfolio_take_profit) {
+    const tpCooldown = checkPortfolioTakeProfitCooldown(settings, now);
+    if (tpCooldown.active) {
+      portfolioTpTriggered = true;
+      log('Portfolio take-profit cooldown active — entries blocked, closing any remaining positions');
+    } else {
+      const tpEquity = calculateEquity(state, priceMap).equity;
+      const tpCheck = checkPortfolioTakeProfit({
+        equity: tpEquity,
+        dailyStartEquity: counters.daily_start_equity ?? startingEquity,
+        maxProfitPercent: settings.portfolio_take_profit_percent,
+      });
+      if (tpCheck.breached) {
+        portfolioTpTriggered = true;
+        portfolioTpReason = tpCheck;
+        log(`Portfolio take-profit hit: ${tpCheck.profitPercent.toFixed(2)}% >= ${tpCheck.limit}% — closing all positions`);
+      }
+    }
+    if (portfolioTpTriggered) newEntriesAllowed = false;
+  }
 
   // -------------------------------------------------------------------------
   // 4. Manage open positions (always runs, regardless of entry limits)
@@ -399,8 +428,13 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
 
     let exitReason = null;
 
-    // Compare NET percent — the number after costs is what you actually keep.
-    if (pnl.netPercent <= -stopLossPercent) {
+    // Portfolio take-profit overrides per-position rules: close everything.
+    if (portfolioTpTriggered) {
+      exitReason = portfolioTpReason
+        ? `Portfolio take-profit (account +${portfolioTpReason.profitPercent.toFixed(2)}%)`
+        : 'Portfolio take-profit (cooldown)';
+    } else if (pnl.netPercent <= -stopLossPercent) {
+      // Compare NET percent — the number after costs is what you actually keep.
       exitReason = `Stop-loss at ${pnl.netPercent.toFixed(2)}% net`;
     } else if (position.breakeven_activated && currentPrice <= position.breakeven_price) {
       exitReason = 'Breakeven stop';
@@ -484,6 +518,19 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
         if (r.updated) actions.push({ symbol, action: 'trailing_updated', price: r.trailingStopPrice });
       }
     }
+  }
+
+  // Persist the portfolio take-profit trigger and notify once per day.
+  if (portfolioTpTriggered && !settings.portfolio_take_profit_triggered_at) {
+    await base44.asServiceRole.entities.AutoTradingSettings.update(settings.id, {
+      portfolio_take_profit_triggered_at: now.toISOString(),
+    });
+    await notify(base44, user_email, {
+      type: 'risk_alert',
+      priority: 'high',
+      title: 'Portfolio take-profit reached',
+      message: `Account profit hit ${portfolioTpReason?.profitPercent?.toFixed(2) ?? ''}% — all positions closed and trading halted for the day.`,
+    });
   }
 
   // -------------------------------------------------------------------------

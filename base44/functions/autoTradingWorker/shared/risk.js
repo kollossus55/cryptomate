@@ -57,6 +57,7 @@ export function rollDailyCounters(settings, now = new Date()) {
     assets_traded_today: [],
     daily_counters_date: today,
     daily_start_equity: null, // caller sets from current equity
+    portfolio_take_profit_triggered_at: null, // new UTC day: resume trading
   };
 
   return {
@@ -93,6 +94,42 @@ export function checkDailyLossLimit({ dailyLoss, dailyStartEquity, maxDailyLossP
     lossPercent,
     limit,
     remaining: Math.max(0, limit - lossPercent),
+  };
+}
+
+/**
+ * Portfolio take-profit — the profit-side mirror of the daily-loss circuit
+ * breaker. When the account's profit for the day crosses the configured %,
+ * the worker closes every open position and halts new entries until the next
+ * UTC day. Baseline is daily_start_equity, the same denominator the loss
+ * limit uses, so the two guards are symmetric.
+ */
+export function checkPortfolioTakeProfit({ equity, dailyStartEquity, maxProfitPercent }) {
+  const limit = typeof maxProfitPercent === 'number' ? maxProfitPercent : 5;
+
+  if (!dailyStartEquity || dailyStartEquity <= 0) {
+    // Cannot evaluate — fail CLOSED so a misconfigured guard does not silently
+    // close positions or, worse, never fire.
+    return { breached: false, reason: 'daily_start_equity_unknown', profitPercent: null, limit };
+  }
+
+  const profitPercent = ((equity - dailyStartEquity) / dailyStartEquity) * 100;
+  return {
+    breached: profitPercent >= limit,
+    reason: profitPercent >= limit ? 'portfolio_take_profit' : 'ok',
+    profitPercent,
+    limit,
+    remaining: Math.max(0, limit - profitPercent),
+  };
+}
+
+/** Halts new entries for the rest of the UTC day after the take-profit fires. */
+export function checkPortfolioTakeProfitCooldown(settings, now = new Date()) {
+  if (!settings.portfolio_take_profit_triggered_at) return { active: false };
+  const triggeredDay = utcDayKey(new Date(settings.portfolio_take_profit_triggered_at));
+  return {
+    active: triggeredDay === utcDayKey(now),
+    reason: 'portfolio_take_profit_cooldown',
   };
 }
 

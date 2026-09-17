@@ -260,6 +260,20 @@
       "type": "string",
       "description": "Timestamp when circuit breaker was triggered"
     },
+    "use_portfolio_take_profit": {
+      "type": "boolean",
+      "default": false,
+      "description": "Close all positions and halt for the day when the account's daily profit reaches the target %."
+    },
+    "portfolio_take_profit_percent": {
+      "type": "number",
+      "default": 5,
+      "description": "Daily account profit % that triggers the portfolio take-profit (closes all, halts entries until next UTC day)."
+    },
+    "portfolio_take_profit_triggered_at": {
+      "type": "string",
+      "description": "UTC timestamp when the portfolio take-profit last fired. Cleared at UTC midnight so trading resumes."
+    },
     "market_condition": {
       "type": "string",
       "enum": [
