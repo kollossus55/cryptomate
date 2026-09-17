@@ -220,6 +220,22 @@ export default function AutoTrading() {
     });
   };
 
+  // Manual reset: clears the circuit-breaker and portfolio take-profit cooldown
+  // flags and zeroes the daily counters so the server worker can open trades
+  // again immediately, without waiting for the next UTC midnight rollover.
+  const handleResetHalt = async () => {
+    await saveSettingsMutation.mutateAsync({
+      ...settings,
+      circuit_breaker_triggered_at: null,
+      portfolio_take_profit_triggered_at: null,
+      trades_today: 0,
+      daily_loss: 0,
+      assets_traded_today: [],
+      daily_start_equity: null,
+      last_trade_date: new Date().toISOString()
+    });
+  };
+
   const toggleRiskLevel = (level) => {
     const current = settings.allowed_risk_levels || [];
     if (current.includes(level)) {
@@ -415,6 +431,27 @@ export default function AutoTrading() {
                     {isCircuitBreakerTriggered ? 'Circuit Breaker' : tradesLimitReached ? 'Limit Reached' : 'Active'}
                   </Badge>
                 </div>
+              </div>
+            )}
+            {settings.is_enabled && (settings.circuit_breaker_triggered_at || settings.portfolio_take_profit_triggered_at) && (
+              <div className="mt-4 flex items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-amber-200 text-sm font-medium">Trading is halted until the next UTC day</p>
+                    <p className="text-amber-200/70 text-xs mt-0.5">
+                      Circuit breaker or portfolio take-profit is active. Reset now to let the server worker open trades immediately.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleResetHalt}
+                  disabled={saveSettingsMutation.isPending}
+                  className="bg-amber-600 hover:bg-amber-700 text-white flex-shrink-0"
+                >
+                  <Shield className="w-4 h-4 mr-2" />
+                  {saveSettingsMutation.isPending ? 'Resetting...' : 'Reset Halt'}
+                </Button>
               </div>
             )}
           </CardContent>
