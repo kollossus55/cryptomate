@@ -28,6 +28,7 @@ import { generatePredictiveSignal, detectMarketRegime } from "../components/trad
 import { detectAnomalies, detectCorrelationAnomalies } from "../components/trading/AnomalyDetection";
 import { generateAdvancedSignal } from "../components/trading/AdvancedSignalGenerator";
 import IndicatorSettingsModal from "../components/trading/IndicatorSettingsModal";
+import CalibrationPanel from "../components/trading/CalibrationPanel";
 import { fetchTickerUniverse } from "../lib/binanceMarketData";
 
 export default function AISignals() {
@@ -585,6 +586,11 @@ export default function AISignals() {
               </CardContent>
             </Card>
           </div>
+        </div>
+
+        {/* Signal Calibration */}
+        <div className="mt-6">
+          <CalibrationPanel />
         </div>
 
         {/* Configuration Panel */}

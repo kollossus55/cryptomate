@@ -1,0 +1,125 @@
+{
+  "name": "CalibrationModel",
+  "type": "object",
+  "properties": {
+    "intercept": {
+      "type": "number",
+      "description": "Logistic regression intercept. Combined with slope, turns a 0-100 strength score into a win probability."
+    },
+    "slope": {
+      "type": "number",
+      "description": "Logistic regression slope on signal strength."
+    },
+    "sample_size": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of resolved signal-outcome pairs used to fit this model"
+    },
+    "win_rate": {
+      "type": "number",
+      "default": 0,
+      "description": "Overall win rate across the sample (0-1)"
+    },
+    "fitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO timestamp of when the model was fitted"
+    },
+    "calibration_buckets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "min_strength": {
+            "type": "number"
+          },
+          "max_strength": {
+            "type": "number"
+          },
+          "count": {
+            "type": "number"
+          },
+          "actual_win_rate": {
+            "type": "number"
+          },
+          "mean_strength": {
+            "type": "number"
+          }
+        }
+      },
+      "default": [],
+      "description": "Actual win rate per strength bucket, for a reliability diagram"
+    },
+    "owner_email": {
+      "type": "string",
+      "description": "Email of the user this model belongs to. Set by the calibration function."
+    }
+  },
+  "required": [
+    "intercept",
+    "slope",
+    "sample_size"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

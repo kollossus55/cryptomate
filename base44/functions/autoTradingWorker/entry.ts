@@ -493,6 +493,29 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
         actions.push({ symbol, action: 'sell', reason: exitReason, netPnL: sell.netPnL });
         if (sell.netPnL < 0) counters.daily_loss += Math.abs(sell.netPnL);
         counters.trades_today += 1;
+
+        // Resolve the open SignalOutcome for this position so the calibration
+        // model can learn whether this strength score predicted a win.
+        try {
+          const openSignals = await base44.asServiceRole.entities.SignalOutcome.list('-entry_time', 200);
+          const mine = (openSignals || []).find(
+            (s) => s.owner_email === user_email && s.asset_symbol === symbol && !s.resolved
+          );
+          if (mine) {
+            const entryNotional = position.quantity * position.avg_entry_price;
+            const netPnlPercent = entryNotional > 0 ? (sell.netPnL / entryNotional) * 100 : 0;
+            await base44.asServiceRole.entities.SignalOutcome.update(mine.id, {
+              resolved: true,
+              outcome: sell.netPnL > 0 ? 1 : 0,
+              exit_price: currentPrice,
+              exit_time: now.toISOString(),
+              exit_reason: exitReason,
+              net_pnl_percent: Math.round(netPnlPercent * 100) / 100,
+            });
+          }
+        } catch (e) {
+          log(`SignalOutcome resolve failed for ${symbol}: ${e.message}`);
+        }
       }
       continue;
     }
@@ -751,6 +774,27 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
           counters.assets_traded_today.push(ticker.symbol);
           priceMap.set(ticker.symbol, costs.fillPrice);
           if (candles) heldReturns.set(ticker.symbol, logReturns(candles));
+
+          // Log the entry signal so its outcome can be calibrated later.
+          try {
+            const tpPercent = settings.take_profit_percent ?? 8;
+            await base44.asServiceRole.entities.SignalOutcome.create({
+              asset_symbol: ticker.symbol,
+              signal_strength: signal.strength,
+              signal_direction: signal.direction || 'bullish',
+              signal_components: signal.components || {},
+              signal_reasons: signal.reasons || [],
+              entry_price: costs.fillPrice,
+              stop_loss_price: sizing.stopPrice ?? null,
+              take_profit_price: costs.fillPrice * (1 + tpPercent / 100),
+              entry_time: now.toISOString(),
+              resolved: false,
+              owner_email: user_email,
+              created_by: user_email,
+            });
+          } catch (e) {
+            log(`SignalOutcome create failed for ${ticker.symbol}: ${e.message}`);
+          }
         } else {
           log(`Buy rejected for ${ticker.symbol}: ${buy.reason}`);
         }

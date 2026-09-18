@@ -1,0 +1,147 @@
+{
+  "name": "SignalOutcome",
+  "type": "object",
+  "properties": {
+    "asset_symbol": {
+      "type": "string",
+      "description": "Trading pair symbol (e.g. BTCUSDT)"
+    },
+    "signal_strength": {
+      "type": "number",
+      "description": "0-100 strength score from the signal engine at entry time"
+    },
+    "signal_direction": {
+      "type": "string",
+      "enum": [
+        "bullish",
+        "bearish",
+        "neutral"
+      ],
+      "description": "Direction the signal engine reported at entry"
+    },
+    "signal_components": {
+      "type": "object",
+      "description": "Component breakdown (trend, momentum, etc.) that produced the strength score"
+    },
+    "signal_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Human-readable reasons the signal engine emitted"
+    },
+    "entry_price": {
+      "type": "number",
+      "description": "Fill price at entry"
+    },
+    "stop_loss_price": {
+      "type": "number",
+      "description": "Stop-loss price at entry time (ATR or flat-percent based)"
+    },
+    "take_profit_price": {
+      "type": "number",
+      "description": "Take-profit target price at entry time"
+    },
+    "entry_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO timestamp of the entry fill"
+    },
+    "outcome": {
+      "type": "number",
+      "description": "1 if the trade closed profitable (net P&L > 0), 0 if it closed at a loss. Null until the position is closed."
+    },
+    "exit_price": {
+      "type": "number",
+      "description": "Fill price at exit. Null until resolved."
+    },
+    "exit_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO timestamp of the exit fill. Null until resolved."
+    },
+    "exit_reason": {
+      "type": "string",
+      "description": "Why the position closed (stop-loss, take-profit, trailing, signal, etc.)"
+    },
+    "net_pnl_percent": {
+      "type": "number",
+      "description": "Net profit/loss as a percentage of entry notional, after fees and slippage. Null until resolved."
+    },
+    "resolved": {
+      "type": "boolean",
+      "default": false,
+      "description": "True once the position closed and outcome was recorded"
+    },
+    "owner_email": {
+      "type": "string",
+      "description": "Email of the user this signal-outcome belongs to. Set by the server worker so RLS can attribute it to the owning user."
+    }
+  },
+  "required": [
+    "asset_symbol",
+    "signal_strength",
+    "entry_price",
+    "entry_time"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}
