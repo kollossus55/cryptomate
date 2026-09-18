@@ -45,6 +45,9 @@
           "actual_win_rate": {
             "type": "number"
           },
+          "predicted_win_rate": {
+            "type": "number"
+          },
           "mean_strength": {
             "type": "number"
           }

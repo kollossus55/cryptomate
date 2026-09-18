@@ -564,6 +564,23 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
   const minStrength = settings.min_confidence ?? 70;
   const scanned = [];
 
+  // Load the user's latest calibration model so entries can gate on calibrated
+  // win-probability instead of raw strength. Falls back to strength when no
+  // model has been fitted yet (sample < 20 resolved trades).
+  let calibrationModel = null;
+  try {
+    const models = await base44.asServiceRole.entities.CalibrationModel.list('-fitted_at', 5);
+    calibrationModel = (models || []).find((m) => m.owner_email === user_email) || models?.[0] || null;
+    if (calibrationModel) {
+      log(`Calibration model loaded: sample ${calibrationModel.sample_size}, win rate ${((calibrationModel.win_rate || 0) * 100).toFixed(1)}%`);
+    }
+  } catch (e) {
+    log(`Calibration model load failed: ${e.message}`);
+  }
+  const calibration = calibrationModel
+    ? { intercept: calibrationModel.intercept, slope: calibrationModel.slope }
+    : null;
+
   if (newEntriesAllowed) {
     // Cost sanity check: does the configured TP/SL clear its own round trip?
     const costPercent = roundTripCostPercent({ exchange, estimatedSlippagePercent: 0.001 });
@@ -633,6 +650,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
         if (!candles || candles.length < MIN_CANDLES) continue;
         signal = scoreAsset(candles, {
           indicators: indicatorSettings || settings.indicator_settings || undefined,
+          calibration,
         });
         if (!signal) continue;
 
@@ -648,9 +666,12 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
         const sdGate = !effInd.supply_demand || (sdScore !== null && sdScore !== undefined && sdScore > 50);
         const sp500Gate = !effInd.sp500ai || (sp500Score !== null && sp500Score !== undefined && sp500Score > 50);
 
-        if (signal.strength >= minStrength && signal.direction === 'bullish' && sdGate && sp500Gate) {
+        // Gate on calibrated probability when a model exists; otherwise fall
+        // back to raw strength. Both are expressed as 0-100 against minStrength.
+        const entryScore = signal.probability != null ? signal.probability * 100 : signal.strength;
+        if (entryScore >= minStrength && signal.direction === 'bullish' && sdGate && sp500Gate) {
           candidates.push({ ticker, candles, signal });
-        } else if (signal.strength >= minStrength && signal.direction === 'bullish') {
+        } else if (entryScore >= minStrength && signal.direction === 'bullish') {
           log(`Skip ${ticker.symbol}: confluence gate failed (SD=${sdScore ?? 'null'}, SP500=${sp500Score ?? 'null'})`);
         }
       }

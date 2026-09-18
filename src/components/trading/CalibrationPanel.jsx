@@ -112,6 +112,18 @@ export default function CalibrationPanel() {
           </div>
         )}
 
+        {/* Live indicator */}
+        {myModel && (
+          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-2">
+            <Target className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-emerald-200/90">
+              <span className="font-semibold">Live:</span> the auto-trader now gates new entries on
+              the calibrated win-probability from this model instead of raw strength. If the model
+              is deleted or refitted, the next worker cycle picks up the change automatically.
+            </p>
+          </div>
+        )}
+
         {/* Model summary */}
         {myModel && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

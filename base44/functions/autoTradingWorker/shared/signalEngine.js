@@ -477,9 +477,16 @@ export function scoreAsset(candles, opts = {}) {
   const vol = atrPercent(candles);
   const price = last(candles).close;
 
+  const roundedStrength = Math.round(clamp(strength, 0, 100));
+  const probability = calibrate(roundedStrength, opts.calibration || null);
+
   return {
     // 0–100. NOT a probability. See calibrate().
-    strength: Math.round(clamp(strength, 0, 100)),
+    strength: roundedStrength,
+    // 0–1 win probability from the fitted logistic model, or null when no
+    // calibration model exists yet. When present, the auto-trader gates entries
+    // on this instead of raw strength.
+    probability,
     regime: ctx.regime,
     regimeConviction: Math.round((ctx.conviction ?? 0) * 100) / 100,
     direction: strength >= 55 ? 'bullish' : strength <= 45 ? 'bearish' : 'neutral',

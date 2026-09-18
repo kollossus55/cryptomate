@@ -474,9 +474,16 @@ export function scoreAsset(candles, opts = {}) {
   const vol = atrPercent(candles);
   const price = last(candles).close;
 
+  const roundedStrength = Math.round(clamp(strength, 0, 100));
+  const probability = calibrate(roundedStrength, opts.calibration || null);
+
   return {
     // 0–100. NOT a probability. See calibrate().
-    strength: Math.round(clamp(strength, 0, 100)),
+    strength: roundedStrength,
+    // 0–1 win probability from the fitted logistic model, or null when no
+    // calibration model exists yet. When present, the auto-trader gates entries
+    // on this instead of raw strength.
+    probability,
     regime: ctx.regime,
     regimeConviction: Math.round((ctx.conviction ?? 0) * 100) / 100,
     direction: strength >= 55 ? 'bullish' : strength <= 45 ? 'bearish' : 'neutral',
@@ -494,17 +501,13 @@ export function scoreAsset(candles, opts = {}) {
 }
 
 /**
- * Turn `strength` into a calibrated probability.
+ * Turn `strength` into a calibrated win probability using a fitted logistic
+ * model (intercept + slope * strength). Returns null when no model is passed,
+ * so callers can fall back to raw strength.
  *
- * This is a placeholder that returns null until you fit it. To make it real:
- *   1. Log every signal with its strength and the eventual outcome
- *      (1 if take-profit hit before stop-loss, 0 otherwise).
- *   2. Fit a logistic regression of outcome on strength.
- *   3. Check calibration on held-out data: of the signals you scored at 0.7,
- *      roughly 70% should have won. If not, the model is not calibrated and
- *      the number should not be shown as a probability.
- *
- * Until that exists, the UI must not render strength with a percent sign.
+ * The model is fit by the `calibrateSignals` backend function from resolved
+ * SignalOutcome records. The auto-trader loads the latest model each cycle and
+ * gates entries on the resulting probability instead of raw strength.
  */
 export function calibrate(strength, model = null) {
   if (!model || typeof model.intercept !== 'number' || typeof model.slope !== 'number') {
