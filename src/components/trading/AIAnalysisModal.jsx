@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
 import AdvancedChart from "./AdvancedChart";
+import ChartErrorBoundary from "./ChartErrorBoundary";
 import { fetchMarketIntelligence } from "./AdvancedSignalGenerator";
 
 export default function AIAnalysisModal({ isOpen, onClose, asset }) {
@@ -527,7 +528,11 @@ export default function AIAnalysisModal({ isOpen, onClose, asset }) {
 
           {/* Charts Tab */}
           <TabsContent value="charts" className="mt-4">
-            {asset && <AdvancedChart asset={asset} />}
+            {asset && (
+              <ChartErrorBoundary>
+                <AdvancedChart asset={asset} />
+              </ChartErrorBoundary>
+            )}
           </TabsContent>
         </Tabs>
         </div>
