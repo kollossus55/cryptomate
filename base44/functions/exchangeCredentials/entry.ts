@@ -32,78 +32,12 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.43';
  * the correct behaviour — it is not recoverable by design.
  */
 
-const OKX_URL = 'https://www.okx.com';
-
-// ---------------------------------------------------------------------------
-// Encryption
-// ---------------------------------------------------------------------------
-
-async function getEncryptionKey(): Promise<CryptoKey> {
-  const raw = Deno.env.get('EXCHANGE_ENCRYPTION_KEY');
-  if (!raw) {
-    throw new Error(
-      'EXCHANGE_ENCRYPTION_KEY is not set. Refusing to store credentials ' +
-      'without encryption.'
-    );
-  }
-  const keyBytes = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
-  if (keyBytes.length !== 32) {
-    throw new Error('EXCHANGE_ENCRYPTION_KEY must decode to exactly 32 bytes');
-  }
-  return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
-}
-
-async function encrypt(plaintext: string): Promise<string> {
-  const key = await getEncryptionKey();
-  // A fresh random IV per encryption. Reusing an IV with AES-GCM is
-  // catastrophic — it leaks the XOR of the plaintexts.
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encoded = new TextEncoder().encode(plaintext);
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
-
-  const combined = new Uint8Array(iv.length + ciphertext.byteLength);
-  combined.set(iv, 0);
-  combined.set(new Uint8Array(ciphertext), iv.length);
-  return btoa(String.fromCharCode(...combined));
-}
-
-async function decrypt(payload: string): Promise<string> {
-  const key = await getEncryptionKey();
-  const combined = Uint8Array.from(atob(payload), (c) => c.charCodeAt(0));
-  const iv = combined.slice(0, 12);
-  const ciphertext = combined.slice(12);
-  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
-  return new TextDecoder().decode(plaintext);
-}
-
-// ---------------------------------------------------------------------------
-// OKX signed request
-// ---------------------------------------------------------------------------
-
-/**
- * Sign an OKX request.
- *
- * OKX signature = base64(HMAC-SHA256(timestamp + method + requestPath + body))
- * timestamp must be ISO 8601 format.
- */
-async function signOkxRequest(
-  timestamp: string,
-  method: string,
-  requestPath: string,
-  body: string,
-  secret: string
-): Promise<string> {
-  const prehash = timestamp + method + requestPath + body;
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(prehash));
-  return btoa(String.fromCharCode(...new Uint8Array(signature)));
-}
+import {
+  OKX_URL,
+  encrypt,
+  decrypt,
+  signOkxRequest,
+} from '../../shared/okxExchange.ts';
 
 /**
  * Validate an OKX key by calling a signed, authenticated endpoint.
