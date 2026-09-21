@@ -139,7 +139,15 @@ export default function ExchangeBalanceCard() {
             <p className="text-sm text-red-300">{fetchError}</p>
           </div>
         ) : balances.length === 0 ? (
-          <p className="text-slate-400 text-sm py-4">No assets with a balance on this account.</p>
+          <div className="flex items-center gap-3 py-2">
+            <div className="w-12 h-12 bg-slate-900/60 rounded-xl flex items-center justify-center border border-slate-700">
+              <Wallet className="w-5 h-5 text-slate-500" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-white tabular-nums">0.00</div>
+              <p className="text-xs text-slate-400">No holdings on this account</p>
+            </div>
+          </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {balances.map((b) => (
