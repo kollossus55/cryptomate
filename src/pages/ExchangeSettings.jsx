@@ -322,7 +322,7 @@ export default function ExchangeSettings() {
                     <Label className="text-slate-300 mb-2 block">Exchange</Label>
                     <Select 
                       value={newConnection.exchange_name}
-                      onValueChange={(value) => setNewConnection({...newConnection, exchange_name: value})}
+                      onValueChange={(value) => setNewConnection({...newConnection, exchange_name: value, ...(value === 'kraken' ? { is_testnet: false } : {})})}
                     >
                       <SelectTrigger className="bg-slate-900 border-slate-700 text-white">
                         <SelectValue />
@@ -330,7 +330,7 @@ export default function ExchangeSettings() {
                       <SelectContent className="bg-slate-900 border-slate-700">
                         <SelectItem value="okx">OKX</SelectItem>
                         <SelectItem value="coinbase" disabled>Coinbase (Coming Soon)</SelectItem>
-                        <SelectItem value="kraken" disabled>Kraken (Coming Soon)</SelectItem>
+                        <SelectItem value="kraken">Kraken</SelectItem>
                         <SelectItem value="bybit" disabled>Bybit (Coming Soon)</SelectItem>
                       </SelectContent>
                     </Select>
@@ -358,6 +358,7 @@ export default function ExchangeSettings() {
                     />
                   </div>
 
+                  {newConnection.exchange_name === 'okx' && (
                   <div>
                     <Label className="text-slate-300 mb-2 block">API Passphrase</Label>
                     <Input
@@ -369,10 +370,12 @@ export default function ExchangeSettings() {
                     />
                     <p className="text-xs text-slate-500 mt-1">OKX requires a passphrase set when you created the API key</p>
                   </div>
+                  )}
 
+                  {newConnection.exchange_name === 'okx' && (
                   <div className="flex items-center justify-between p-4 bg-slate-900 rounded-lg">
                     <div>
-                      <Label className="text-slate-300">Use Testnet</Label>
+                      <Label className="text-slate-300">Use Testnet (Demo Trading)</Label>
                       <p className="text-xs text-slate-500 mt-1">Recommended for testing without real funds</p>
                     </div>
                     <Switch
@@ -380,6 +383,16 @@ export default function ExchangeSettings() {
                       onCheckedChange={(checked) => setNewConnection({...newConnection, is_testnet: checked})}
                     />
                   </div>
+                  )}
+                  {newConnection.exchange_name === 'kraken' && (
+                  <div className="flex items-start gap-3 p-4 bg-orange-900/20 border border-orange-500/30 rounded-lg">
+                    <AlertTriangle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-white font-medium">Kraken has no testnet</p>
+                      <p className="text-xs text-slate-400 mt-1">All Kraken orders are live. Credentials are validated against Kraken's live API on save — no order is placed until you explicitly confirm one.</p>
+                    </div>
+                  </div>
+                  )}
 
                   <div className="bg-slate-900 border-2 border-blue-500/40 rounded-xl p-4">
                     <p className="text-white leading-relaxed">
@@ -464,7 +477,23 @@ export default function ExchangeSettings() {
 
                   <div>
                     <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
-                      <span className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">2</span>
+                      <span className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">2</span>
+                      Kraken (Live Trading)
+                    </h4>
+                    <ol className="list-decimal list-inside space-y-2 text-slate-400 text-sm ml-8">
+                      <li>Sign up at <strong>kraken.com</strong> and verify your account</li>
+                      <li>Go to Settings → API</li>
+                      <li>Generate new key with <strong>Query funds</strong> and <strong>Create/modify orders</strong> permissions</li>
+                      <li><strong>Do NOT enable withdrawal permissions</strong></li>
+                      <li>Copy API Key and Private Key (the secret is base64-encoded — copy it exactly)</li>
+                      <li>Add IP whitelist restrictions for added security</li>
+                      <li>Kraken has no testnet — credentials are validated live on save, but no order is placed until you explicitly confirm</li>
+                    </ol>
+                  </div>
+
+                  <div>
+                    <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
+                      <span className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">3</span>
                       Security Checklist
                     </h4>
                     <div className="space-y-2 ml-8">
@@ -487,7 +516,7 @@ export default function ExchangeSettings() {
 
                   <div>
                     <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
-                      <span className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">3</span>
+                      <span className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">4</span>
                       Required Permissions
                     </h4>
                     <div className="bg-slate-900 rounded-lg p-4 ml-8">
