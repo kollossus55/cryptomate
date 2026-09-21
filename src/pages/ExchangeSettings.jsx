@@ -77,6 +77,7 @@ export default function ExchangeSettings() {
   };
 
   const [credentialError, setCredentialError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   /**
    * Send credentials to the server function, which validates them against the
@@ -100,6 +101,7 @@ export default function ExchangeSettings() {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const response = await base44.functions.invoke('exchangeCredentials', {
         action: 'store',
@@ -121,6 +123,8 @@ export default function ExchangeSettings() {
       queryClient.invalidateQueries({ queryKey: ['exchange-connections'] });
     } catch (error) {
       setCredentialError(error.message || 'Failed to store credentials');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -407,6 +411,13 @@ export default function ExchangeSettings() {
                     </p>
                   </div>
 
+                  {credentialError && (
+                    <div className="flex items-start gap-2 p-3 bg-red-900/20 border border-red-500/40 rounded-lg">
+                      <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-red-300">{credentialError}</p>
+                    </div>
+                  )}
+
                   <div className="flex gap-3 pt-4">
                     <Button
                       variant="outline"
@@ -420,10 +431,10 @@ export default function ExchangeSettings() {
                     </Button>
                     <Button
                       onClick={handleAddConnection}
-                      disabled={!newConnection.api_key || !newConnection.api_secret || (newConnection.exchange_name === 'okx' && !newConnection.api_passphrase) || createConnectionMutation.isPending}
+                      disabled={!newConnection.api_key || !newConnection.api_secret || (newConnection.exchange_name === 'okx' && !newConnection.api_passphrase) || isSubmitting}
                       className="flex-1 bg-indigo-600 hover:bg-indigo-700"
                     >
-                      {createConnectionMutation.isPending ? 'Adding...' : 'Add Connection'}
+                      {isSubmitting ? 'Validating & Adding...' : 'Add Connection'}
                     </Button>
                   </div>
                 </CardContent>
