@@ -501,6 +501,7 @@ export default function ExchangeSettings() {
                       <li>Copy API Key and Private Key (the secret is base64-encoded — copy it exactly)</li>
                       <li>Add IP whitelist restrictions for added security</li>
                       <li>Kraken has no testnet — credentials are validated live on save, but no order is placed until you explicitly confirm</li>
+                      <li><strong>If you get "EGeneral:Permission denied":</strong> edit the key on Kraken and enable <strong>Query funds</strong> + <strong>Query open orders & trades</strong> + <strong>Query closed orders & trades</strong>, then save the key again here. Also remove any <strong>Start Date</strong> on the key (or set it to today) — a future start date rejects all calls until it arrives.</li>
                     </ol>
                   </div>
 
