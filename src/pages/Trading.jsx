@@ -15,6 +15,7 @@ import AltcoinScannerModal from "../components/trading/AltcoinScannerModal";
 import IndicatorSettingsModal from "../components/trading/IndicatorSettingsModal";
 import WatchlistModal from "../components/trading/WatchlistModal";
 import PortfolioCard from "../components/trading/PortfolioCard";
+import ExchangeBalanceCard from "../components/trading/ExchangeBalanceCard";
 import NotificationToast from "../components/notifications/NotificationToast";
 import { useNotificationMonitor } from "../components/notifications/useNotificationMonitor";
 import { generateAdvancedSignal } from "../components/trading/AdvancedSignalGenerator";
@@ -1831,6 +1832,10 @@ export default function Trading() {
               </Button>
             </div>
           </div>
+        </div>
+
+        <div className="mb-6">
+          <ExchangeBalanceCard />
         </div>
 
         <div className="mb-8">

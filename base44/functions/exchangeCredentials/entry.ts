@@ -163,6 +163,8 @@ Deno.serve(async (req) => {
         return await handleTest(base44, user, params);
       case 'delete':
         return await handleDelete(base44, user, params);
+      case 'fetchBalances':
+        return await handleFetchBalances(base44, user, params);
       default:
         return Response.json({ success: false, error: `Unknown action: ${action}` }, { status: 400 });
     }
@@ -295,4 +297,108 @@ async function handleDelete(base44: any, user: any, params: any) {
   }
   await base44.asServiceRole.entities.ExchangeConnection.delete(connection_id);
   return Response.json({ success: true });
+}
+
+/**
+ * Fetch the real balances held on the connected exchange.
+ *
+ * Used by the Trading page to show the user's actual exchange holdings
+ * alongside the paper-trading portfolio. Returns an array of
+ * { asset, amount } for assets with a non-zero balance.
+ */
+async function handleFetchBalances(base44: any, user: any, params: any) {
+  const { connection_id } = params;
+
+  const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
+    id: connection_id,
+    created_by: user.email,
+  });
+  const connection = connections?.[0];
+  if (!connection) {
+    return Response.json({ success: false, error: 'Connection not found' }, { status: 404 });
+  }
+
+  const apiKey = await decrypt(connection.encrypted_api_key);
+  const apiSecret = await decrypt(connection.encrypted_api_secret);
+
+  if (connection.exchange_name === 'kraken') {
+    const urlPath = '/0/private/Balance';
+    const postData = buildKrakenBody({});
+    const headers = await buildKrakenHeaders(apiKey, apiSecret, urlPath, postData);
+
+    const res = await fetch(`${KRAKEN_URL}${urlPath}`, { method: 'POST', headers, body: postData });
+    if (!res.ok) {
+      return Response.json({ success: false, error: `Kraken error (${res.status})` }, { status: 400 });
+    }
+    const data = await res.json();
+    if (data.error && data.error.length > 0) {
+      return Response.json({ success: false, error: `Kraken: ${data.error.join(', ')}` }, { status: 400 });
+    }
+
+    const balances = Object.entries(data.result || {})
+      .map(([asset, amount]: [string, any]) => ({
+        asset: normalizeKrakenAsset(asset),
+        amount: parseFloat(amount),
+      }))
+      .filter((b: any) => b.amount > 0);
+
+    return Response.json({ success: true, exchange: 'kraken', balances });
+  }
+
+  if (connection.exchange_name === 'okx') {
+    const apiPassphrase = connection.encrypted_api_passphrase
+      ? await decrypt(connection.encrypted_api_passphrase)
+      : '';
+    const timestamp = new Date().toISOString();
+    const method = 'GET';
+    const requestPath = '/api/v5/account/balance';
+    const body = '';
+    const sign = await signOkxRequest(timestamp, method, requestPath, body, apiSecret);
+
+    const headers: Record<string, string> = {
+      'OK-ACCESS-KEY': apiKey,
+      'OK-ACCESS-SIGN': sign,
+      'OK-ACCESS-TIMESTAMP': timestamp,
+      'OK-ACCESS-PASSPHRASE': apiPassphrase,
+      'Content-Type': 'application/json',
+    };
+    if (connection.is_testnet) {
+      headers['x-simulated-trading'] = '1';
+    }
+
+    const res = await fetch(`${OKX_URL}${requestPath}`, { headers });
+    if (!res.ok) {
+      return Response.json({ success: false, error: `OKX error (${res.status})` }, { status: 400 });
+    }
+    const data = await res.json();
+    if (data.code !== '0') {
+      return Response.json({ success: false, error: `OKX: ${data.msg || 'Unknown error'}` }, { status: 400 });
+    }
+
+    const balances: any[] = [];
+    (data.data?.[0]?.details || []).forEach((d: any) => {
+      const amt = parseFloat(d.cashBal);
+      if (amt > 0) balances.push({ asset: d.ccy, amount: amt });
+    });
+
+    return Response.json({ success: true, exchange: 'okx', balances });
+  }
+
+  return Response.json({ success: false, error: 'Unsupported exchange' }, { status: 400 });
+}
+
+/**
+ * Kraken uses X-prefixed (crypto) and Z-prefixed (fiat) asset codes.
+ * Normalize them to common symbols for display.
+ */
+function normalizeKrakenAsset(asset: string): string {
+  const map: Record<string, string> = {
+    XXBT: 'BTC', XETH: 'ETH', XLTC: 'LTC', XXRP: 'XRP',
+    XADA: 'ADA', XDGE: 'DOGE', XSOL: 'SOL', XDOT: 'DOT',
+    USDT: 'USDT', ZUSD: 'USD', ZEUR: 'EUR', ZGBP: 'GBP',
+  };
+  if (map[asset]) return map[asset];
+  if (asset.startsWith('X') && asset.length === 4) return asset.slice(1);
+  if (asset.startsWith('Z') && asset.length === 4) return asset.slice(1);
+  return asset;
 }
