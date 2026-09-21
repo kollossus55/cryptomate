@@ -122,7 +122,8 @@ export default function ExchangeSettings() {
       resetForm();
       queryClient.invalidateQueries({ queryKey: ['exchange-connections'] });
     } catch (error) {
-      setCredentialError(error.message || 'Failed to store credentials');
+      const errMsg = error.response?.data?.error || error.data?.error || error.message || 'Failed to store credentials';
+      setCredentialError(errMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -153,7 +154,8 @@ export default function ExchangeSettings() {
       }
       queryClient.invalidateQueries({ queryKey: ['exchange-connections'] });
     } catch (error) {
-      setCredentialError(error.message || 'Connection test failed');
+      const errMsg = error.response?.data?.error || error.data?.error || error.message || 'Connection test failed';
+      setCredentialError(errMsg);
     } finally {
       setTestingConnectionId(null);
     }
