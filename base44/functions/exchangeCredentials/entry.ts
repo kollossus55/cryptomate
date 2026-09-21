@@ -247,7 +247,7 @@ async function handleTest(base44: any, user: any, params: any) {
 
   const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
     id: connection_id,
-    created_by: user.email, // ownership check — never trust the id alone
+    created_by_id: user.id, // ownership check — never trust the id alone
   });
   const connection = connections?.[0];
   if (!connection) {
@@ -290,7 +290,7 @@ async function handleDelete(base44: any, user: any, params: any) {
   const { connection_id } = params;
   const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
     id: connection_id,
-    created_by: user.email,
+    created_by_id: user.id,
   });
   if (!connections?.[0]) {
     return Response.json({ success: false, error: 'Connection not found' }, { status: 404 });
@@ -311,7 +311,7 @@ async function handleFetchBalances(base44: any, user: any, params: any) {
 
   const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
     id: connection_id,
-    created_by: user.email,
+    created_by_id: user.id,
   });
   const connection = connections?.[0];
   if (!connection) {
