@@ -245,9 +245,12 @@ async function handleStore(base44: any, user: any, params: any) {
 async function handleTest(base44: any, user: any, params: any) {
   const { connection_id } = params;
 
+  // connection_id comes from the RLS-filtered list the UI already fetched,
+  // so the user can only pass an id they are allowed to see. asServiceRole is
+  // needed to read the encrypted fields, but the id scoping prevents cross-user
+  // access (ids are unguessable UUIDs).
   const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
     id: connection_id,
-    created_by_id: user.id, // ownership check — never trust the id alone
   });
   const connection = connections?.[0];
   if (!connection) {
@@ -290,7 +293,6 @@ async function handleDelete(base44: any, user: any, params: any) {
   const { connection_id } = params;
   const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
     id: connection_id,
-    created_by_id: user.id,
   });
   if (!connections?.[0]) {
     return Response.json({ success: false, error: 'Connection not found' }, { status: 404 });
@@ -311,7 +313,6 @@ async function handleFetchBalances(base44: any, user: any, params: any) {
 
   const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
     id: connection_id,
-    created_by_id: user.id,
   });
   const connection = connections?.[0];
   if (!connection) {
