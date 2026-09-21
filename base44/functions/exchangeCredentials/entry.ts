@@ -38,6 +38,11 @@ import {
   decrypt,
   signOkxRequest,
 } from '../../shared/okxExchange.ts';
+import {
+  KRAKEN_URL,
+  buildKrakenBody,
+  buildKrakenHeaders,
+} from '../../shared/krakenExchange.ts';
 
 /**
  * Validate an OKX key by calling a signed, authenticated endpoint.
@@ -102,6 +107,43 @@ async function validateOkxKey(
   };
 }
 
+/**
+ * Validate a Kraken key by calling the read-only Balance endpoint.
+ *
+ * Kraken uses two credentials: API key and secret (no passphrase).
+ * Kraken spot has no testnet/sandbox — all calls hit the live API.
+ */
+async function validateKrakenKey(apiKey: string, apiSecret: string) {
+  const urlPath = '/0/private/Balance';
+  const postData = buildKrakenBody({});
+  const headers = await buildKrakenHeaders(apiKey, apiSecret, urlPath, postData);
+
+  const res = await fetch(`${KRAKEN_URL}${urlPath}`, {
+    method: 'POST',
+    headers,
+    body: postData,
+  });
+
+  if (!res.ok) {
+    return { valid: false, error: `Kraken rejected the key (${res.status})` };
+  }
+
+  const data = await res.json();
+
+  // Kraken returns { error: [...], result: {...} }
+  if (data.error && data.error.length > 0) {
+    return { valid: false, error: `Kraken error: ${data.error.join(', ')}` };
+  }
+
+  // Kraken does not expose granular key permissions via the Balance endpoint.
+  // We can only confirm the key is valid and can read. Trade permission is
+  // implied if the key was created with it, but cannot be verified here.
+  const permissions = ['read'];
+  const balanceCount = data.result ? Object.keys(data.result).length : 0;
+
+  return { valid: true, permissions, balanceCount };
+}
+
 // ---------------------------------------------------------------------------
 
 Deno.serve(async (req) => {
@@ -149,6 +191,8 @@ async function handleStore(base44: any, user: any, params: any) {
       }, { status: 400 });
     }
     validation = await validateOkxKey(api_key, api_secret, api_passphrase, is_testnet);
+  } else if (exchange_name === 'kraken') {
+    validation = await validateKrakenKey(api_key, api_secret);
   } else {
     return Response.json({
       success: false,
@@ -217,6 +261,8 @@ async function handleTest(base44: any, user: any, params: any) {
   let validation;
   if (connection.exchange_name === 'okx') {
     validation = await validateOkxKey(apiKey, apiSecret, apiPassphrase, connection.is_testnet);
+  } else if (connection.exchange_name === 'kraken') {
+    validation = await validateKrakenKey(apiKey, apiSecret);
   } else {
     validation = { valid: false, error: `Validation for ${connection.exchange_name} is not implemented.` };
   }
