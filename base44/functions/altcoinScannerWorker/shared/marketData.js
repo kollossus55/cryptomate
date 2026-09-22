@@ -12,7 +12,6 @@
  * Runs unmodified in the browser and in Deno (fetch + ESM only, no deps).
  */
 
-const BINANCE = 'https://api.binance.com';
 const COINGECKO = 'https://api.coingecko.com/api/v3';
 
 /** Interval -> milliseconds, used for cache keying on bar close. */
@@ -79,18 +78,13 @@ async function mapLimit(items, limit, fn) {
 /**
  * Data provider chain.
  *
- * Binance returns HTTP 451 to Base44's servers (geo-block). The workaround in
- * place fed data from the browser, which meant the bot could only trade while
- * someone had the Altcoin Scanner page open — overnight it had no data and
- * placed no trades.
+ * OKX is the primary, Coinbase the fallback. Both expose free, unauthenticated
+ * spot endpoints and return the same normalised shape so nothing downstream
+ * needs to know which one replied.
  *
- * This tries several exchanges in order and uses the first that answers. All
- * of them expose free, unauthenticated spot endpoints, and all return the same
- * normalised shape so nothing downstream needs to know which one replied.
- *
- * Order is deliberate: OKX first because its symbols map to Binance's almost
- * one-to-one (BTCUSDT -> BTC-USDT), then Coinbase and Kraken, which quote
- * against USD rather than USDT and need real mapping.
+ * Binance was removed because the server is geo-blocked (HTTP 451) from
+ * api.binance.com. OKX symbols map to Binance's almost one-to-one
+ * (BTCUSDT -> BTC-USDT), so the rest of the app keeps Binance-style symbols.
  */
 
 const PROVIDER_TIMEOUT = 8000;
@@ -252,54 +246,10 @@ const coinbaseProvider = {
 };
 
 // ---------------------------------------------------------------------------
-// Binance (preferred when reachable)
+// Provider chain — OKX is primary, Coinbase is the fallback.
+// Binance was removed because the server is geo-blocked (HTTP 451).
 // ---------------------------------------------------------------------------
 
-const binanceProvider = {
-  name: 'binance',
-
-  async tickers() {
-    const [tickers, tradable] = await Promise.all([
-      fetchJson(`${BINANCE}/api/v3/ticker/24hr`, { timeoutMs: PROVIDER_TIMEOUT }),
-      fetchTradableUsdtSymbols(),
-    ]);
-    return tickers
-      .filter((t) => tradable.has(t.symbol))
-      .map((t) => ({
-        symbol: t.symbol,
-        base: t.symbol.replace(/USDT$/, ''),
-        price: parseFloat(t.lastPrice),
-        change24h: parseFloat(t.priceChangePercent),
-        quoteVolume24h: parseFloat(t.quoteVolume),
-        high24h: parseFloat(t.highPrice),
-        low24h: parseFloat(t.lowPrice),
-        trades24h: t.count,
-      }));
-  },
-
-  async candles(symbol, interval, limit) {
-    const raw = await fetchJson(
-      `${BINANCE}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit + 1}`,
-      { timeoutMs: PROVIDER_TIMEOUT }
-    );
-    if (!Array.isArray(raw)) return null;
-    const intervalMs = INTERVAL_MS[interval];
-    return raw.map((k) => ({
-      openTime: k[0],
-      open: parseFloat(k[1]),
-      high: parseFloat(k[2]),
-      low: parseFloat(k[3]),
-      close: parseFloat(k[4]),
-      volume: parseFloat(k[5]),
-      closeTime: k[6] ?? k[0] + intervalMs - 1,
-      quoteVolume: parseFloat(k[7]),
-      _confirmed: null,
-    }));
-  },
-};
-
-// Binance removed from the chain — the server is geo-blocked (HTTP 451) from
-// api.binance.com, so it never answered. OKX is the primary, Coinbase the fallback.
 const PROVIDERS = [okxProvider, coinbaseProvider];
 
 // Remember which provider last worked so a geo-blocked primary is not retried
@@ -386,9 +336,7 @@ export async function fetchCandles(symbol, interval = '1h', limit = 200) {
 
   let raw;
   try {
-    // Provider chain: Binance when reachable, otherwise OKX or Coinbase.
-    // The server is geo-blocked from Binance (HTTP 451), so without this the
-    // bot could only trade while a browser fed it data.
+    // Provider chain: OKX first, then Coinbase as fallback.
     raw = await withProvider(
       (provider) => provider.candles(symbol, interval, limit),
       `candles ${symbol} ${interval}`
@@ -438,26 +386,6 @@ const MAJORS = new Set([
   'LTC', 'BCH', 'LINK', 'AVAX', 'TRX', 'ATOM',
 ]);
 
-let tradableSymbolsCache = { at: 0, set: null };
-
-/**
- * Symbols currently open for spot trading against USDT on Binance.
- * Cached for an hour — listings change rarely.
- */
-export async function fetchTradableUsdtSymbols() {
-  if (tradableSymbolsCache.set && Date.now() - tradableSymbolsCache.at < 3600e3) {
-    return tradableSymbolsCache.set;
-  }
-  const info = await fetchJson(`${BINANCE}/api/v3/exchangeInfo`);
-  const set = new Set(
-    info.symbols
-      .filter((s) => s.status === 'TRADING' && s.quoteAsset === 'USDT' && s.isSpotTradingAllowed)
-      .map((s) => s.symbol)
-  );
-  tradableSymbolsCache = { at: Date.now(), set };
-  return set;
-}
-
 /**
  * Build the tradable universe in TWO network calls, not 250.
  *
@@ -472,9 +400,7 @@ export async function fetchTradableUsdtSymbols() {
  * treat "no market data" as "do not trade".
  */
 export async function fetchUniverse({ topN = 60, minQuoteVolume24h = 5_000_000 } = {}) {
-  // Provider chain rather than Binance alone. The server is geo-blocked from
-  // Binance (HTTP 451); falling back to OKX or Coinbase keeps the bot running
-  // autonomously instead of depending on a browser tab being open.
+  // Provider chain: OKX first, then Coinbase as fallback.
   const tickers = await withProvider(
     (provider) => provider.tickers(),
     'universe tickers'
@@ -493,6 +419,64 @@ export async function fetchUniverse({ topN = 60, minQuoteVolume24h = 5_000_000 }
     .filter((t) => t.quoteVolume24h >= minQuoteVolume24h)
     .sort((a, b) => b.quoteVolume24h - a.quoteVolume24h)
     .slice(0, topN);
+}
+
+/**
+ * Fetch current spot prices for a specific set of Binance-style symbols
+ * (e.g. "ZECUSDT", "PEPEUSDT") in a single bulk call.
+ *
+ * Used to mark held positions to market when they fall outside the trading
+ * universe (obscure altcoins below the liquidity floor or top-N cap). Without
+ * this, markToMarket leaves their current_value at the entry price and their
+ * profit_loss at just the entry fee, so the UI shows stale unrealized P&L.
+ *
+ * Returns a Map<string, number> of symbol -> live price. Symbols not found
+ * on any provider are simply absent from the map.
+ */
+export async function fetchPricesForSymbols(symbols) {
+  if (!symbols || symbols.length === 0) return new Map();
+  const usdtSymbols = symbols.filter((s) => typeof s === 'string' && s.endsWith('USDT'));
+  if (usdtSymbols.length === 0) return new Map();
+
+  const wanted = new Set(usdtSymbols);
+  const out = new Map();
+
+  // OKX is the most reliable bulk endpoint and maps cleanly to Binance symbols.
+  try {
+    const data = await fetchJson(`${OKX}/api/v5/market/tickers?instType=SPOT`, { timeoutMs: PROVIDER_TIMEOUT });
+    if (data.code === '0' && Array.isArray(data.data)) {
+      for (const t of data.data) {
+        if (typeof t.instId !== 'string' || !t.instId.endsWith('-USDT')) continue;
+        const binanceSymbol = t.instId.replace('-USDT', 'USDT');
+        if (wanted.has(binanceSymbol) && t.last) {
+          const price = parseFloat(t.last);
+          if (Number.isFinite(price) && price > 0) out.set(binanceSymbol, price);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`[marketData] fetchPricesForSymbols OKX failed: ${err.message}`);
+  }
+
+  // Fill any gaps from Coinbase single-product stats (best-effort, low concurrency).
+  const missing = usdtSymbols.filter((s) => !out.has(s));
+  if (missing.length > 0) {
+    const results = await mapLimit(missing, 4, async (sym) => {
+      try {
+        const product = toCoinbaseProduct(sym);
+        if (!product) return null;
+        const s = await fetchJson(`${COINBASE}/products/${product}/stats`, { timeoutMs: 5000 });
+        const price = parseFloat(s.last);
+        if (Number.isFinite(price) && price > 0) return [sym, price];
+      } catch { /* not listed on Coinbase */ }
+      return null;
+    });
+    for (const r of results) {
+      if (r && !r.error) out.set(r[0], r[1]);
+    }
+  }
+
+  return out;
 }
 
 /**
