@@ -33,7 +33,8 @@ import { logReturns } from './shared/indicators.js';
  *    must be able to fire on trade number 11.
  */
 
-const CANDLE_INTERVAL = '1h';
+const DEFAULT_CANDLE_INTERVAL = '1h';
+const VALID_INTERVALS = new Set(['15m', '30m', '1h', '4h', '1d']);
 const CANDLE_LIMIT = 200;
 const UNIVERSE_SIZE = 100;
 const MAX_SCAN_CANDIDATES = 100;
@@ -421,9 +422,12 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
 
   const symbolsNeedingCandles = [...new Set([...heldSymbols, ...scanSymbols])];
 
-  log(`Fetching ${CANDLE_INTERVAL} candles for ${symbolsNeedingCandles.length} symbols`);
+  const candleInterval = VALID_INTERVALS.has(settings.candle_interval)
+    ? settings.candle_interval
+    : DEFAULT_CANDLE_INTERVAL;
+  log(`Fetching ${candleInterval} candles for ${symbolsNeedingCandles.length} symbols`);
   const candlesBySymbol = await fetchCandlesBatch(
-    symbolsNeedingCandles, CANDLE_INTERVAL, CANDLE_LIMIT, 8
+    symbolsNeedingCandles, candleInterval, CANDLE_LIMIT, 8
   );
   log(`Candles retrieved for ${candlesBySymbol.size} symbols`);
 

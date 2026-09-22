@@ -86,7 +86,9 @@ export default function AutoTrading() {
     // NEW: VWAP Execution
     use_vwap: false,
     vwap_lookback_periods: 20,
-    vwap_participation_rate: 10
+    vwap_participation_rate: 10,
+    // NEW: Candle Timeframe
+    candle_interval: "1h"
   });
 
   const queryClient = useQueryClient();
@@ -188,7 +190,9 @@ export default function AutoTrading() {
         // NEW: VWAP Execution
         use_vwap: savedSettings.use_vwap ?? false,
         vwap_lookback_periods: savedSettings.vwap_lookback_periods ?? 20,
-        vwap_participation_rate: savedSettings.vwap_participation_rate ?? 10
+        vwap_participation_rate: savedSettings.vwap_participation_rate ?? 10,
+        // NEW: Candle Timeframe
+        candle_interval: savedSettings.candle_interval ?? "1h"
       }));
     }
   }, [savedSettings]);

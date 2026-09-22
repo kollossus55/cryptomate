@@ -4,7 +4,14 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
-import { Shield, TrendingUp, AlertTriangle, Activity, Layers } from "lucide-react";
+import { Shield, TrendingUp, AlertTriangle, Activity, Layers, Clock } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Advanced risk controls that are enforced server-side but had no UI.
 // Receives the shared settings state + setter so saves persist to the backend.
@@ -13,8 +20,53 @@ export default function AdvancedRiskControls({ settings, setSettings }) {
 
   const set = (key, value) => setSettings(prev => ({ ...prev, [key]: value }));
 
+  const INTERVAL_LABELS = {
+    '15m': '15 minutes — Scalping',
+    '30m': '30 minutes — Intraday',
+    '1h': '1 hour — Swing (default)',
+    '4h': '4 hours — Position',
+    '1d': '1 day — Trend',
+  };
+
   return (
     <>
+      {/* Candle Timeframe */}
+      <Card className="bg-slate-800 border-2 border-indigo-500/50 mt-6 shadow-[0_0_15px_rgba(99,102,241,0.15)]">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-indigo-100">
+            <Clock className="w-5 h-5 text-indigo-400" />
+            Candle Timeframe
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-slate-900/50 rounded-xl p-4 border border-indigo-500/30">
+            <p className="text-xs text-indigo-400/70 mb-4 leading-relaxed">
+              The timeframe the signal engine uses to score assets and decide trades. The scheduler still runs every
+              10 minutes — this controls the bar size each evaluation is built on, not how often the worker wakes up.
+            </p>
+            <Label className="text-indigo-200 mb-2 block font-medium">Timeframe</Label>
+            <Select
+              value={settings.candle_interval || '1h'}
+              onValueChange={(v) => set("candle_interval", v)}
+            >
+              <SelectTrigger className="w-full bg-slate-900 border-indigo-500/40 text-indigo-100">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-900 border-slate-700">
+                {Object.entries(INTERVAL_LABELS).map(([val, label]) => (
+                  <SelectItem key={val} value={val} className="text-slate-200 focus:bg-indigo-600/30">
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-indigo-400/50 mt-3">
+              Shorter timeframes = more signals but more noise. Longer = fewer, more reliable signals.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ATR-Based Risk Sizing */}
       <Card className="bg-slate-800 border-2 border-amber-500/50 mt-6 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
         <CardHeader>
