@@ -16,6 +16,7 @@ import IndicatorSettingsModal from "../components/trading/IndicatorSettingsModal
 import WatchlistModal from "../components/trading/WatchlistModal";
 import PortfolioCard from "../components/trading/PortfolioCard";
 import ExchangeBalanceCard from "../components/trading/ExchangeBalanceCard";
+import LiveTradingPanel from "../components/trading/LiveTradingPanel";
 import NotificationToast from "../components/notifications/NotificationToast";
 import { useNotificationMonitor } from "../components/notifications/useNotificationMonitor";
 import { generateAdvancedSignal } from "../components/trading/AdvancedSignalGenerator";
@@ -590,6 +591,59 @@ export default function Trading() {
         profit_loss: profitLoss
       }
     });
+  };
+
+  const handleExecuteLiveTrade = async ({ asset, tradeType, quantity, price }) => {
+    try {
+      const connections = await base44.entities.ExchangeConnection.list();
+      const activeConn = connections?.find(c => c.is_active && c.connection_status === 'connected');
+      if (!activeConn) {
+        alert('No active exchange connection. Connect an exchange in Exchange Settings first.');
+        return;
+      }
+
+      const assetSymbol = `${asset.symbol}/USDT`;
+      const response = await base44.functions.invoke('liveOrderExecution', {
+        connection_id: activeConn.id,
+        asset_symbol: assetSymbol,
+        side: tradeType,
+        order_type: 'market',
+        quantity,
+        confirm_live: true,
+      });
+
+      const result = response.data || response;
+      if (!result.success) {
+        alert(`Live order failed: ${result.error || 'Unknown error'}`);
+        return;
+      }
+
+      const fillPrice = result.avg_fill_price || price;
+      const fillQty = result.fill_quantity || quantity;
+
+      await createTradeMutation.mutateAsync({
+        asset_symbol: assetSymbol,
+        trade_type: tradeType,
+        quantity: fillQty,
+        price: fillPrice,
+        total_value: fillPrice * fillQty,
+        exchange: `${activeConn.exchange_name} (Live)`,
+        status: 'completed',
+      });
+
+      await base44.entities.Notification.create({
+        notification_type: 'order_filled',
+        priority: 'high',
+        title: 'LIVE Order Filled',
+        message: `${tradeType.toUpperCase()} ${fillQty} ${asset.symbol} @ $${fillPrice.toFixed(2)} on ${activeConn.exchange_name.toUpperCase()}`,
+        data: { asset: asset.symbol, type: tradeType, quantity: fillQty, price: fillPrice, live: true },
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['trades'] });
+    } catch (error) {
+      console.error('Live trade execution failed:', error);
+      alert(`Live trade failed: ${error.message || 'Unknown error'}`);
+    }
   };
 
   const handleAutoTrade = async (asset, tradeType, quantity, confidence, riskLevel) => {
@@ -1835,6 +1889,10 @@ export default function Trading() {
         </div>
 
         <div className="mb-6">
+          <LiveTradingPanel />
+        </div>
+
+        <div className="mb-6">
           <ExchangeBalanceCard />
         </div>
 
@@ -2038,7 +2096,9 @@ export default function Trading() {
           asset={selectedAsset}
           tradeType={tradeType}
           onExecuteTrade={handleExecuteTrade}
+          onExecuteLiveTrade={handleExecuteLiveTrade}
           portfolio={portfolio}
+          liveTradingEnabled={autoTradingSettings?.live_trading_enabled && !autoTradingSettings?.kill_switch_enabled}
         />
       )}
 

@@ -6,14 +6,15 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertCircle, TrendingUp, Sparkles, Target, Shield } from "lucide-react";
+import { AlertCircle, TrendingUp, Sparkles, Target, Shield, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import RealTimeMarketDepth from "./RealTimeMarketDepth";
 
-export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecuteTrade, portfolio }) {
+export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecuteTrade, onExecuteLiveTrade, portfolio, liveTradingEnabled }) {
   const [quantity, setQuantity] = useState("");
   const [percentage, setPercentage] = useState([25]);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isLiveTrade, setIsLiveTrade] = useState(false);
   
   // Risk Management Settings
   const [useRiskManagement, setUseRiskManagement] = useState(false);
@@ -104,21 +105,30 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
     
     setIsExecuting(true);
     try {
-      await onExecuteTrade({
-        asset,
-        tradeType,
-        quantity: parseFloat(quantity),
-        price: assetPrice,
-        totalValue: calculatedTotal,
-        // Risk Management Settings
-        riskManagement: useRiskManagement ? {
-          stopLoss: stopLossPercent,
-          takeProfit: takeProfitPercent,
-          useTrailingStop,
-          trailingStopPercent,
-          useBreakeven
-        } : null
-      });
+      if (isLiveTrade && onExecuteLiveTrade) {
+        await onExecuteLiveTrade({
+          asset,
+          tradeType,
+          quantity: parseFloat(quantity),
+          price: assetPrice,
+          totalValue: calculatedTotal,
+        });
+      } else {
+        await onExecuteTrade({
+          asset,
+          tradeType,
+          quantity: parseFloat(quantity),
+          price: assetPrice,
+          totalValue: calculatedTotal,
+          riskManagement: useRiskManagement ? {
+            stopLoss: stopLossPercent,
+            takeProfit: takeProfitPercent,
+            useTrailingStop,
+            trailingStopPercent,
+            useBreakeven
+          } : null
+        });
+      }
       onClose();
     } catch (error) {
       console.error("Trade execution failed:", error);
@@ -161,8 +171,8 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
             <Badge className={tradeType === 'buy' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}>
               {tradeType.toUpperCase()}
             </Badge>
-            <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 ml-auto">
-              PAPER TRADING
+            <Badge className={`ml-auto ${isLiveTrade ? 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse' : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'}`}>
+              {isLiveTrade ? 'LIVE TRADING' : 'PAPER TRADING'}
             </Badge>
           </DialogTitle>
         </DialogHeader>
@@ -486,14 +496,37 @@ export default function TradeModal({ isOpen, onClose, asset, tradeType, onExecut
             </div>
           )}
 
+          {/* Live Trade Toggle */}
+          {liveTradingEnabled && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-red-500" />
+                  <div>
+                    <Label className="text-red-200 font-semibold">Live Trade</Label>
+                    <p className="text-xs text-red-200/70">Place a real order on your exchange with real funds</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={isLiveTrade}
+                  onCheckedChange={setIsLiveTrade}
+                  className="data-[state=checked]:bg-red-600"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Warning */}
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 flex gap-2">
-            <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+          <div className={`rounded-xl p-3 flex gap-2 ${isLiveTrade ? 'bg-red-500/10 border border-red-500/30' : 'bg-yellow-500/10 border border-yellow-500/30'}`}>
+            <AlertCircle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${isLiveTrade ? 'text-red-500' : 'text-yellow-500'}`} />
             <div>
-              <p className="text-sm text-yellow-200 font-semibold mb-1">Paper Trading Mode</p>
-              <p className="text-xs text-yellow-200/80">
-                This trade will be executed with simulated funds and real market prices. 
-                Includes realistic slippage (0.1-0.2%) and execution delays.
+              <p className={`text-sm font-semibold mb-1 ${isLiveTrade ? 'text-red-200' : 'text-yellow-200'}`}>
+                {isLiveTrade ? 'LIVE TRADING MODE' : 'Paper Trading Mode'}
+              </p>
+              <p className={`text-xs ${isLiveTrade ? 'text-red-200/80' : 'text-yellow-200/80'}`}>
+                {isLiveTrade
+                  ? 'This will place a REAL order with REAL funds on your exchange. This cannot be undone.'
+                  : 'This trade will be executed with simulated funds and real market prices. Includes realistic slippage (0.1-0.2%) and execution delays.'}
               </p>
             </div>
           </div>

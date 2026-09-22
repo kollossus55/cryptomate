@@ -42,7 +42,13 @@ export default async function(req: Request): Promise<Response> {
     }
 
     const body = await req.json();
-    const { connection_id, asset_symbol, side, order_type, quantity, price, dry_run, confirm_live } = body;
+    const { connection_id, asset_symbol, side, order_type, quantity, price, dry_run, confirm_live, user_email: callerEmail } = body;
+
+    // When called from the auto-trading worker (service role), callerEmail is
+    // the owning user's email. When called directly from the frontend, use
+    // the authenticated user's own email. Only the service role (admin) may
+    // act on behalf of another user.
+    const actingEmail = (callerEmail && user.role === 'admin') ? callerEmail : user.email;
 
     // --- Validate input ---
     if (!connection_id || !asset_symbol || !side || !order_type || !quantity) {
@@ -61,7 +67,7 @@ export default async function(req: Request): Promise<Response> {
     // --- Load connection (ownership check — never trust the id alone) ---
     const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
       id: connection_id,
-      created_by: user.email,
+      created_by: actingEmail,
     });
     const connection = connections?.[0];
     if (!connection) {
@@ -81,7 +87,7 @@ export default async function(req: Request): Promise<Response> {
 
     // --- Kill switch — hard block regardless of caller ---
     const settingsList = await base44.asServiceRole.entities.AutoTradingSettings.filter({
-      created_by: user.email,
+      created_by: actingEmail,
     });
     const settings = settingsList?.[0];
     if (settings?.kill_switch_enabled) {
@@ -156,7 +162,7 @@ async function executeOkxOrder(base44: any, user: any, params: any): Promise<Res
   const trade = await base44.asServiceRole.entities.Trade.create({
     asset_symbol, trade_type: side, quantity,
     price: price || 0, total_value: price ? price * quantity : 0,
-    exchange: 'okx', status: 'pending', owner_email: user.email,
+    exchange: 'okx', status: 'pending', owner_email: actingEmail,
   });
 
   const fill = await reconcileOkxOrder(apiKey, apiSecret, apiPassphrase, instId, ordId, isTestnet);
@@ -264,7 +270,7 @@ async function executeKrakenOrder(base44: any, user: any, params: any): Promise<
   const trade = await base44.asServiceRole.entities.Trade.create({
     asset_symbol, trade_type: side, quantity,
     price: price || 0, total_value: price ? price * quantity : 0,
-    exchange: 'kraken', status: 'pending', owner_email: user.email,
+    exchange: 'kraken', status: 'pending', owner_email: actingEmail,
   });
 
   const fill = await reconcileKrakenOrder(apiKey, apiSecret, txid);

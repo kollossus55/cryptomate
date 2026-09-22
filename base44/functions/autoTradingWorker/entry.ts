@@ -157,12 +157,75 @@ Deno.serve(async (req) => {
   }
 });
 
+async function loadLiveTradingConfig(base44: any, settings: any, user_email: string, log: (msg: string) => void) {
+  if (!settings.live_trading_enabled || !settings.exchange_connection_id) {
+    return { enabled: false };
+  }
+
+  if (settings.live_trading_requested_at) {
+    const requestedAt = new Date(settings.live_trading_requested_at);
+    const cooldownEnd = new Date(requestedAt.getTime() + 24 * 60 * 60 * 1000);
+    if (new Date() < cooldownEnd) {
+      log('Live trading enabled but 24h cooldown not yet passed — trading paper this cycle');
+      return { enabled: false, reason: 'cooldown_active' };
+    }
+  }
+
+  try {
+    const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
+      id: settings.exchange_connection_id,
+    });
+    const connection = connections?.[0];
+    if (!connection || !connection.is_active || connection.connection_status !== 'connected') {
+      log('Live trading enabled but exchange connection not active/connected');
+      return { enabled: false, reason: 'connection_not_active' };
+    }
+    if (connection.trading_mode !== 'ready_for_live') {
+      log('Live trading enabled but connection not in ready_for_live mode');
+      return { enabled: false, reason: 'not_ready_for_live' };
+    }
+    log(`Live trading ACTIVE via ${connection.exchange_name} (conn ${connection.id.slice(0, 8)}...)`);
+    return { enabled: true, connection_id: connection.id, exchange: connection.exchange_name };
+  } catch (e) {
+    log(`Failed to load exchange connection for live trading: ${e.message}`);
+    return { enabled: false, reason: 'load_failed' };
+  }
+}
+
+async function placeLiveOrder(base44: any, liveTrading: any, params: any) {
+  try {
+    const result = await base44.asServiceRole.functions.invoke('liveOrderExecution', {
+      connection_id: liveTrading.connection_id,
+      asset_symbol: params.asset_symbol,
+      side: params.side,
+      order_type: params.order_type || 'market',
+      quantity: params.quantity,
+      confirm_live: true,
+      user_email: params.user_email,
+    });
+    const data = result?.data ?? result;
+    if (!data || !data.success) {
+      return { ok: false, error: data?.error || 'Unknown error' };
+    }
+    return {
+      ok: true,
+      fillPrice: data.avg_fill_price || null,
+      fillQuantity: data.fill_quantity || null,
+      orderId: data.order_id || null,
+    };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 async function runTradingCycle({ base44, settings, portfolio, user_email, log, now, indicatorSettings }) {
   // -------------------------------------------------------------------------
   // 1. Daily counter rollover
   // -------------------------------------------------------------------------
   const roll = rollDailyCounters(settings, now);
   const counters = roll.state;
+
+  const liveTrading = await loadLiveTradingConfig(base44, settings, user_email, log);
 
   const state = createPortfolioState(portfolio);
   const priceMap = new Map();
@@ -479,6 +542,24 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
         quoteVolume24h: ticker?.quoteVolume24h,
       });
 
+      // Live trading: place the real sell order before updating paper state
+      if (liveTrading.enabled) {
+        const liveOrder = await placeLiveOrder(base44, liveTrading, {
+          side: 'sell',
+          asset_symbol: symbol,
+          quantity: position.quantity,
+          user_email,
+        });
+        if (!liveOrder.ok) {
+          log(`LIVE SELL FAILED ${symbol}: ${liveOrder.error} — skipping exit this cycle`);
+          continue;
+        }
+        if (liveOrder.fillPrice) {
+          costs.fillPrice = liveOrder.fillPrice;
+        }
+        log(`LIVE SELL filled ${symbol} @ ${liveOrder.fillPrice || 'market'}`);
+      }
+
       const sell = applySell(state, {
         symbol,
         quantity: position.quantity,
@@ -779,6 +860,25 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
         }
 
         const quantity = sizing.quoteAmount / costs.fillPrice;
+
+        // Live trading: place the real buy order before updating paper state
+        if (liveTrading.enabled) {
+          const liveOrder = await placeLiveOrder(base44, liveTrading, {
+            side: 'buy',
+            asset_symbol: ticker.symbol,
+            quantity,
+            user_email,
+          });
+          if (!liveOrder.ok) {
+            log(`LIVE BUY FAILED ${ticker.symbol}: ${liveOrder.error}`);
+            continue;
+          }
+          if (liveOrder.fillPrice) {
+            costs.fillPrice = liveOrder.fillPrice;
+          }
+          log(`LIVE BUY filled ${ticker.symbol} @ ${liveOrder.fillPrice || 'market'}`);
+        }
+
         const buy = applyBuy(state, {
           symbol: ticker.symbol,
           quantity,
@@ -842,7 +942,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
         total_value: trade.total_value,
         fee: trade.fee,
         slippage_percent: trade.slippage_percent,
-        exchange: 'Paper Trading (Server V5)',
+        exchange: liveTrading.enabled ? `${liveTrading.exchange} (Live)` : 'Paper Trading (Server V5)',
         status: 'completed',
         profit_loss: trade.profit_loss,
         ai_signal: {

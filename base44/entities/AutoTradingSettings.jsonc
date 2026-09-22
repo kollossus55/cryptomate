@@ -412,6 +412,20 @@
       "type": "object",
       "default": {},
       "description": "Which indicator families the signal engine uses."
+    },
+    "live_trading_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether live trading is enabled. When true, the auto-trading worker places real orders via liveOrderExecution."
+    },
+    "live_trading_requested_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when live trading was requested. A 24h cooldown must pass before live trading can be enabled."
+    },
+    "exchange_connection_id": {
+      "type": "string",
+      "description": "ID of the ExchangeConnection to use for live order execution."
     }
   },
   "required": [
