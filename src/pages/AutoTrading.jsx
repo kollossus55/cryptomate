@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Sparkles, AlertTriangle, Shield, Zap, CheckCircle, Settings, TrendingUp, Target, AlertCircle, Clock, Server, Globe, Activity, PlayCircle, Calendar, Layers } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import AutoTradingDebugPanel from "../components/trading/AutoTradingDebugPanel";
+import AdvancedRiskControls from "../components/trading/AdvancedRiskControls";
 
 export default function AutoTrading() {
   const [settings, setSettings] = useState({
@@ -72,7 +73,20 @@ export default function AutoTrading() {
       start_hour: 9,
       end_hour: 17,
       timezone: "UTC"
-    }
+    },
+    // NEW: ATR-Based Risk Sizing
+    risk_per_trade_percent: 1,
+    atr_stop_multiplier: 2,
+    // NEW: Portfolio Exposure & Correlation
+    max_gross_exposure_percent: 60,
+    max_correlation: 0.8,
+    // NEW: Market Crash Circuit Breaker
+    circuit_breaker_market_drop: 15,
+    circuit_breaker_cooldown_minutes: 60,
+    // NEW: VWAP Execution
+    use_vwap: false,
+    vwap_lookback_periods: 20,
+    vwap_participation_rate: 10
   });
 
   const queryClient = useQueryClient();
@@ -161,7 +175,20 @@ export default function AutoTrading() {
           start_hour: 9,
           end_hour: 17,
           timezone: "UTC"
-        }
+        },
+        // NEW: ATR-Based Risk Sizing
+        risk_per_trade_percent: savedSettings.risk_per_trade_percent ?? 1,
+        atr_stop_multiplier: savedSettings.atr_stop_multiplier ?? 2,
+        // NEW: Portfolio Exposure & Correlation
+        max_gross_exposure_percent: savedSettings.max_gross_exposure_percent ?? 60,
+        max_correlation: savedSettings.max_correlation ?? 0.8,
+        // NEW: Market Crash Circuit Breaker
+        circuit_breaker_market_drop: savedSettings.circuit_breaker_market_drop ?? 15,
+        circuit_breaker_cooldown_minutes: savedSettings.circuit_breaker_cooldown_minutes ?? 60,
+        // NEW: VWAP Execution
+        use_vwap: savedSettings.use_vwap ?? false,
+        vwap_lookback_periods: savedSettings.vwap_lookback_periods ?? 20,
+        vwap_participation_rate: savedSettings.vwap_participation_rate ?? 10
       }));
     }
   }, [savedSettings]);
@@ -996,6 +1023,9 @@ export default function AutoTrading() {
 
           </CardContent>
         </Card>
+
+        {/* Advanced Risk Controls (ATR sizing, exposure, correlation, crash breaker, VWAP) */}
+        <AdvancedRiskControls settings={settings} setSettings={setSettings} />
 
         {/* DCA Strategy */}
         <Card className="bg-slate-800 border-2 border-purple-500/50 mt-6 shadow-[0_0_15px_rgba(168,85,247,0.15)]">
