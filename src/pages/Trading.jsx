@@ -92,6 +92,25 @@ export default function Trading() {
 
   const queryClient = useQueryClient();
 
+  // Fetch the active AI signal config so indicator settings stay in sync
+  // with the backend (the same source the server-side auto-trading worker uses).
+  const { data: aiSignalConfigs } = useQuery({
+    queryKey: ['ai-signal-configs'],
+    queryFn: () => base44.entities.AISignalConfig.list(),
+    staleTime: 30000,
+  });
+  const activeSignalConfig = aiSignalConfigs?.find(c => c.is_active) || null;
+  const [indicatorSettingsSynced, setIndicatorSettingsSynced] = useState(false);
+
+  // Load indicator settings from the active backend config on first mount,
+  // so the Trading page shows the same indicators the server worker uses.
+  useEffect(() => {
+    if (activeSignalConfig?.indicator_settings && !indicatorSettingsSynced) {
+      setIndicatorSettings(prev => ({ ...prev, ...activeSignalConfig.indicator_settings }));
+      setIndicatorSettingsSynced(true);
+    }
+  }, [activeSignalConfig?.id, indicatorSettingsSynced]);
+
   // Save indicator settings to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('indicator_settings', JSON.stringify(indicatorSettings));
@@ -2097,6 +2116,19 @@ export default function Trading() {
           onClose={() => setShowIndicatorSettings(false)}
           settings={indicatorSettings}
           onUpdate={setIndicatorSettings}
+          onSave={() => {
+            // Persist to the backend AISignalConfig so the server-side
+            // auto-trading worker uses the same indicators shown here.
+            if (activeSignalConfig) {
+              base44.entities.AISignalConfig.update(activeSignalConfig.id, {
+                ...activeSignalConfig,
+                indicator_settings: indicatorSettings
+              }).then(() => {
+                queryClient.invalidateQueries({ queryKey: ['ai-signal-configs'] });
+              }).catch(err => console.error('Failed to persist indicator settings to backend:', err));
+            }
+            setShowIndicatorSettings(false);
+          }}
         />
       )}
 
