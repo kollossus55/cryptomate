@@ -1325,8 +1325,8 @@ export default function Trading() {
   };
 
   const fetchLivePrices = async () => {
-    if (consecutiveFailures >= 3) {
-      console.log('⚠️ Skipping price fetch due to repeated failures. Using cached prices.');
+    if (consecutiveFailures >= 10) {
+      console.log('⚠️ Skipping price fetch — REST poll paused after 10 failures. WebSocket live prices still active.');
       return;
     }
 
@@ -1398,6 +1398,18 @@ export default function Trading() {
 
       if (assets.length === 0) {
         setAssets(initialAssets);
+      }
+
+      // After 10 consecutive failures, pause the REST poll for 5 minutes
+      // before it tries again automatically. WebSocket live prices keep flowing.
+      if (consecutiveFailures + 1 >= 10) {
+        console.log('⏸️ REST poll paused for 5 minutes after 10 failures — will retry automatically');
+        setTimeout(() => {
+          console.log('▶️ REST poll cooldown elapsed — resuming price fetches');
+          setConsecutiveFailures(0);
+          setPriceUpdateError(null);
+          fetchLivePrices();
+        }, 5 * 60 * 1000);
       }
     } finally {
       setIsPriceLoading(false);
@@ -1807,18 +1819,17 @@ export default function Trading() {
           </div>
         )}
 
-        {consecutiveFailures >= 3 && (
+        {consecutiveFailures >= 10 && (
           <div className="bg-red-500/10 border-2 border-red-500/50 rounded-xl p-4 mb-6">
             <div className="flex items-start gap-3">
               <AlertCircle className="w-6 h-6 text-red-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <h4 className="text-red-300 font-semibold mb-1">Live Prices Unavailable</h4>
+                <h4 className="text-red-300 font-semibold mb-1">REST Price Poll Paused</h4>
                 <p className="text-red-200 text-sm mb-2">
-                  Multiple attempts to fetch live prices failed. Using simulated data.
+                  10 consecutive attempts to fetch prices from OKX failed. The REST poll is paused to avoid hammering the endpoint.
                 </p>
                 <p className="text-red-200 text-sm text-xs">
-                  This may be due to OKX API rate limits, CORS restrictions, or network issues.
-                  Trading functionality continues with cached prices.
+                  Live prices are still flowing via the WebSocket feed — your numbers remain real. The poll will resume automatically after a cooldown. This is usually a temporary network or rate-limit issue.
                 </p>
               </div>
               <Button
@@ -1831,7 +1842,7 @@ export default function Trading() {
                 size="sm"
                 className="border-red-500/50 text-red-400 hover:bg-red-500/10"
               >
-                Reset & Retry
+                Retry Now
               </Button>
             </div>
           </div>
