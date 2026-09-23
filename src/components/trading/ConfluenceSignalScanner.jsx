@@ -214,7 +214,7 @@ export default function ConfluenceSignalScanner({ assets, indicatorSettings }) {
         onClick={runScan}
         disabled={!canScan}
         size="lg"
-        className={`font-bold ${canScan ? "bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white" : "bg-slate-700 text-slate-500 cursor-not-allowed"}`}
+        className={`font-semibold ${canScan ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-emerald-600/40 text-emerald-200/60 cursor-not-allowed"}`}
         title={!canScan ? "Enable SP500 AI and Supply & Demand in indicator settings to use this scan" : "Scan for assets where all SP500 AI components align at a supply/demand zone"}
       >
         <Scan className="w-5 h-5 mr-2" />

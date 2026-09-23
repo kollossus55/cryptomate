@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, TrendingUp, Sparkles, RefreshCw, AlertCircle, Settings, Eye, EyeOff, Newspaper, Scan, Star, FlaskConical } from "lucide-react";
+import { Search, TrendingUp, Sparkles, RefreshCw, AlertCircle, Settings, Eye, EyeOff, Newspaper, Scan, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 
@@ -1273,50 +1273,6 @@ export default function Trading() {
     setAssetConfidence(confidence);
   };
 
-  // Test helper: builds sample recommendations (including SP500 AI indicator
-  // data) and passes them directly to the popup as a prop, bypassing the
-  // popup's internal LLM/assetSignalData flow so we can verify rendering.
-  const runPopupTest = () => {
-    if (!assets || assets.length === 0) {
-      console.warn('No assets loaded yet for popup test');
-      return;
-    }
-
-    const testAssets = [...assets].sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0)).slice(0, 3);
-    const recommendations = testAssets.map((asset, i) => ({
-      symbol: asset.symbol,
-      action: 'buy',
-      confidence: 78 + i * 3,
-      reasoning: `TEST: ${asset.symbol} shows BUY signal with SP500 AI confirmation. SP500 AI indicator: LONG signal (strength 5/6).`,
-      risk_level: 'medium',
-      target_price: asset.price * 1.08,
-      data_sources: {
-        technical_score: 72 + i * 2,
-        news_sentiment: 'positive',
-        social_score: 15,
-        onchain_signal: 'bullish'
-      },
-      _test_sp500: {
-        longSignal: true,
-        shortSignal: false,
-        bullish: true,
-        bearish: false,
-        strength: 5,
-        maxStrength: 6,
-        components: {
-          haBullish: true, sslBullish: true, cmoOverboughtCond: false,
-          aiRSIBullish: true, tmoBullish: true, mfBullish: true
-        }
-      }
-    }));
-
-    setTestRecommendations({
-      recommendations,
-      market_summary: `🧪 TEST MODE: ${recommendations.length} sample buy signals with SP500 AI confirmation.`
-    });
-    setShowRecommendations(true);
-  };
-
   const calculateBasicConfidence = (asset) => {
     // Deterministic score from REAL Binance 24h change & quote volume.
     // No random noise, no market cap (Binance doesn't provide it).
@@ -1605,9 +1561,17 @@ export default function Trading() {
 
           <div className="flex flex-wrap gap-3">
             <Button
-              onClick={() => setShowNewsWidget(!showNewsWidget)}
+              onClick={() => {
+                const next = !showNewsWidget;
+                setShowNewsWidget(next);
+                if (next) {
+                  setTimeout(() => {
+                    document.getElementById('news-widget-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 100);
+                }
+              }}
               size="lg"
-              className={`${showNewsWidget ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-700 hover:bg-slate-600'} text-white font-bold`}
+              className={`${showNewsWidget ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-700 hover:bg-slate-600'} text-white font-semibold`}
             >
               <Newspaper className="w-5 h-5 mr-2" />
               News Feed
@@ -1616,7 +1580,7 @@ export default function Trading() {
               <Button
                 onClick={() => setShowRecommendations(true)}
                 size="lg"
-                className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold rounded-r-none border-r border-white/20"
+                className="bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-r-none"
               >
                 <Sparkles className="w-5 h-5 mr-2" />
                 AI Signals
@@ -1624,19 +1588,10 @@ export default function Trading() {
               <Button
                 onClick={() => setShowIndicatorSettings(true)}
                 size="lg"
-                className="bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold rounded-l-none px-3"
+                className="bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-l-none px-3"
                 title="Configure Indicators"
               >
                 <Settings className="w-5 h-5" />
-              </Button>
-              <Button
-                onClick={runPopupTest}
-                size="lg"
-                className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
-                title="Inject test signal data and open the popup"
-              >
-                <FlaskConical className="w-5 h-5 mr-2" />
-                Test Popup
               </Button>
             </div>
             <div className="flex items-center gap-2">
@@ -1644,7 +1599,7 @@ export default function Trading() {
                 onClick={() => setShowAltcoinScanner(true)}
                 size="lg"
                 disabled={!altcoinScannerEnabled}
-                className={`font-bold ${altcoinScannerEnabled ? "bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white" : "bg-slate-700 text-slate-500 cursor-not-allowed"}`}
+                className={`font-semibold ${altcoinScannerEnabled ? "bg-cyan-600 hover:bg-cyan-700 text-white" : "bg-cyan-600/40 text-cyan-200/60 cursor-not-allowed"}`}
               >
                 <Scan className="w-5 h-5 mr-2" />
                 Altcoin Scanner
@@ -1663,7 +1618,7 @@ export default function Trading() {
             <Button
               onClick={() => setShowWatchlistModal(true)}
               size="lg"
-              className="bg-gradient-to-br from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold"
+              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold"
             >
               <TrendingUp className="w-5 h-5 mr-2" />
               My Watchlist
@@ -1948,7 +1903,7 @@ export default function Trading() {
         </div>
 
         {showNewsWidget && (
-          <div className="mb-8">
+          <div id="news-widget-section" className="mb-8 scroll-mt-4">
             <NewsWidget
               assets={assets}
               onNewsAlert={(news) => {
