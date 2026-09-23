@@ -458,10 +458,6 @@ export default function Trading() {
       setCurrentTime(new Date());
     }, 1000);
 
-    const timer = setTimeout(() => {
-      setShowRecommendations(true);
-    }, 2000);
-
     const savedState = BrowserState.load();
     if (savedState && autoTradingSettings?.is_enabled) {
       console.log('📥 Auto-trading state restored from previous session');
@@ -477,7 +473,6 @@ export default function Trading() {
     return () => {
       clearInterval(priceInterval);
       clearInterval(timeInterval);
-      clearTimeout(timer);
     };
   }, []);
 
@@ -1604,12 +1599,18 @@ export default function Trading() {
                 <Scan className="w-5 h-5 mr-2" />
                 Altcoin Scanner
               </Button>
-              <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 rounded-xl border border-slate-700">
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-colors ${
+                altcoinScannerEnabled
+                  ? "bg-cyan-500/15 border-cyan-500/40"
+                  : "bg-slate-800/50 border-slate-700"
+              }`}>
                 <Switch
                   checked={altcoinScannerEnabled}
                   onCheckedChange={toggleAltcoinScanner}
                 />
-                <span className="text-xs text-slate-400 font-medium">
+                <span className={`text-xs font-medium ${
+                  altcoinScannerEnabled ? "text-cyan-300" : "text-slate-400"
+                }`}>
                   {altcoinScannerEnabled ? "Enabled" : "Disabled"}
                 </span>
               </div>

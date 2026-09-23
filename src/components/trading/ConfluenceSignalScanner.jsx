@@ -171,6 +171,15 @@ export default function ConfluenceSignalScanner({ assets, indicatorSettings }) {
 
   const runScan = useCallback(async () => {
     setIsOpen(true);
+    const sp500Ok = indicatorSettings?.sp500ai !== false;
+    const sdOk = indicatorSettings?.supply_demand !== false;
+    if (!sp500Ok || !sdOk) {
+      setIsScanning(false);
+      setSignals([]);
+      setScannedCount(0);
+      setProgress({ done: 0, total: 0 });
+      return;
+    }
     setIsScanning(true);
     setSignals([]);
     setScannedCount(0);
@@ -212,10 +221,9 @@ export default function ConfluenceSignalScanner({ assets, indicatorSettings }) {
     <>
       <Button
         onClick={runScan}
-        disabled={!canScan}
         size="lg"
-        className={`font-semibold ${canScan ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-emerald-600/40 text-emerald-200/60 cursor-not-allowed"}`}
-        title={!canScan ? "Enable SP500 AI and Supply & Demand in indicator settings to use this scan" : "Scan for assets where all SP500 AI components align at a supply/demand zone"}
+        className="font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+        title={canScan ? "Scan for assets where all SP500 AI components align at a supply/demand zone" : "Open scan — enable SP500 AI and Supply & Demand in indicator settings to see signals"}
       >
         <Scan className="w-5 h-5 mr-2" />
         Confluence Scan
