@@ -1801,6 +1801,19 @@ export default function Trading() {
 
         <BackendMigrationGuide isActive={hasBackendFunctions} />
 
+        <div className="mb-8">
+          <PortfolioCard
+            portfolio={portfolio}
+            onClosePosition={handleClosePosition}
+            assets={allAssets}
+            livePrices={livePrices}
+          />
+        </div>
+
+        <div className="mb-6">
+          <ExchangeBalanceCard />
+        </div>
+
         <AutoTradingDebugPanel
           autoTradingSettings={autoTradingSettings}
           portfolio={portfolio}
@@ -1920,19 +1933,6 @@ export default function Trading() {
 
         <div className="mb-6">
           <LiveTradingPanel />
-        </div>
-
-        <div className="mb-6">
-          <ExchangeBalanceCard />
-        </div>
-
-        <div className="mb-8">
-          <PortfolioCard
-            portfolio={portfolio}
-            onClosePosition={handleClosePosition}
-            assets={allAssets}
-            livePrices={livePrices}
-          />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
