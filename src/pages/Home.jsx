@@ -102,7 +102,7 @@ export default function Home() {
             </h1>
 
             <p className="text-xl text-slate-400 mb-10 max-w-3xl mx-auto leading-relaxed">
-              Leverage real-time Binance market data, technical indicators, and strategy-led signals to trade the top 20 cryptocurrencies with confidence.
+              Leverage real-time exchange market data, technical indicators, and strategy-led signals to trade the top 20 cryptocurrencies with confidence.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
@@ -166,7 +166,7 @@ export default function Home() {
               </div>
               <h3 className="text-2xl font-bold text-white mb-4">Indicator-Led Signals</h3>
               <p className="text-slate-400 leading-relaxed mb-6">
-                Get real-time trading recommendations driven by technical indicators on real Binance OHLCV data — RSI, MACD, EMA, Bollinger, and the SP500 AI composite.
+                Get real-time trading recommendations driven by technical indicators on real exchange OHLCV data — RSI, MACD, EMA, Bollinger, and the SP500 AI composite.
               </p>
               <ul className="space-y-2">
                 <li className="flex items-center gap-2 text-slate-300">

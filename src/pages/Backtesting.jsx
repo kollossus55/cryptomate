@@ -133,7 +133,7 @@ export default function Backtesting() {
       return {
         status: 'failed',
         error_message: `Could not fetch historical data for any of: ${symbols.join(', ')}. ` +
-          `Check the symbols are valid Binance USDT pairs and that the date range is not in the future.`,
+          `Check the symbols are valid exchange USDT pairs and that the date range is not in the future.`,
       };
     }
 
@@ -226,7 +226,7 @@ export default function Backtesting() {
               <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
                 Strategy Backtesting
               </h1>
-              <p className="text-slate-400">Replay AI strategies on real Binance OHLCV — same signal engine as the live bot</p>
+              <p className="text-slate-400">Replay AI strategies on real exchange OHLCV — same signal engine as the live bot</p>
             </div>
           </div>
         </div>
@@ -239,7 +239,7 @@ export default function Backtesting() {
               <div>
                 <h3 className="font-semibold text-blue-200 mb-2">Advanced Backtesting Engine</h3>
                 <p className="text-blue-200/80 text-sm leading-relaxed">
-                  <strong>Real historical data:</strong> Strategies are replayed bar by bar against actual Binance 1h OHLCV,
+                  <strong>Real historical data:</strong> Strategies are replayed bar by bar against actual exchange 1h OHLCV,
                   using the same signal engine the live bot runs. Exchange fees and order-size slippage are applied to every fill,
                   entries fill at the next bar's open (no look-ahead), and results are compared against buy-and-hold on the same assets.
                   Sentiment is not included — no sentiment data source is wired up. 
@@ -300,7 +300,7 @@ export default function Backtesting() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-slate-400 text-sm mb-1">Data Source</p>
-                  <p className="text-lg font-bold text-cyan-400">Binance 1h</p>
+                  <p className="text-lg font-bold text-cyan-400">Exchange 1h</p>
                 </div>
                 <Badge className="bg-cyan-500/20 text-cyan-400">Real OHLCV</Badge>
               </div>

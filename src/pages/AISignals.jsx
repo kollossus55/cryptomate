@@ -300,7 +300,7 @@ export default function AISignals() {
                 Indicator-Led Signals
               </h1>
               <p className="text-slate-400">
-                Indicator-driven scoring on real Binance OHLCV data
+                Indicator-driven scoring on real exchange OHLCV data
               </p>
             </div>
           </div>
@@ -433,7 +433,7 @@ export default function AISignals() {
                     <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                     <p className="text-indigo-200 text-lg font-semibold">Analyzing indicators...</p>
                     <p className="text-indigo-300 text-sm mt-2">
-                      Running technical indicators on real Binance data and detecting anomalies
+                      Running technical indicators on real exchange data and detecting anomalies
                     </p>
                   </div>
                 ) : !signalResults ? (

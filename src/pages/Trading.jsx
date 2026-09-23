@@ -1600,7 +1600,7 @@ export default function Trading() {
                 </span>
               </div>
             </div>
-            <p className="text-slate-400">Trade top 20 cryptocurrencies with indicator-led signals on real Binance data</p>
+            <p className="text-slate-400">Trade top 20 cryptocurrencies with indicator-led signals on real exchange data</p>
           </div>
 
           <div className="flex flex-wrap gap-3">
