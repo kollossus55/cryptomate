@@ -1671,6 +1671,19 @@ export default function Trading() {
           </div>
         </div>
 
+        <div className="mb-8">
+          <PortfolioCard
+            portfolio={portfolio}
+            onClosePosition={handleClosePosition}
+            assets={allAssets}
+            livePrices={livePrices}
+          />
+        </div>
+
+        <div className="mb-6">
+          <ExchangeBalanceCard />
+        </div>
+
         {autoTradingSettings?.is_enabled && (
           <>
             <div className="mb-6">
@@ -1800,19 +1813,6 @@ export default function Trading() {
         )}
 
         <BackendMigrationGuide isActive={hasBackendFunctions} />
-
-        <div className="mb-8">
-          <PortfolioCard
-            portfolio={portfolio}
-            onClosePosition={handleClosePosition}
-            assets={allAssets}
-            livePrices={livePrices}
-          />
-        </div>
-
-        <div className="mb-6">
-          <ExchangeBalanceCard />
-        </div>
 
         <AutoTradingDebugPanel
           autoTradingSettings={autoTradingSettings}
