@@ -226,7 +226,6 @@ async function handleStore(base44: any, user: any, params: any) {
     permissions: validation.permissions,
     trading_mode: 'simulated',
     last_sync: new Date().toISOString(),
-    created_by: user.email,
   });
 
   return Response.json({
@@ -246,10 +245,13 @@ async function handleTest(base44: any, user: any, params: any) {
   const { connection_id } = params;
 
   // Ownership check — never trust the id alone. asServiceRole bypasses RLS,
-  // so we scope by created_by to ensure the caller owns this connection.
+  // so we scope by the built-in created_by_id to ensure the caller owns this
+  // connection. (The previous code filtered by a custom `created_by` email
+  // field that was never declared in the entity schema and was silently
+  // stripped on create, so every lookup returned "Connection not found".)
   const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
     id: connection_id,
-    created_by: user.email,
+    created_by_id: user.id,
   });
   const connection = connections?.[0];
   if (!connection) {
@@ -292,7 +294,7 @@ async function handleDelete(base44: any, user: any, params: any) {
   const { connection_id } = params;
   const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
     id: connection_id,
-    created_by: user.email,
+    created_by_id: user.id,
   });
   if (!connections?.[0]) {
     return Response.json({ success: false, error: 'Connection not found' }, { status: 404 });
@@ -311,11 +313,11 @@ async function handleDelete(base44: any, user: any, params: any) {
 async function handleFetchBalances(base44: any, user: any, params: any) {
   const { connection_id } = params;
 
-  // Ownership check — never trust the id alone. asServiceRole bypasses RLS,
-  // so we scope by created_by to ensure the caller owns this connection.
+  // Ownership check — scope by the built-in created_by_id (see handleTest for
+  // why the custom created_by email field is not used).
   const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
     id: connection_id,
-    created_by: user.email,
+    created_by_id: user.id,
   });
   const connection = connections?.[0];
   if (!connection) {
