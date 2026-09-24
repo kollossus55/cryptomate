@@ -438,6 +438,21 @@
     "exchange_connection_id": {
       "type": "string",
       "description": "ID of the ExchangeConnection to use for live order execution."
+    },
+    "ai_confirmation_mode": {
+      "type": "string",
+      "enum": [
+        "off",
+        "auto",
+        "manual"
+      ],
+      "default": "off",
+      "description": "AI confirmation gate before trade execution. 'off' = no gate, 'auto' = LLM reviews each signal server-side and blocks rejects, 'manual' = trades pause as pending approvals for the user to confirm in the UI."
+    },
+    "ai_confirmation_min_score": {
+      "type": "number",
+      "default": 70,
+      "description": "In auto mode, the AI must return a confidence at or above this score for the trade to proceed."
     }
   },
   "required": [

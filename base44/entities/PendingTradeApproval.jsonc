@@ -1,0 +1,160 @@
+{
+  "name": "PendingTradeApproval",
+  "type": "object",
+  "properties": {
+    "asset_symbol": {
+      "type": "string",
+      "description": "Trading pair symbol (e.g. BTCUSDT)"
+    },
+    "signal_strength": {
+      "type": "number",
+      "description": "0-100 signal strength score at detection time"
+    },
+    "signal_direction": {
+      "type": "string",
+      "enum": [
+        "bullish",
+        "bearish",
+        "neutral"
+      ],
+      "default": "bullish"
+    },
+    "signal_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Human-readable reasons the signal engine emitted"
+    },
+    "signal_components": {
+      "type": "object",
+      "description": "Component breakdown (RSI, MACD, S&D, etc.) at detection time"
+    },
+    "entry_price": {
+      "type": "number",
+      "description": "Price at signal detection time"
+    },
+    "stop_loss_price": {
+      "type": "number",
+      "description": "Stop-loss price computed at detection time"
+    },
+    "take_profit_price": {
+      "type": "number",
+      "description": "Take-profit target price at detection time"
+    },
+    "position_size_usdt": {
+      "type": "number",
+      "description": "Position size in USDT computed by the sizing engine"
+    },
+    "candle_interval": {
+      "type": "string",
+      "description": "Candle timeframe used when the signal was generated"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected",
+        "expired",
+        "executed",
+        "failed"
+      ],
+      "default": "pending",
+      "description": "Approval workflow status"
+    },
+    "ai_review": {
+      "type": "object",
+      "description": "If auto AI gate was used, the AI's assessment stored for audit"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this approval expires and can no longer be executed"
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the user approved or rejected this trade"
+    },
+    "executed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the approved trade was actually executed"
+    },
+    "execution_result": {
+      "type": "object",
+      "description": "Result of the trade execution (fill price, quantity, status)"
+    },
+    "owner_email": {
+      "type": "string",
+      "description": "Email of the user this approval belongs to. Set by the server worker."
+    }
+  },
+  "required": [
+    "asset_symbol",
+    "signal_strength",
+    "entry_price",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

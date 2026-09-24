@@ -8,10 +8,11 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Sparkles, AlertTriangle, Shield, Zap, CheckCircle, Settings, TrendingUp, Target, AlertCircle, Clock, Server, Globe, Activity, PlayCircle, Calendar, Layers } from "lucide-react";
+import { Sparkles, AlertTriangle, Shield, Zap, CheckCircle, Settings, TrendingUp, Target, AlertCircle, Clock, Server, Globe, Activity, PlayCircle, Calendar, Layers, Brain, Bot, UserCheck } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import AutoTradingDebugPanel from "../components/trading/AutoTradingDebugPanel";
 import AdvancedRiskControls from "../components/trading/AdvancedRiskControls";
+import AIConfirmationPanel from "../components/trading/AIConfirmationPanel";
 
 export default function AutoTrading() {
   const [settings, setSettings] = useState({
@@ -88,7 +89,10 @@ export default function AutoTrading() {
     vwap_lookback_periods: 20,
     vwap_participation_rate: 10,
     // NEW: Candle Timeframe
-    candle_interval: "1h"
+    candle_interval: "1h",
+    // NEW: AI Confirmation Gate
+    ai_confirmation_mode: "off",
+    ai_confirmation_min_score: 70
   });
 
   const queryClient = useQueryClient();
@@ -192,7 +196,10 @@ export default function AutoTrading() {
         vwap_lookback_periods: savedSettings.vwap_lookback_periods ?? 20,
         vwap_participation_rate: savedSettings.vwap_participation_rate ?? 10,
         // NEW: Candle Timeframe
-        candle_interval: savedSettings.candle_interval ?? "1h"
+        candle_interval: savedSettings.candle_interval ?? "1h",
+        // NEW: AI Confirmation Gate
+        ai_confirmation_mode: savedSettings.ai_confirmation_mode ?? "off",
+        ai_confirmation_min_score: savedSettings.ai_confirmation_min_score ?? 70
       }));
     }
   }, [savedSettings]);
@@ -530,6 +537,73 @@ export default function AutoTrading() {
                   className="mb-2 [&>.relative>.bg-primary]:bg-indigo-500 [&>.block]:border-indigo-500"
                 />
                 <p className="text-xs text-indigo-300/60">Only execute trades with AI confidence above this level</p>
+              </div>
+
+              <div className="bg-slate-900/50 rounded-xl p-4 border border-violet-500/30">
+                <Label className="text-violet-200 mb-3 block font-medium flex items-center gap-2">
+                  <Brain className="w-4 h-4 text-violet-400" />
+                  AI Trade Confirmation
+                </Label>
+                <p className="text-xs text-violet-300/60 mb-3">
+                  Add a second opinion before trades execute. An AI risk analyst reviews each signal.
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => setSettings({...settings, ai_confirmation_mode: 'off'})}
+                    className={`p-3 rounded-lg border flex flex-col items-center gap-1.5 transition-all ${
+                      settings.ai_confirmation_mode === 'off'
+                        ? 'bg-slate-700 border-slate-500 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
+                    }`}
+                  >
+                    <Shield className="w-4 h-4" />
+                    <span className="text-xs font-medium">Off</span>
+                  </button>
+                  <button
+                    onClick={() => setSettings({...settings, ai_confirmation_mode: 'auto'})}
+                    className={`p-3 rounded-lg border flex flex-col items-center gap-1.5 transition-all ${
+                      settings.ai_confirmation_mode === 'auto'
+                        ? 'bg-violet-600/20 border-violet-500 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
+                    }`}
+                  >
+                    <Bot className="w-4 h-4" />
+                    <span className="text-xs font-medium">Auto AI Gate</span>
+                  </button>
+                  <button
+                    onClick={() => setSettings({...settings, ai_confirmation_mode: 'manual'})}
+                    className={`p-3 rounded-lg border flex flex-col items-center gap-1.5 transition-all ${
+                      settings.ai_confirmation_mode === 'manual'
+                        ? 'bg-violet-600/20 border-violet-500 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
+                    }`}
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    <span className="text-xs font-medium">Manual Approve</span>
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  {settings.ai_confirmation_mode === 'off' && "No AI gate — trades execute when the signal engine's strength threshold is met."}
+                  {settings.ai_confirmation_mode === 'auto' && "An LLM reviews each signal server-side and blocks trades it rejects. Fully hands-off."}
+                  {settings.ai_confirmation_mode === 'manual' && "Trades pause as pending approvals. You confirm each one in the panel below before it executes."}
+                </p>
+
+                {settings.ai_confirmation_mode === 'auto' && (
+                  <div className="mt-3 pt-3 border-t border-violet-500/20">
+                    <Label className="text-violet-200 mb-2 block">
+                      AI Min Approval Score: <span className="text-violet-400 font-bold">{settings.ai_confirmation_min_score}/100</span>
+                    </Label>
+                    <Slider
+                      value={[settings.ai_confirmation_min_score]}
+                      onValueChange={(value) => setSettings({...settings, ai_confirmation_min_score: value[0]})}
+                      min={50}
+                      max={95}
+                      step={5}
+                      className="mb-2 [&>.relative>.bg-primary]:bg-violet-500 [&>.block]:border-violet-500"
+                    />
+                    <p className="text-xs text-violet-300/60">The AI must return a confidence at or above this score for the trade to proceed.</p>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1027,6 +1101,13 @@ export default function AutoTrading() {
 
           </CardContent>
         </Card>
+
+        {/* AI Trade Confirmation Panel (visible in manual mode) */}
+        {settings.ai_confirmation_mode === 'manual' && (
+          <div className="mt-6">
+            <AIConfirmationPanel />
+          </div>
+        )}
 
         {/* Advanced Risk Controls (ATR sizing, exposure, correlation, crash breaker, VWAP) */}
         <AdvancedRiskControls settings={settings} setSettings={setSettings} />

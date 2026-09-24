@@ -865,6 +865,41 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
 
         const quantity = sizing.quoteAmount / costs.fillPrice;
 
+        // ── AI Confirmation Gate ──────────────────────────────────────────
+        // Three modes: 'off' (no gate), 'auto' (LLM reviews and blocks),
+        // 'manual' (create a pending approval for the user to confirm).
+        const aiMode = settings.ai_confirmation_mode || 'off';
+        if (aiMode === 'auto') {
+          const aiResult = await aiConfirmTrade(base44, {
+            ticker, signal, settings, candleInterval, log,
+          });
+          if (!aiResult.approve) {
+            log(`AI REJECTED ${ticker.symbol}: ${aiResult.reasoning}`);
+            continue;
+          }
+          log(`AI APPROVED ${ticker.symbol} (confidence ${aiResult.confidence}/100): ${aiResult.reasoning}`);
+        } else if (aiMode === 'manual') {
+          const tpPercent = settings.take_profit_percent ?? 8;
+          await base44.asServiceRole.entities.PendingTradeApproval.create({
+            asset_symbol: ticker.symbol,
+            signal_strength: signal.strength,
+            signal_direction: signal.direction || 'bullish',
+            signal_reasons: signal.reasons || [],
+            signal_components: signal.components || {},
+            entry_price: ticker.price,
+            stop_loss_price: sizing.stopPrice ?? null,
+            take_profit_price: costs.fillPrice * (1 + tpPercent / 100),
+            position_size_usdt: sizing.quoteAmount,
+            candle_interval: candleInterval,
+            status: 'pending',
+            expires_at: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
+            owner_email: user_email,
+            created_by: user_email,
+          });
+          log(`MANUAL APPROVAL PENDING ${ticker.symbol} — waiting for user confirmation`);
+          continue;
+        }
+
         // Live trading: place the real buy order before updating paper state
         if (liveTrading.enabled) {
           const liveOrder = await placeLiveOrder(base44, liveTrading, {
@@ -1004,5 +1039,81 @@ async function notify(base44, user_email, { type, priority, title, message }) {
     });
   } catch (err) {
     console.warn(`Notification failed: ${err.message}`);
+  }
+}
+
+/**
+ * AI Confirmation Gate — asks an LLM to review a trade signal and decide
+ * whether to approve it. Returns { approve, confidence, reasoning }.
+ *
+ * On AI service failure, the trade is ALLOWED through (the AI is a gate, not
+ * a dependency — an outage should not halt trading). The user can always
+ * enable the kill switch to stop everything.
+ */
+async function aiConfirmTrade(base44, { ticker, signal, settings, candleInterval, log }) {
+  const minScore = settings.ai_confirmation_min_score ?? 70;
+  const tpPercent = settings.take_profit_percent ?? 8;
+  const slPercent = settings.stop_loss_percent ?? 3;
+
+  const prompt = `You are a disciplined crypto trading risk analyst. Review the following trade signal and decide whether to APPROVE or REJECT it.
+
+ASSET: ${ticker.symbol}
+CURRENT PRICE: $${ticker.price}
+SIGNAL STRENGTH: ${signal.strength}/100
+DIRECTION: ${signal.direction}
+TIMEFRAME: ${candleInterval}
+ATR VOLATILITY: ${((signal.atrPercent || 0) * 100).toFixed(2)}%
+STOP LOSS: -${slPercent}%
+TAKE PROFIT: +${tpPercent}%
+
+SIGNAL REASONS:
+${(signal.reasons || []).map((r) => `  - ${r}`).join('\n')}
+
+INDICATOR COMPONENTS:
+${JSON.stringify(signal.components || {}, null, 2)}
+
+Your job:
+1. Assess whether the technical evidence supports this entry.
+2. Check for conflicting signals or weakness in the components.
+3. Consider whether the risk/reward ratio is favourable.
+4. Only APPROVE if your confidence is at least ${minScore}/100.
+
+Respond as JSON: {"approve": <true|false>, "confidence": <0-100>, "reasoning": "<one sentence explanation>"}`;
+
+  try {
+    const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
+      prompt,
+      response_json_schema: {
+        type: 'object',
+        properties: {
+          approve: { type: 'boolean' },
+          confidence: { type: 'number' },
+          reasoning: { type: 'string' },
+        },
+        required: ['approve', 'confidence', 'reasoning'],
+      },
+    });
+
+    const approve = result?.approve === true;
+    const confidence = Number(result?.confidence) || 0;
+    const reasoning = result?.reasoning || 'No reasoning provided';
+
+    // Double-gate: the AI must both approve AND meet the min score.
+    if (approve && confidence < minScore) {
+      return {
+        approve: false,
+        confidence,
+        reasoning: `AI confidence ${confidence} below threshold ${minScore}: ${reasoning}`,
+      };
+    }
+
+    return { approve, confidence, reasoning };
+  } catch (e) {
+    log(`AI confirmation service failed: ${e.message} — allowing trade by default`);
+    return {
+      approve: true,
+      confidence: 0,
+      reasoning: `AI service unavailable — trade allowed by default`,
+    };
   }
 }
