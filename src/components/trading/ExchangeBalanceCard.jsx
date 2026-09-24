@@ -49,7 +49,13 @@ export default function ExchangeBalanceCard() {
         }
         return res.data;
       } catch (error) {
-        const msg = error.response?.data?.error || error.data?.error || error.message || 'Failed to fetch balances';
+        // Network-level failure (no response object) — axios sets message
+        // to "Network Error". Show a friendlier message and let react-query
+        // retry once (configured above).
+        const isNetworkError = !error?.response && !error?.status;
+        const msg = isNetworkError
+          ? 'Network error reaching the balance service. Retrying...'
+          : (error.response?.data?.error || error.data?.error || error.message || 'Failed to fetch balances');
         setFetchError(msg);
         if (error.response?.data?.rate_limited || /rate-limiting/i.test(msg)) {
           setRateLimitSeconds(60);
@@ -61,7 +67,15 @@ export default function ExchangeBalanceCard() {
     staleTime: 120000,
     refetchOnWindowFocus: false,
     refetchInterval: false,
-    retry: 0,
+    // Retry once on network-level errors (axios "Network Error" has no
+    // .response). Don't retry on HTTP errors (4xx/5xx) — those are
+    // deterministic (rate limit, auth, bad connection) and retrying
+    // wastes a Kraken call or prolongs a lockout.
+    retry: (failureCount, error) => {
+      if (failureCount >= 1) return false;
+      return !error?.response && !error?.status;
+    },
+    retryDelay: () => 3000,
   });
 
   // No connection at all
