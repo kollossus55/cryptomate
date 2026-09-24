@@ -99,6 +99,24 @@ export default async function(req) {
       return Response.json({ status: 'healthy', message: 'altcoin scanner worker ready' });
     }
 
+    // Authenticate the caller. Two legitimate paths exist:
+    //   1. A user token (manual call from the Altcoin Scanner page) — any
+    //      logged-in user may trigger a server-side scan.
+    //   2. The platform scheduler — no user token, but the platform's
+    //      invoke_backend_function provides the service-role auth context
+    //      (admin-level), so base44.auth.me() still resolves.
+    // An unauthenticated external request has neither and must be rejected;
+    // previously the server-side fetch path did no auth check, so anyone
+    // who knew the URL could trigger the service-role DB writes below.
+    try {
+      const caller = await base44.auth.me();
+      if (!caller) {
+        return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      }
+    } catch {
+      return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     console.log('🔍 Altcoin Scanner Worker: starting server-side scan…');
 
     // 1. Universe: prefer a browser-fed payload (server is geo-blocked from
@@ -109,9 +127,8 @@ export default async function(req) {
 
     // Browser-fed data overwrites the shared ScanResult that all users read
     // (and that autoTradingWorker uses as its fallback universe). Require an
-    // authenticated admin to submit it — an unauthenticated caller must not
-    // be able to inject fake market data into the shared scan feed.
-    // Scheduled runs (no body) proceed without auth.
+    // authenticated admin to submit it — a non-admin must not be able to
+    // inject fake market data into the shared scan feed.
     if (providedUniverse || providedCandles) {
       try {
         const caller = await base44.auth.me();
