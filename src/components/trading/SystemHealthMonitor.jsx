@@ -24,10 +24,14 @@ export default function SystemHealthMonitor({
 
   useEffect(() => {
     if (lastScanResult) {
+      const type = lastScanResult.startsWith('EXECUTED') ? 'success'
+        : lastScanResult.startsWith('HALTED') || lastScanResult.startsWith('ERROR') ? 'error'
+        : lastScanResult.startsWith('SKIPPED') || lastScanResult.startsWith('WARNING') ? 'warning'
+        : 'info';
       setLogs(prev => [
-        { time: new Date().toLocaleTimeString(), message: lastScanResult, type: lastScanResult.includes('EXECUTED') ? 'success' : 'info' },
+        { time: new Date().toLocaleTimeString(), message: lastScanResult, type },
         ...prev
-      ].slice(0, 5));
+      ].slice(0, 8));
     }
   }, [lastScanTime, lastScanResult]);
 
@@ -132,7 +136,12 @@ export default function SystemHealthMonitor({
                       className="flex gap-2 items-start text-xs"
                     >
                       <span className="text-slate-600 font-mono whitespace-nowrap">{log.time}</span>
-                      <span className={`${log.type === 'success' ? 'text-green-400' : 'text-slate-300'} leading-tight`}>
+                      <span className={`${
+                        log.type === 'success' ? 'text-green-400' :
+                        log.type === 'error' ? 'text-red-400' :
+                        log.type === 'warning' ? 'text-yellow-400' :
+                        'text-slate-300'
+                      } leading-tight`}>
                         {log.message}
                       </span>
                     </motion.div>

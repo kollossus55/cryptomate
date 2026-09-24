@@ -44,6 +44,7 @@ Deno.serve(async (req) => {
     let executed = 0;
     let errors = 0;
     const lastError = [];
+    const userDetails = [];
 
     for (let i = 0; i < enabledSettings.length; i++) {
       const settings = enabledSettings[i];
@@ -106,9 +107,35 @@ Deno.serve(async (req) => {
           } else {
             console.log(`ℹ️ No trade for user ${i} (scanned ${result.scanned ?? 0})`);
           }
+          userDetails.push({
+            settings_id: settings.id,
+            created_by: settings.created_by,
+            trades_executed: tradeCount,
+            scanned: result.scanned ?? 0,
+            halted: result.halted || false,
+            skipped: result.skipped || false,
+            reason: result.reason || null,
+            equity: result.equity,
+            equity_change: result.equityChange,
+            realized_pnl: result.realizedPnL,
+            open_positions: result.openPositions,
+            new_entries_allowed: result.newEntriesAllowed,
+            trade_actions: (result.trades || []).map(t => ({
+              action: t.action || t.trade_type,
+              asset_symbol: t.asset_symbol,
+              quantity: t.quantity,
+              price: t.price,
+              reason: t.reason,
+            })),
+          });
         } else {
           console.error(`⚠️ Worker failed for user ${i}:`, result?.error || 'Unknown error');
           lastError.push({ user_index: i, error: result?.error || 'Unknown error', status: 500 });
+          userDetails.push({
+            settings_id: settings.id,
+            created_by: settings.created_by,
+            error: result?.error || 'Unknown error',
+          });
           errors++;
         }
       } catch (error) {
@@ -134,6 +161,7 @@ Deno.serve(async (req) => {
     return Response.json({
       success: true,
       summary,
+      userDetails,
       lastError
     });
     

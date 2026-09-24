@@ -746,6 +746,30 @@ export default function Trading() {
   const [backendDebugLog, setBackendDebugLog] = useState(null);
   const [isRunningManualTrade, setIsRunningManualTrade] = useState(false);
 
+  // Build a human-readable activity-log message from the scheduler response.
+  // Used by both the automatic 2-minute poller and the manual "Run Trade Check
+  // Now" button so the Live Activity Log reflects real server-side work.
+  const formatSchedulerActivity = (data, settingsId) => {
+    const myDetails = data?.userDetails?.find(d => d.settings_id === settingsId);
+    if (myDetails) {
+      if (myDetails.error) return `ERROR: ${myDetails.error}`;
+      if (myDetails.halted) return `HALTED: ${myDetails.reason || 'Risk guard triggered'}`;
+      if (myDetails.skipped) return `SKIPPED: ${myDetails.reason || 'Conditions not met'}`;
+      if (myDetails.trades_executed > 0) {
+        const tradeSummary = (myDetails.trade_actions || [])
+          .map(t => `${(t.action || '').toUpperCase()} ${t.asset_symbol}`)
+          .join(', ');
+        return `EXECUTED: ${myDetails.trades_executed} trade(s)${tradeSummary ? ' — ' + tradeSummary : ''}`;
+      }
+      return `Scanned ${myDetails.scanned} assets — No signals met criteria`;
+    }
+    const s = data?.summary;
+    if (!s) return null;
+    if (s.trades_executed > 0) return `EXECUTED: ${s.trades_executed} trade(s) across ${s.users_processed} user(s)`;
+    if (s.errors > 0) return `WARNING: ${s.errors} error(s) processing ${s.users_processed} user(s)`;
+    return `Server worker: Scanned ${s.users_processed} user(s) — No signals met criteria`;
+  };
+
   useEffect(() => {
     // Check if backend functions are available and TRIGGER them periodically
     const runBackendTrading = async () => {
@@ -763,6 +787,16 @@ export default function Trading() {
           if (result.data.summary?.trades_executed > 0) {
             queryClient.invalidateQueries({ queryKey: ['portfolio'] });
             queryClient.invalidateQueries({ queryKey: ['trades'] });
+          }
+
+          // Feed server-side worker activity into the Live Activity Log so
+          // SystemHealthMonitor shows what the V5 worker actually did. The
+          // browser-side loop early-returns in server/auto mode, so without
+          // this the log stays empty forever in the default execution mode.
+          const activityMsg = formatSchedulerActivity(result.data, autoTradingSettings?.id);
+          if (activityMsg) {
+            setLastScanTime(Date.now());
+            setLastScanResult(activityMsg);
           }
         } else {
           setBackendDebugLog(result.data);
@@ -1704,6 +1738,11 @@ export default function Trading() {
                         if (result.data?.summary?.trades_executed > 0) {
                           queryClient.invalidateQueries({ queryKey: ['portfolio'] });
                           queryClient.invalidateQueries({ queryKey: ['trades'] });
+                        }
+                        const activityMsg = formatSchedulerActivity(result.data, autoTradingSettings?.id);
+                        if (activityMsg) {
+                          setLastScanTime(Date.now());
+                          setLastScanResult(activityMsg);
                         }
                         alert(`Trade check complete!\n\nUsers processed: ${result.data?.summary?.users_processed || 0}\nTrades executed: ${result.data?.summary?.trades_executed || 0}\nErrors: ${result.data?.summary?.errors || 0}`);
                       } catch (err) {
