@@ -1,6 +1,14 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { OKX_URL, decrypt, buildOkxHeaders } from '../../shared/okxExchange.ts';
-import { KRAKEN_URL, buildKrakenBody, buildKrakenHeaders } from '../../shared/krakenExchange.ts';
+import {
+  KRAKEN_URL,
+  buildKrakenBody,
+  buildKrakenHeaders,
+  isKrakenLockedOut,
+  getKrakenLockoutRemainingMs,
+  recordKrakenLockout,
+  isKrakenLockoutError,
+} from '../../shared/krakenExchange.ts';
 
 /**
  * liveOrderExecution — places real orders using stored, encrypted credentials,
@@ -221,6 +229,15 @@ async function executeKrakenOrder(base44: any, user: any, params: any): Promise<
 
   // --- Dry run: verify credentials via read-only Balance endpoint ---
   if (dry_run) {
+    if (isKrakenLockedOut()) {
+      const secs = Math.ceil(getKrakenLockoutRemainingMs() / 1000);
+      return Response.json({
+        success: false,
+        error: `Kraken is rate-limiting this API key. Please wait ~${secs}s before retrying.`,
+        rate_limited: true,
+      }, { status: 429 });
+    }
+
     const urlPath = '/0/private/Balance';
     const postData = buildKrakenBody({});
     const headers = await buildKrakenHeaders(apiKey, apiSecret, urlPath, postData);
@@ -228,6 +245,15 @@ async function executeKrakenOrder(base44: any, user: any, params: any): Promise<
     const data = await res.json();
 
     if (data.error && data.error.length > 0) {
+      if (isKrakenLockoutError(data.error)) {
+        recordKrakenLockout();
+        const secs = Math.ceil(getKrakenLockoutRemainingMs() / 1000);
+        return Response.json({
+          success: false,
+          error: `Kraken is rate-limiting this API key. Please wait ~${secs}s before retrying.`,
+          rate_limited: true,
+        }, { status: 429 });
+      }
       return Response.json({
         success: false,
         error: `Kraken credential test failed: ${data.error.join(', ')}`,
@@ -259,6 +285,15 @@ async function executeKrakenOrder(base44: any, user: any, params: any): Promise<
     orderParams.price = String(price);
   }
 
+  if (isKrakenLockedOut()) {
+    const secs = Math.ceil(getKrakenLockoutRemainingMs() / 1000);
+    return Response.json({
+      success: false,
+      error: `Kraken is rate-limiting this API key. Please wait ~${secs}s before retrying.`,
+      rate_limited: true,
+    }, { status: 429 });
+  }
+
   const urlPath = '/0/private/AddOrder';
   const postData = buildKrakenBody(orderParams);
   const headers = await buildKrakenHeaders(apiKey, apiSecret, urlPath, postData);
@@ -267,6 +302,15 @@ async function executeKrakenOrder(base44: any, user: any, params: any): Promise<
   const data = await res.json();
 
   if (data.error && data.error.length > 0) {
+    if (isKrakenLockoutError(data.error)) {
+      recordKrakenLockout();
+      const secs = Math.ceil(getKrakenLockoutRemainingMs() / 1000);
+      return Response.json({
+        success: false,
+        error: `Kraken is rate-limiting this API key. Please wait ~${secs}s before retrying.`,
+        rate_limited: true,
+      }, { status: 429 });
+    }
     return Response.json({
       success: false,
       error: `Kraken rejected the order: ${data.error.join(', ')}`,

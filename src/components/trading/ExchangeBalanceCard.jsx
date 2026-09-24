@@ -1,14 +1,24 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Wallet, AlertCircle, ExternalLink } from "lucide-react";
+import { RefreshCw, Wallet, AlertCircle, ExternalLink, Timer } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "../utils";
 
 export default function ExchangeBalanceCard() {
   const [fetchError, setFetchError] = useState(null);
+  const [rateLimitSeconds, setRateLimitSeconds] = useState(0);
+
+  // Client-side cooldown mirror of the server-side Kraken lockout guard.
+  // When a fetch returns rate_limited, we disable refresh for 60s so the
+  // user doesn't spam the button (each call prolongs the real Kraken lockout).
+  useEffect(() => {
+    if (rateLimitSeconds <= 0) return;
+    const t = setInterval(() => setRateLimitSeconds((s) => s - 1), 1000);
+    return () => clearInterval(t);
+  }, [rateLimitSeconds]);
 
   // Load the user's exchange connections
   const { data: connections = [] } = useQuery({
@@ -30,13 +40,20 @@ export default function ExchangeBalanceCard() {
           connection_id: activeConnection.id,
         });
         if (!res.data?.success) {
-          setFetchError(res.data?.error || 'Failed to fetch balances');
+          const errMsg = res.data?.error || 'Failed to fetch balances';
+          setFetchError(errMsg);
+          if (res.data?.rate_limited || /rate-limiting/i.test(errMsg)) {
+            setRateLimitSeconds(60);
+          }
           return null;
         }
         return res.data;
       } catch (error) {
         const msg = error.response?.data?.error || error.data?.error || error.message || 'Failed to fetch balances';
         setFetchError(msg);
+        if (error.response?.data?.rate_limited || /rate-limiting/i.test(msg)) {
+          setRateLimitSeconds(60);
+        }
         return null;
       }
     },
@@ -125,10 +142,15 @@ export default function ExchangeBalanceCard() {
             size="sm"
             variant="ghost"
             onClick={() => refetch()}
-            disabled={isLoading || isFetching}
+            disabled={isLoading || isFetching || rateLimitSeconds > 0}
             className="text-slate-400 hover:text-white hover:bg-slate-700"
+            title={rateLimitSeconds > 0 ? `Rate-limited by Kraken — retry in ${rateLimitSeconds}s` : 'Refresh'}
           >
-            <RefreshCw className={`w-4 h-4 ${(isLoading || isFetching) ? 'animate-spin' : ''}`} />
+            {rateLimitSeconds > 0 ? (
+              <Timer className="w-4 h-4 text-amber-400" />
+            ) : (
+              <RefreshCw className={`w-4 h-4 ${(isLoading || isFetching) ? 'animate-spin' : ''}`} />
+            )}
           </Button>
         </div>
       </CardHeader>
