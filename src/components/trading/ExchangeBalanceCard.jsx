@@ -41,8 +41,10 @@ export default function ExchangeBalanceCard() {
       }
     },
     enabled: !!activeConnection,
-    staleTime: 60000,
-    retry: 1,
+    staleTime: 120000,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    retry: 0,
   });
 
   // No connection at all
