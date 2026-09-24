@@ -552,8 +552,8 @@ export default function AutoTrading() {
                     onClick={() => setSettings({...settings, ai_confirmation_mode: 'off'})}
                     className={`p-3 rounded-lg border flex flex-col items-center gap-1.5 transition-all ${
                       settings.ai_confirmation_mode === 'off'
-                        ? 'bg-slate-700 border-slate-500 text-white'
-                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
+                        ? 'bg-gradient-to-br from-slate-500 to-slate-600 border-slate-400 text-white shadow-lg shadow-slate-500/30'
+                        : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:bg-slate-700/60 hover:border-slate-500'
                     }`}
                   >
                     <Shield className="w-4 h-4" />
@@ -563,8 +563,8 @@ export default function AutoTrading() {
                     onClick={() => setSettings({...settings, ai_confirmation_mode: 'auto'})}
                     className={`p-3 rounded-lg border flex flex-col items-center gap-1.5 transition-all ${
                       settings.ai_confirmation_mode === 'auto'
-                        ? 'bg-violet-600/20 border-violet-500 text-white'
-                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
+                        ? 'bg-gradient-to-br from-violet-500 to-purple-600 border-violet-400 text-white shadow-lg shadow-violet-500/40'
+                        : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:bg-violet-900/30 hover:border-violet-600'
                     }`}
                   >
                     <Bot className="w-4 h-4" />
@@ -574,8 +574,8 @@ export default function AutoTrading() {
                     onClick={() => setSettings({...settings, ai_confirmation_mode: 'manual'})}
                     className={`p-3 rounded-lg border flex flex-col items-center gap-1.5 transition-all ${
                       settings.ai_confirmation_mode === 'manual'
-                        ? 'bg-violet-600/20 border-violet-500 text-white'
-                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
+                        ? 'bg-gradient-to-br from-amber-500 to-orange-600 border-amber-400 text-white shadow-lg shadow-amber-500/40'
+                        : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:bg-amber-900/30 hover:border-amber-600'
                     }`}
                   >
                     <UserCheck className="w-4 h-4" />
