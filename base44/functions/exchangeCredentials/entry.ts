@@ -42,6 +42,10 @@ import {
   KRAKEN_URL,
   buildKrakenBody,
   buildKrakenHeaders,
+  isKrakenLockedOut,
+  getKrakenLockoutRemainingMs,
+  recordKrakenLockout,
+  isKrakenLockoutError,
 } from '../../shared/krakenExchange.ts';
 
 /**
@@ -114,6 +118,11 @@ async function validateOkxKey(
  * Kraken spot has no testnet/sandbox — all calls hit the live API.
  */
 async function validateKrakenKey(apiKey: string, apiSecret: string) {
+  if (isKrakenLockedOut()) {
+    const secs = Math.ceil(getKrakenLockoutRemainingMs() / 1000);
+    return { valid: false, error: `Kraken is rate-limiting this API key. Please wait ~${secs}s before retrying.` };
+  }
+
   const urlPath = '/0/private/Balance';
   const postData = buildKrakenBody({});
   const headers = await buildKrakenHeaders(apiKey, apiSecret, urlPath, postData);
@@ -132,6 +141,11 @@ async function validateKrakenKey(apiKey: string, apiSecret: string) {
 
   // Kraken returns { error: [...], result: {...} }
   if (data.error && data.error.length > 0) {
+    if (isKrakenLockoutError(data.error)) {
+      recordKrakenLockout();
+      const secs = Math.ceil(getKrakenLockoutRemainingMs() / 1000);
+      return { valid: false, error: `Kraken is rate-limiting this API key. Please wait ~${secs}s before retrying.` };
+    }
     return { valid: false, error: `Kraken error: ${data.error.join(', ')}` };
   }
 
@@ -334,6 +348,15 @@ async function handleFetchBalances(base44: any, user: any, params: any) {
   const apiSecret = await decrypt(connection.encrypted_api_secret);
 
   if (connection.exchange_name === 'kraken') {
+    if (isKrakenLockedOut()) {
+      const secs = Math.ceil(getKrakenLockoutRemainingMs() / 1000);
+      return Response.json({
+        success: false,
+        error: `Kraken is rate-limiting this API key. Please wait ~${secs}s before retrying.`,
+        rate_limited: true,
+      }, { status: 429 });
+    }
+
     const urlPath = '/0/private/Balance';
     const postData = buildKrakenBody({});
     const headers = await buildKrakenHeaders(apiKey, apiSecret, urlPath, postData);
@@ -344,6 +367,15 @@ async function handleFetchBalances(base44: any, user: any, params: any) {
     }
     const data = await res.json();
     if (data.error && data.error.length > 0) {
+      if (isKrakenLockoutError(data.error)) {
+        recordKrakenLockout();
+        const secs = Math.ceil(getKrakenLockoutRemainingMs() / 1000);
+        return Response.json({
+          success: false,
+          error: `Kraken is rate-limiting this API key. Please wait ~${secs}s before retrying.`,
+          rate_limited: true,
+        }, { status: 429 });
+      }
       return Response.json({ success: false, error: `Kraken: ${data.error.join(', ')}` }, { status: 400 });
     }
 

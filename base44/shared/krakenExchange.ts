@@ -19,6 +19,40 @@
 export const KRAKEN_URL = 'https://api.kraken.com';
 
 // ---------------------------------------------------------------------------
+// Kraken rate-limit lockout guard
+// ---------------------------------------------------------------------------
+//
+// Kraken returns `EGeneral:Temporary lockout` when an API key makes too many
+// private calls in a short window. The worst thing to do is retry immediately
+// — every call during the lockout extends it. This module-level cooldown is
+// shared across all functions in the same isolate, so once any Kraken call
+// reports a lockout, subsequent calls short-circuit until the window clears.
+
+const LOCKOUT_COOLDOWN_MS = 60_000; // Kraken lockouts typically clear in <1 min
+let krakenLockoutUntil = 0;
+
+export function isKrakenLockedOut(): boolean {
+  return Date.now() < krakenLockoutUntil;
+}
+
+export function getKrakenLockoutRemainingMs(): number {
+  return Math.max(0, krakenLockoutUntil - Date.now());
+}
+
+export function recordKrakenLockout(): void {
+  krakenLockoutUntil = Date.now() + LOCKOUT_COOLDOWN_MS;
+}
+
+/**
+ * Kraken returns `{ error: [...] }`. Check whether any error string indicates
+ * a temporary rate-limit lockout.
+ */
+export function isKrakenLockoutError(errors: string[] | undefined): boolean {
+  if (!errors || !Array.isArray(errors)) return false;
+  return errors.some((e) => typeof e === 'string' && e.includes('EGeneral:Temporary lockout'));
+}
+
+// ---------------------------------------------------------------------------
 // Kraken request signing
 // ---------------------------------------------------------------------------
 
