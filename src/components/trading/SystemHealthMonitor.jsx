@@ -4,21 +4,36 @@ import { Badge } from "@/components/ui/badge";
 import { Activity, Brain, Server, Wifi, Cpu, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function SystemHealthMonitor({ 
-  autoTradingSettings, 
-  lastScanTime, 
+// Maps indicator_settings keys to display names + type for color-coding.
+// Mirrors the indicators configurable in the AI Signals indicator settings modal.
+const INDICATOR_META = [
+  { id: 'supply_demand', name: 'Supply & Demand', type: 'technical' },
+  { id: 'rsi', name: 'RSI', type: 'technical' },
+  { id: 'macd', name: 'MACD', type: 'technical' },
+  { id: 'bollinger', name: 'Bollinger Bands', type: 'technical' },
+  { id: 'ema', name: 'EMA Trend', type: 'technical' },
+  { id: 'stoch', name: 'Stochastic', type: 'technical' },
+  { id: 'adx', name: 'ADX', type: 'technical' },
+  { id: 'sma', name: 'SMA', type: 'technical' },
+  { id: 'ao', name: 'Awesome Oscillator', type: 'technical' },
+  { id: 'aroon', name: 'Aroon', type: 'technical' },
+  { id: 'candlestick', name: 'Candlestick Patterns', type: 'technical' },
+  { id: 'ichimoku', name: 'Ichimoku Cloud', type: 'technical' },
+  { id: 'sp500ai', name: 'SP500 AI', type: 'ai' },
+];
+
+export default function SystemHealthMonitor({
+  autoTradingSettings,
+  lastScanTime,
   lastScanResult,
   activeAssetsCount,
-  marketCondition
+  marketCondition,
+  indicatorSettings
 }) {
-  const [indicators, setIndicators] = useState([
-    { name: "Price Action Analysis", status: "active", type: "technical" },
-    { name: "Volume Profile", status: "active", type: "technical" },
-    { name: "Market Structure", status: "active", type: "technical" },
-    { name: "Sentiment Analysis", status: "active", type: "ai" },
-    { name: "Pattern Recognition", status: "active", type: "ai" },
-    { name: "Volatility Scanner", status: "active", type: "risk" }
-  ]);
+  // Compute enabled indicators from the real indicator_settings object
+  // (synced from AISignalConfig). Missing keys default to enabled (true).
+  const activeIndicators = INDICATOR_META.filter(i => indicatorSettings?.[i.id] !== false);
+  const enabledCount = activeIndicators.length;
 
   const [logs, setLogs] = useState([]);
 
@@ -68,20 +83,36 @@ export default function SystemHealthMonitor({
               Active Trading Indicators
             </h4>
             <div className="space-y-2">
-              {indicators.map((indicator, idx) => (
-                <div key={idx} className="flex items-center justify-between group">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-1.5 h-1.5 rounded-full ${indicator.type === 'ai' ? 'bg-purple-500' : 'bg-blue-500'}`} />
-                    <span className="text-sm text-slate-300 group-hover:text-white transition-colors">{indicator.name}</span>
+              {activeIndicators.length > 0 ? (
+                activeIndicators.map((indicator) => (
+                  <div key={indicator.id} className="flex items-center justify-between group">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full ${indicator.type === 'ai' ? 'bg-purple-500' : 'bg-blue-500'}`} />
+                      <span className="text-sm text-slate-300 group-hover:text-white transition-colors">{indicator.name}</span>
+                      {indicator.type === 'ai' && (
+                        <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-[9px] px-1 py-0">AI</Badge>
+                      )}
+                    </div>
+                    <CheckCircle2 className="w-3 h-3 text-green-500 opacity-50 group-hover:opacity-100" />
                   </div>
-                  <CheckCircle2 className="w-3 h-3 text-green-500 opacity-50 group-hover:opacity-100" />
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center h-24 text-slate-600 text-xs">
+                  <AlertCircle className="w-5 h-5 mb-2 opacity-30" />
+                  No indicators enabled
                 </div>
-              ))}
+              )}
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500">Logic Core</span>
                 <span className="text-indigo-400">V5 (Real-Data Engine)</span>
+              </div>
+              <div className="flex justify-between items-center text-xs mt-1">
+                <span className="text-slate-500">Indicators</span>
+                <span className={enabledCount === 0 ? 'text-red-400' : 'text-green-400'}>
+                  {enabledCount} / {INDICATOR_META.length} active
+                </span>
               </div>
             </div>
           </div>

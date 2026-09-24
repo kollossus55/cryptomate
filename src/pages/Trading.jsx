@@ -1677,12 +1677,13 @@ export default function Trading() {
         {autoTradingSettings?.is_enabled && (
           <>
             <div className="mb-6">
-          <SystemHealthMonitor 
+          <SystemHealthMonitor
             autoTradingSettings={autoTradingSettings}
             lastScanTime={lastScanTime}
             lastScanResult={lastScanResult}
             activeAssetsCount={Object.keys(assetConfidence).length}
             marketCondition={currentMarketCondition}
+            indicatorSettings={indicatorSettings}
           />
         </div>
 
