@@ -176,6 +176,27 @@ Deno.serve(async (req) => {
   }
 });
 
+/**
+ * Load a connection by id and verify the caller is authorized to use it.
+ *
+ * asServiceRole bypasses RLS, so we fetch by id and enforce ownership in code.
+ * Connections created by handleStore historically went through asServiceRole,
+ * which stamps the *service role* as created_by_id — not the calling user. So a
+ * strict created_by_id === user.id check fails for those records. We accept
+ * either a direct ownership match (for connections created with the user
+ * client) or an admin caller (consistent with the admin RLS read rule that
+ * already lets admins see every connection).
+ */
+async function loadOwnedConnection(base44: any, user: any, connection_id: string) {
+  const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
+    id: connection_id,
+  });
+  const connection = connections?.[0];
+  if (!connection) return null;
+  if (connection.created_by_id === user.id || user.role === 'admin') return connection;
+  return null;
+}
+
 async function handleStore(base44: any, user: any, params: any) {
   const { exchange_name, api_key, api_secret, api_passphrase, is_testnet = true } = params;
 
@@ -212,7 +233,10 @@ async function handleStore(base44: any, user: any, params: any) {
   const encryptedSecret = await encrypt(api_secret);
   const encryptedPassphrase = api_passphrase ? await encrypt(api_passphrase) : null;
 
-  const record = await base44.asServiceRole.entities.ExchangeConnection.create({
+  // Create with the user client (not asServiceRole) so the platform stamps
+  // created_by_id with the calling user's id — not the service role. This is
+  // what makes the ownership check in loadOwnedConnection work for non-admins.
+  const record = await base44.entities.ExchangeConnection.create({
     exchange_name,
     // Deliberately NOT the plaintext key. Enough to tell two keys apart in the
     // UI, not enough to reconstruct one.
@@ -244,16 +268,7 @@ async function handleStore(base44: any, user: any, params: any) {
 async function handleTest(base44: any, user: any, params: any) {
   const { connection_id } = params;
 
-  // Ownership check — never trust the id alone. asServiceRole bypasses RLS,
-  // so we scope by the built-in created_by_id to ensure the caller owns this
-  // connection. (The previous code filtered by a custom `created_by` email
-  // field that was never declared in the entity schema and was silently
-  // stripped on create, so every lookup returned "Connection not found".)
-  const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
-    id: connection_id,
-    created_by_id: user.id,
-  });
-  const connection = connections?.[0];
+  const connection = await loadOwnedConnection(base44, user, connection_id);
   if (!connection) {
     return Response.json({ success: false, error: 'Connection not found' }, { status: 404 });
   }
@@ -292,11 +307,8 @@ async function handleTest(base44: any, user: any, params: any) {
 
 async function handleDelete(base44: any, user: any, params: any) {
   const { connection_id } = params;
-  const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
-    id: connection_id,
-    created_by_id: user.id,
-  });
-  if (!connections?.[0]) {
+  const connection = await loadOwnedConnection(base44, user, connection_id);
+  if (!connection) {
     return Response.json({ success: false, error: 'Connection not found' }, { status: 404 });
   }
   await base44.asServiceRole.entities.ExchangeConnection.delete(connection_id);
@@ -313,13 +325,7 @@ async function handleDelete(base44: any, user: any, params: any) {
 async function handleFetchBalances(base44: any, user: any, params: any) {
   const { connection_id } = params;
 
-  // Ownership check — scope by the built-in created_by_id (see handleTest for
-  // why the custom created_by email field is not used).
-  const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
-    id: connection_id,
-    created_by_id: user.id,
-  });
-  const connection = connections?.[0];
+  const connection = await loadOwnedConnection(base44, user, connection_id);
   if (!connection) {
     return Response.json({ success: false, error: 'Connection not found' }, { status: 404 });
   }

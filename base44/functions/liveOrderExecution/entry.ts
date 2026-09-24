@@ -65,12 +65,20 @@ export default async function(req: Request): Promise<Response> {
     }
 
     // --- Load connection (ownership check — never trust the id alone) ---
+    // asServiceRole bypasses RLS, so we fetch by id and enforce ownership in
+    // code. The old filter used a custom `created_by` email field that was
+    // never declared in the entity schema and was silently stripped on create,
+    // so every lookup returned "Connection not found". We use the built-in
+    // created_by_id and allow admin callers (consistent with the admin RLS
+    // read rule; the worker runs as admin and passes the owner's connection_id).
     const connections = await base44.asServiceRole.entities.ExchangeConnection.filter({
       id: connection_id,
-      created_by: actingEmail,
     });
     const connection = connections?.[0];
     if (!connection) {
+      return Response.json({ success: false, error: 'Connection not found' }, { status: 404 });
+    }
+    if (connection.created_by_id !== user.id && user.role !== 'admin') {
       return Response.json({ success: false, error: 'Connection not found' }, { status: 404 });
     }
     if (connection.exchange_name !== 'okx' && connection.exchange_name !== 'kraken') {
@@ -86,8 +94,11 @@ export default async function(req: Request): Promise<Response> {
     }
 
     // --- Kill switch — hard block regardless of caller ---
+    // Link settings to this connection via exchange_connection_id. The old
+    // filter used a custom `created_by` email field that was never stored, so
+    // it always missed and the kill switch was silently bypassed.
     const settingsList = await base44.asServiceRole.entities.AutoTradingSettings.filter({
-      created_by: actingEmail,
+      exchange_connection_id: connection_id,
     });
     const settings = settingsList?.[0];
     if (settings?.kill_switch_enabled) {
