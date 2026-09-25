@@ -7,12 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sparkles,
   Settings,
-  TrendingUp,
   AlertTriangle,
   Activity,
   Brain,
@@ -24,7 +22,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 
-import { generatePredictiveSignal, detectMarketRegime } from "../components/trading/PredictiveModels";
+import { detectMarketRegime } from "../components/trading/PredictiveModels";
 import { detectAnomalies, detectCorrelationAnomalies } from "../components/trading/AnomalyDetection";
 import { generateAdvancedSignal } from "../components/trading/AdvancedSignalGenerator";
 import IndicatorSettingsModal from "../components/trading/IndicatorSettingsModal";
@@ -120,18 +118,7 @@ export default function AISignals() {
         is_active: true,
         data_sources: {
           technical_indicators: true,
-          news_sentiment: false,
-          social_media: false,
-          on_chain_data: false,
-          predictive_models: true,
           anomaly_detection: true
-        },
-        weights: {
-          technical: 100,
-          news: 0,
-          social: 0,
-          onchain: 0,
-          predictive: 0
         }
       });
     }
@@ -182,21 +169,7 @@ export default function AISignals() {
         }
       }
 
-      // 2. Predictive Models (with network error handling)
-      if (activeConfig?.data_sources?.predictive_models) {
-        try {
-          results.predictive = await generatePredictiveSignal(
-            asset,
-            assets,
-            activeConfig?.predictive_config
-          );
-        } catch (predError) {
-          console.warn('Predictive analysis failed, skipping:', predError.message);
-          results.predictive = null;
-        }
-      }
-
-      // 3. Anomaly Detection (with error handling)
+      // 2. Anomaly Detection (with error handling)
       if (activeConfig?.data_sources?.anomaly_detection) {
         try {
           results.anomalies = detectAnomalies(asset, assets, activeConfig?.anomaly_config);
@@ -269,7 +242,6 @@ export default function AISignals() {
       signal,
       breakdown: {
         technical: Math.round(finalScore),
-        predictive: results.predictive?.confidence || 0,
         anomaly_impact: results.anomalies?.overall_risk || 'none'
       }
     };
@@ -461,17 +433,11 @@ export default function AISignals() {
                             {signalResults.composite_score.score}
                             <span className="text-xl text-slate-400">/100</span>
                           </div>
-                          <div className="grid grid-cols-3 gap-4 mt-4">
+                          <div className="grid grid-cols-2 gap-4 mt-4">
                             <div className="bg-slate-800 rounded p-3">
                               <div className="text-xs text-slate-400 mb-1">Technical</div>
                               <div className="text-lg font-bold text-white">
                                 {signalResults.composite_score.breakdown.technical}
-                              </div>
-                            </div>
-                            <div className="bg-slate-800 rounded p-3">
-                              <div className="text-xs text-slate-400 mb-1">Predictive</div>
-                              <div className="text-lg font-bold text-white">
-                                {signalResults.composite_score.breakdown.predictive}
                               </div>
                             </div>
                             <div className="bg-slate-800 rounded p-3">
@@ -482,65 +448,6 @@ export default function AISignals() {
                             </div>
                           </div>
                         </div>
-                      )}
-
-                      {/* Predictive Analysis */}
-                      {signalResults.predictive && (
-                        <Card className="bg-slate-800 border-slate-700">
-                          <CardHeader>
-                            <CardTitle className="text-white flex items-center gap-2">
-                              <TrendingUp className="w-5 h-5 text-purple-400" />
-                              Predictive Analysis
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                <span className="text-slate-400">Model:</span>
-                                <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
-                                  {signalResults.predictive.model}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-slate-400">Predicted Price:</span>
-                                <span className="text-white font-bold">
-                                  ${signalResults.predictive.predicted_price?.toLocaleString()}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-slate-400">Expected Change:</span>
-                                <span className={`font-bold ${signalResults.predictive.predicted_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                  {signalResults.predictive.predicted_change >= 0 ? '+' : ''}
-                                  {signalResults.predictive.predicted_change?.toFixed(2)}%
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-slate-400">Confidence:</span>
-                                <span className="text-white font-bold">
-                                  {signalResults.predictive.confidence?.toFixed(0)}/100
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-slate-400">Signal Strength:</span>
-                                <Badge className={
-                                  signalResults.predictive.signals.strength === 'strong' ? 'bg-green-500' :
-                                  signalResults.predictive.signals.strength === 'moderate' ? 'bg-yellow-500' :
-                                  'bg-slate-500'
-                                }>
-                                  {signalResults.predictive.signals.strength.toUpperCase()}
-                                </Badge>
-                              </div>
-                              {signalResults.predictive.market_regime && (
-                                <div className="mt-4 p-3 bg-indigo-500/10 border border-indigo-500/30 rounded">
-                                  <div className="text-xs text-indigo-300 mb-1">Market Context</div>
-                                  <div className="text-sm text-white">
-                                    {signalResults.predictive.market_regime.description}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
                       )}
 
                       {/* Anomaly Detection */}
@@ -621,59 +528,11 @@ export default function AISignals() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Tabs defaultValue="weights">
+              <Tabs defaultValue="sources">
                 <TabsList className="bg-slate-800">
-                  <TabsTrigger value="weights">Weights</TabsTrigger>
                   <TabsTrigger value="sources">Data Sources</TabsTrigger>
                   <TabsTrigger value="thresholds">Thresholds</TabsTrigger>
                 </TabsList>
-
-                <TabsContent value="weights" className="space-y-4 mt-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {Object.entries(activeConfig.weights || {}).map(([key, value]) => {
-                      const colorMap = {
-                        technical: { bg: 'bg-gradient-to-r from-indigo-600/20 to-purple-600/20', border: 'border-indigo-500/50', text: 'text-indigo-300', bar: 'bg-indigo-500' },
-                        news: { bg: 'bg-gradient-to-r from-cyan-600/20 to-blue-600/20', border: 'border-cyan-500/50', text: 'text-cyan-300', bar: 'bg-cyan-500' },
-                        social: { bg: 'bg-gradient-to-r from-pink-600/20 to-rose-600/20', border: 'border-pink-500/50', text: 'text-pink-300', bar: 'bg-pink-500' },
-                        onchain: { bg: 'bg-gradient-to-r from-green-600/20 to-emerald-600/20', border: 'border-green-500/50', text: 'text-green-300', bar: 'bg-green-500' },
-                        predictive: { bg: 'bg-gradient-to-r from-amber-600/20 to-orange-600/20', border: 'border-amber-500/50', text: 'text-amber-300', bar: 'bg-amber-500' }
-                      };
-                      const colors = colorMap[key] || { bg: 'bg-slate-800', border: 'border-slate-600', text: 'text-slate-300', bar: 'bg-slate-500' };
-                      
-                      return (
-                        <div key={key} className={`p-4 rounded-xl border-2 ${colors.bg} ${colors.border}`}>
-                          <div className="flex items-center justify-between mb-3">
-                            <Label className={`capitalize font-semibold ${colors.text}`}>
-                              {key}
-                            </Label>
-                            <span className={`text-2xl font-bold ${colors.text}`}>{value}%</span>
-                          </div>
-                          <div className="relative">
-                            <div className="h-3 bg-slate-700 rounded-full overflow-hidden mb-2">
-                              <div 
-                                className={`h-full ${colors.bar} transition-all duration-300`} 
-                                style={{ width: `${value}%` }}
-                              />
-                            </div>
-                            <Slider
-                              value={[value]}
-                              onValueChange={(val) => {
-                                const newWeights = { ...activeConfig.weights, [key]: val[0] };
-                                updateConfigMutation.mutate({
-                                  id: activeConfig.id,
-                                  data: { ...activeConfig, weights: newWeights }
-                                });
-                              }}
-                              max={100}
-                              step={5}
-                              className="w-full"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </TabsContent>
 
                 <TabsContent value="sources" className="mt-4">
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
