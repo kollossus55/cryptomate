@@ -8,6 +8,7 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import TradeSignals from './pages/TradeSignals';
 import AltcoinScanner from './pages/AltcoinScanner';
+import AISettings from './pages/AISettings';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -75,6 +76,14 @@ const AuthenticatedApp = () => {
         element={
           <LayoutWrapper currentPageName="AltcoinScanner">
             <AltcoinScanner />
+          </LayoutWrapper>
+        }
+      />
+      <Route
+        path="/AISettings"
+        element={
+          <LayoutWrapper currentPageName="AISettings">
+            <AISettings />
           </LayoutWrapper>
         }
       />

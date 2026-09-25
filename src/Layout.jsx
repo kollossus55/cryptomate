@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "./components/utils";
 import { base44 } from "@/api/base44Client";
-import { TrendingUp, History, Settings, LogOut, User, Sparkles, Bell, Shield, Activity, Brain, Target, Scan } from "lucide-react";
+import { TrendingUp, History, Settings, LogOut, User, Sparkles, Bell, Shield, Activity, Brain, Target, Scan, Cpu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -84,7 +84,8 @@ export default function Layout({ children, currentPageName }) {
     { name: "Backtesting", path: "Backtesting", icon: Activity },
     { name: "Alerts", path: "Alerts", icon: Bell },
     { name: "Trade History", path: "TradeHistory", icon: History },
-    { name: "Exchange Settings", path: "ExchangeSettings", icon: Settings }
+    { name: "Exchange Settings", path: "ExchangeSettings", icon: Settings },
+    { name: "AI Settings", path: "AISettings", icon: Cpu }
   ];
 
   // Add admin dashboard to nav if user is admin

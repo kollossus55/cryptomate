@@ -1,0 +1,125 @@
+{
+  "name": "AIModelConfig",
+  "type": "object",
+  "properties": {
+    "config_name": {
+      "type": "string",
+      "default": "default",
+      "description": "Name of this AI model configuration"
+    },
+    "model_source": {
+      "type": "string",
+      "enum": [
+        "platform",
+        "custom"
+      ],
+      "default": "platform",
+      "description": "Whether to use a platform built-in model or a custom API key"
+    },
+    "platform_model": {
+      "type": "string",
+      "default": "automatic",
+      "description": "Platform model ID to use with InvokeLLM (automatic, gpt_6_luna, claude-sonnet-5, gemini_3_8_flash, etc.)"
+    },
+    "custom_provider": {
+      "type": "string",
+      "enum": [
+        "openai",
+        "anthropic",
+        "google"
+      ],
+      "default": "openai",
+      "description": "Custom LLM provider"
+    },
+    "custom_model_name": {
+      "type": "string",
+      "description": "Model name for the custom provider (e.g. gpt-4o, claude-3-5-sonnet)"
+    },
+    "encrypted_api_key": {
+      "type": "string",
+      "description": "AES-GCM encrypted custom API key. Written and read ONLY by the aiModelConfig server function."
+    },
+    "api_key_fingerprint": {
+      "type": "string",
+      "description": "First/last 4 chars of the API key for display only. Not sensitive."
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this config is active"
+    },
+    "last_tested_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the connection was last tested"
+    },
+    "test_result": {
+      "type": "object",
+      "description": "Result of the last connection test",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "required": [
+    "model_source"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

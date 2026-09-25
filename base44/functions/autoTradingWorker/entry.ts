@@ -11,6 +11,9 @@ import {
   toPersistablePortfolio, pendingTrades,
 } from './shared/portfolio.js';
 import { logReturns } from './shared/indicators.js';
+import { secrets } from 'base44:runtime';
+import { decryptApiKey } from '../../shared/aiModelCrypto.ts';
+import { callCustomLLM } from '../../shared/customLLM.ts';
 
 /**
  * Auto-Trading Worker V5
@@ -1080,19 +1083,47 @@ Your job:
 
 Respond as JSON: {"approve": <true|false>, "confidence": <0-100>, "reasoning": "<one sentence explanation>"}`;
 
+  // Load the user's AI model config (platform model selector or custom API key)
+  let modelConfig = null;
   try {
-    const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          approve: { type: 'boolean' },
-          confidence: { type: 'number' },
-          reasoning: { type: 'string' },
-        },
-        required: ['approve', 'confidence', 'reasoning'],
-      },
-    });
+    const configs = await base44.asServiceRole.entities.AIModelConfig.list();
+    modelConfig = (configs || [])[0] || null;
+  } catch (e) {
+    log(`AI model config load failed: ${e.message}`);
+  }
+
+  const responseSchema = {
+    type: 'object',
+    properties: {
+      approve: { type: 'boolean' },
+      confidence: { type: 'number' },
+      reasoning: { type: 'string' },
+    },
+    required: ['approve', 'confidence', 'reasoning'],
+  };
+
+  try {
+    let result;
+
+    if (modelConfig && modelConfig.model_source === 'custom' && modelConfig.encrypted_api_key) {
+      // Custom LLM — decrypt the API key and call the provider directly
+      const keyHex = secrets.get('EXCHANGE_ENCRYPTION_KEY');
+      const apiKey = decryptApiKey(modelConfig.encrypted_api_key, keyHex);
+      log(`Using custom LLM: ${modelConfig.custom_provider}/${modelConfig.custom_model_name}`);
+      result = await callCustomLLM(
+        { provider: modelConfig.custom_provider, modelName: modelConfig.custom_model_name, apiKey },
+        prompt,
+        responseSchema,
+      );
+    } else {
+      // Platform model via InvokeLLM
+      const invokeParams = { prompt, response_json_schema: responseSchema };
+      if (modelConfig?.platform_model && modelConfig.platform_model !== 'automatic') {
+        invokeParams.model = modelConfig.platform_model;
+        log(`Using platform model: ${modelConfig.platform_model}`);
+      }
+      result = await base44.asServiceRole.integrations.Core.InvokeLLM(invokeParams);
+    }
 
     const approve = result?.approve === true;
     const confidence = Number(result?.confidence) || 0;
