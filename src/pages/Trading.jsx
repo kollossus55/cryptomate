@@ -1931,15 +1931,18 @@ export default function Trading() {
           <LiveTradingPanel />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {trades && trades.length >= 5 && (
+        {trades && trades.length >= 5 && (
+          <div className="mb-6">
             <AITradingAdvisor
               trades={trades}
               portfolio={portfolio}
               autoTradingSettings={autoTradingSettings}
               onApplyRecommendation={handleApplyAdvisorRecommendation}
             />
-          )}
+          </div>
+        )}
+
+        <div className="mb-8">
           <SignalAlertSettings />
         </div>
 
