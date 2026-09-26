@@ -53,6 +53,10 @@ export default function Trading() {
     return saved === 'true';
   });
   const [altcoinPrefSynced, setAltcoinPrefSynced] = useState(false);
+  const [paperBaseAmount, setPaperBaseAmount] = useState(() => {
+    const saved = localStorage.getItem('paper_base_amount');
+    return saved ? parseInt(saved) : 10000;
+  });
   const [isPriceLoading, setIsPriceLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [assetConfidence, setAssetConfidence] = useState({});
@@ -121,6 +125,10 @@ export default function Trading() {
   useEffect(() => {
     localStorage.setItem('altcoin_scanner_enabled', String(altcoinScannerEnabled));
   }, [altcoinScannerEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('paper_base_amount', String(paperBaseAmount));
+  }, [paperBaseAmount]);
 
   const toggleAltcoinScanner = async (enabled) => {
     setAltcoinScannerEnabled(enabled);
@@ -368,8 +376,8 @@ export default function Trading() {
     mutationFn: async () => {
       if (portfolio?.id) {
         await base44.entities.Portfolio.update(portfolio.id, {
-          total_balance: 10000,
-          available_balance: 10000,
+          total_balance: paperBaseAmount,
+          available_balance: paperBaseAmount,
           positions: [],
           total_profit_loss: 0,
           total_trades: 0
@@ -1421,7 +1429,7 @@ export default function Trading() {
   };
 
   const handleResetPortfolio = async () => {
-    if (window.confirm('Are you sure you want to reset your paper trading portfolio? This will clear all trades and reset your balance to $10,000.')) {
+    if (window.confirm(`Are you sure you want to reset your paper trading portfolio? This will clear all trades and reset your balance to $${paperBaseAmount.toLocaleString()}.`)) {
       await resetPortfolioMutation.mutateAsync();
     }
   };
@@ -1904,7 +1912,25 @@ export default function Trading() {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
+              <div className="flex items-center gap-2 bg-slate-900/60 rounded-lg px-3 py-1.5 border border-yellow-500/30">
+                <span className="text-xs text-yellow-200 font-medium">Base:</span>
+                <div className="flex gap-1">
+                  {[1000, 3000, 5000, 10000].map((amt) => (
+                    <button
+                      key={amt}
+                      onClick={() => setPaperBaseAmount(amt)}
+                      className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${
+                        paperBaseAmount === amt
+                          ? 'bg-yellow-500 text-slate-900'
+                          : 'bg-slate-800 text-yellow-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      ${amt.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <Button
                 onClick={fetchLivePrices}
                 disabled={isPriceLoading}
@@ -1921,7 +1947,7 @@ export default function Trading() {
                 disabled={resetPortfolioMutation.isPending}
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
-                Reset Portfolio
+                Reset to ${paperBaseAmount.toLocaleString()}
               </Button>
             </div>
           </div>
