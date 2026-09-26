@@ -230,7 +230,6 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
           price: asset.price,
           change24h: asset.change24h,
           volume24h: asset.volume24h,
-          prediction: signalData?.prediction,
           sp500ai: signalData?.breakdown?.advanced_indicators?.sp500ai,
           confidence: signalData?.confidence,
           recommendation: signalData?.recommendation,
@@ -793,28 +792,6 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
 
                         <p className="text-indigo-200 text-sm mb-3">{rec.reasoning}</p>
 
-                        {/* Prediction Display */}
-                        {rec.predicted_change_24h != null && (
-                          <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 rounded-lg p-3 mb-3">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <span className="text-xs text-purple-300">24h Prediction</span>
-                                <div className={`text-lg font-bold ${rec.predicted_change_24h > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                  {rec.predicted_change_24h > 0 ? '+' : ''}{rec.predicted_change_24h.toFixed(2)}%
-                                </div>
-                              </div>
-                              {rec.prediction_confidence && (
-                                <div className="text-right">
-                                  <span className="text-xs text-purple-300">Confidence</span>
-                                  <div className="text-lg font-bold text-purple-400">
-                                    {rec.prediction_confidence}%
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
                         {/* Data Sources Breakdown */}
                         {rec.data_sources && (
                           <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
@@ -834,12 +811,6 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
                               <span className="text-slate-400">On-Chain: </span>
                               <span className="text-white font-bold capitalize">{rec.data_sources.onchain_signal}</span>
                             </div>
-                            {rec.data_sources.predictive_score != null && (
-                              <div className="bg-purple-500/20 rounded p-2 col-span-2">
-                                <span className="text-purple-300">Predictive: </span>
-                                <span className="text-white font-bold">{rec.data_sources.predictive_score}/100</span>
-                              </div>
-                            )}
                           </div>
                         )}
 

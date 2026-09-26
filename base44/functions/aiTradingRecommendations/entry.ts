@@ -41,10 +41,6 @@ Deno.serve(async (req) => {
     // Build the assets data string server-side from structured input.
     const assetsData = cappedAssets.map((asset) => {
       const parts = [`${asset.name} (${asset.symbol}): Price $${asset.price}, 24h Change ${asset.change24h}%, Volume $${((asset.volume24h || 0) / 1e9).toFixed(2)}B`];
-      if (asset.prediction) {
-        const pc = asset.prediction.predicted_change;
-        parts.push(`Predicted 24h: ${pc > 0 ? '+' : ''}${pc.toFixed(2)}%`);
-      }
       if (asset.sp500ai) {
         const sp = asset.sp500ai;
         parts.push(`SP500 AI: ${sp.longSignal ? 'LONG' : sp.shortSignal ? 'SHORT' : 'neutral'} (strength ${sp.strength}/${sp.maxStrength})${sp.sp500ai_blocked ? ' [BLOCKED]' : ''}`);
@@ -69,7 +65,6 @@ Deno.serve(async (req) => {
 
     const minConfidenceBuy = preferences?.signal_alert_thresholds?.min_confidence_buy ?? 70;
     const minConfidenceSell = preferences?.signal_alert_thresholds?.min_confidence_sell ?? 65;
-    const minPredictedGain = preferences?.signal_alert_thresholds?.min_predicted_gain ?? 5;
     const riskTolerance = preferences?.risk_tolerance || 'moderate';
     const tradingStyle = preferences?.trading_style || 'balanced';
 
@@ -90,19 +85,18 @@ Alert Thresholds: Buy signals minimum ${minConfidenceBuy}% confidence, Sell sign
 
 Use comprehensive data sources:
 1. **Technical Analysis**: Price momentum, volume, volatility patterns${hasSp500 ? ', AND the pre-computed SP500 AI indicator signals (Heikin Ashi, SSL Channel, CMO, AI RSI, TMO, AI Money Flow) shown per asset as "SP500 AI: LONG/SHORT/neutral (strength X/Y)". Prioritise assets where SP500 AI shows a LONG or SHORT signal with high strength. If an asset shows "SP500 AI: [BLOCKED]", do NOT recommend a buy on that asset.' : ''}
-2. **Predictive Analysis**: 24-hour price movement forecasts (minimum ${minPredictedGain}% gain for buy signals)
-3. **News Sentiment**: Recent headlines, regulatory news, partnerships
-4. **Social Media Trends**: Twitter/Reddit sentiment, influencer opinions, trending topics
-5. **On-Chain Metrics**: Whale movements, exchange flows, network activity
+2. **News Sentiment**: Recent headlines, regulatory news, partnerships
+3. **Social Media Trends**: Twitter/Reddit sentiment, influencer opinions, trending topics
+4. **On-Chain Metrics**: Whale movements, exchange flows, network activity
 
 Recommend the BEST ${cappedMax} trading opportunities with:
 - PRIORITIZE: Sell signals for assets user currently holds if they show weakness or profit-taking opportunity
 - High conviction trades based on multiple confirming signals
-- Detailed reasoning incorporating all data sources including predictive analysis
+- Detailed reasoning incorporating all data sources
 - For held positions: Consider profit targets, risk of reversal, and optimal exit timing
-- For new positions: Only recommend buy signals with predicted gains above ${minPredictedGain}%
+- For new positions: Only recommend buy signals meeting the confidence threshold
 - Risk assessment considering volatility and market conditions
-- Realistic target prices based on support/resistance levels and predictions
+- Realistic target prices based on support/resistance levels
 - Ensure confidence levels meet user thresholds (${minConfidenceBuy}% for buys, ${minConfidenceSell}% for sells)
 
 IMPORTANT:
@@ -130,8 +124,6 @@ Return ONLY the top ${cappedMax} highest-conviction opportunities (can be mix of
                 reasoning: { type: 'string' },
                 risk_level: { type: 'string', enum: ['low', 'medium', 'high'] },
                 target_price: { type: 'number' },
-                predicted_change_24h: { type: 'number' },
-                prediction_confidence: { type: 'number' },
                 data_sources: {
                   type: 'object',
                   properties: {
@@ -139,7 +131,6 @@ Return ONLY the top ${cappedMax} highest-conviction opportunities (can be mix of
                     news_sentiment: { type: 'string' },
                     social_score: { type: 'number' },
                     onchain_signal: { type: 'string' },
-                    predictive_score: { type: 'number' },
                   },
                 },
               },

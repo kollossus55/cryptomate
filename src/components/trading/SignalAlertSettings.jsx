@@ -5,9 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Bell, TrendingUp, TrendingDown, Settings, Save, AlertCircle } from "lucide-react";
+import { Bell, TrendingUp, TrendingDown, Save } from "lucide-react";
 
 export default function SignalAlertSettings() {
   const queryClient = useQueryClient();
@@ -15,8 +14,6 @@ export default function SignalAlertSettings() {
   const [settings, setSettings] = useState({
     min_confidence_buy: 70,
     min_confidence_sell: 65,
-    enable_predictive_alerts: true,
-    min_predicted_gain: 5,
     news_sentiment_weight: 0.3,
     alert_frequency: 'hourly'
   });
@@ -105,42 +102,6 @@ export default function SignalAlertSettings() {
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-slate-300 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-purple-400" />
-              Enable Predictive Price Alerts
-            </Label>
-            <Switch
-              checked={settings.enable_predictive_alerts}
-              onCheckedChange={(checked) => setSettings({...settings, enable_predictive_alerts: checked})}
-            />
-          </div>
-          <p className="text-xs text-slate-400">
-            Get alerts based on AI-predicted price movements
-          </p>
-        </div>
-
-        {settings.enable_predictive_alerts && (
-          <div className="space-y-2">
-            <Label className="text-slate-300">
-              Min Predicted Gain for Alerts (%)
-            </Label>
-            <Input
-              type="number"
-              min="0"
-              max="50"
-              step="0.5"
-              value={settings.min_predicted_gain}
-              onChange={(e) => setSettings({...settings, min_predicted_gain: parseFloat(e.target.value)})}
-              className="bg-slate-800 border-slate-700 text-white"
-            />
-            <p className="text-xs text-slate-400">
-              Only alert for buy signals with predicted gains above this threshold
-            </p>
-          </div>
-        )}
-
-        <div className="space-y-2">
           <Label className="text-slate-300">
             News Sentiment Weight (0-1)
           </Label>
@@ -186,12 +147,6 @@ export default function SignalAlertSettings() {
             <div className="flex justify-between">
               <span>Sell signals:</span>
               <Badge className="bg-red-500/20 text-red-400">≥{settings.min_confidence_sell}%</Badge>
-            </div>
-            <div className="flex justify-between">
-              <span>Predictive alerts:</span>
-              <Badge className={settings.enable_predictive_alerts ? "bg-purple-500/20 text-purple-400" : "bg-slate-600 text-slate-400"}>
-                {settings.enable_predictive_alerts ? 'Enabled' : 'Disabled'}
-              </Badge>
             </div>
             <div className="flex justify-between">
               <span>News weight:</span>
