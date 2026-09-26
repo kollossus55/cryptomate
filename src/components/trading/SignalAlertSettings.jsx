@@ -14,7 +14,6 @@ export default function SignalAlertSettings() {
   const [settings, setSettings] = useState({
     min_confidence_buy: 70,
     min_confidence_sell: 65,
-    news_sentiment_weight: 0.3,
     alert_frequency: 'hourly'
   });
 
@@ -103,24 +102,6 @@ export default function SignalAlertSettings() {
 
         <div className="space-y-2">
           <Label className="text-slate-300">
-            News Sentiment Weight (0-1)
-          </Label>
-          <Input
-            type="number"
-            min="0"
-            max="1"
-            step="0.05"
-            value={settings.news_sentiment_weight}
-            onChange={(e) => setSettings({...settings, news_sentiment_weight: parseFloat(e.target.value)})}
-            className="bg-slate-800 border-slate-700 text-white"
-          />
-          <p className="text-xs text-slate-400">
-            How much to weight news sentiment in signal calculations (higher = more influence)
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-slate-300">
             Alert Frequency
           </Label>
           <select
@@ -147,10 +128,6 @@ export default function SignalAlertSettings() {
             <div className="flex justify-between">
               <span>Sell signals:</span>
               <Badge className="bg-red-500/20 text-red-400">≥{settings.min_confidence_sell}%</Badge>
-            </div>
-            <div className="flex justify-between">
-              <span>News weight:</span>
-              <Badge className="bg-blue-500/20 text-blue-400">{(settings.news_sentiment_weight * 100).toFixed(0)}%</Badge>
             </div>
           </div>
         </div>

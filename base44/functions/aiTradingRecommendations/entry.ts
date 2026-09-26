@@ -85,9 +85,6 @@ Alert Thresholds: Buy signals minimum ${minConfidenceBuy}% confidence, Sell sign
 
 Use comprehensive data sources:
 1. **Technical Analysis**: Price momentum, volume, volatility patterns${hasSp500 ? ', AND the pre-computed SP500 AI indicator signals (Heikin Ashi, SSL Channel, CMO, AI RSI, TMO, AI Money Flow) shown per asset as "SP500 AI: LONG/SHORT/neutral (strength X/Y)". Prioritise assets where SP500 AI shows a LONG or SHORT signal with high strength. If an asset shows "SP500 AI: [BLOCKED]", do NOT recommend a buy on that asset.' : ''}
-2. **News Sentiment**: Recent headlines, regulatory news, partnerships
-3. **Social Media Trends**: Twitter/Reddit sentiment, influencer opinions, trending topics
-4. **On-Chain Metrics**: Whale movements, exchange flows, network activity
 
 Recommend the BEST ${cappedMax} trading opportunities with:
 - PRIORITIZE: Sell signals for assets user currently holds if they show weakness or profit-taking opportunity
@@ -100,7 +97,7 @@ Recommend the BEST ${cappedMax} trading opportunities with:
 - Ensure confidence levels meet user thresholds (${minConfidenceBuy}% for buys, ${minConfidenceSell}% for sells)
 
 IMPORTANT:
-- Include SELL opportunities for held positions if technical/sentiment signals indicate exits
+- Include SELL opportunities for held positions if technical signals indicate exits
 - Return confidence as a percentage from 0-100 (e.g., 85 not 0.85)
 - Balance recommendations between buy/sell based on market conditions and portfolio
 
@@ -128,9 +125,6 @@ Return ONLY the top ${cappedMax} highest-conviction opportunities (can be mix of
                   type: 'object',
                   properties: {
                     technical_score: { type: 'number' },
-                    news_sentiment: { type: 'string' },
-                    social_score: { type: 'number' },
-                    onchain_signal: { type: 'string' },
                   },
                 },
               },

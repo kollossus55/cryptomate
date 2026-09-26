@@ -794,22 +794,10 @@ export default function AIRecommendationNotification({ assets, onTradeAsset, onE
 
                         {/* Data Sources Breakdown */}
                         {rec.data_sources && (
-                          <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
+                          <div className="grid grid-cols-1 gap-2 mb-3 text-xs">
                             <div className="bg-black/20 rounded p-2">
                               <span className="text-slate-400">Technical: </span>
                               <span className="text-white font-bold">{rec.data_sources.technical_score}/100</span>
-                            </div>
-                            <div className="bg-black/20 rounded p-2">
-                              <span className="text-slate-400">News: </span>
-                              <span className="text-white font-bold capitalize">{rec.data_sources.news_sentiment}</span>
-                            </div>
-                            <div className="bg-black/20 rounded p-2">
-                              <span className="text-slate-400">Social: </span>
-                              <span className="text-white font-bold">{rec.data_sources.social_score}/100</span>
-                            </div>
-                            <div className="bg-black/20 rounded p-2">
-                              <span className="text-slate-400">On-Chain: </span>
-                              <span className="text-white font-bold capitalize">{rec.data_sources.onchain_signal}</span>
                             </div>
                           </div>
                         )}
