@@ -57,6 +57,7 @@ export default function Trading() {
     const saved = localStorage.getItem('paper_base_amount');
     return saved ? parseInt(saved) : 10000;
   });
+  const [paperBaseSynced, setPaperBaseSynced] = useState(false);
   const [isPriceLoading, setIsPriceLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [assetConfidence, setAssetConfidence] = useState({});
@@ -130,6 +131,33 @@ export default function Trading() {
     localStorage.setItem('paper_base_amount', String(paperBaseAmount));
   }, [paperBaseAmount]);
 
+  // Persist the paper trading base amount to the backend so it follows the
+  // user across devices/browsers, not just this browser's localStorage.
+  const persistPaperBaseAmount = async (amount) => {
+    try {
+      if (preferences?.id) {
+        await base44.entities.TradingPreferences.update(preferences.id, {
+          paper_base_amount: amount
+        });
+      } else {
+        await base44.entities.TradingPreferences.create({
+          trading_style: 'balanced',
+          risk_tolerance: 'moderate',
+          paper_base_amount: amount
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ['trading-preferences'] });
+    } catch (error) {
+      console.error('Failed to persist paper base amount:', error);
+    }
+  };
+
+  const handlePaperBaseAmountChange = (amount) => {
+    setPaperBaseAmount(amount);
+    localStorage.setItem('paper_base_amount', String(amount));
+    persistPaperBaseAmount(amount);
+  };
+
   const toggleAltcoinScanner = async (enabled) => {
     setAltcoinScannerEnabled(enabled);
     localStorage.setItem('altcoin_scanner_enabled', String(enabled));
@@ -169,6 +197,12 @@ export default function Trading() {
         setAltcoinScannerEnabled(preferences.altcoin_scanner_enabled);
         localStorage.setItem('altcoin_scanner_enabled', String(preferences.altcoin_scanner_enabled));
         setAltcoinPrefSynced(true);
+      }
+      // Sync paper base amount from backend (authoritative) once on load
+      if (!paperBaseSynced && typeof preferences.paper_base_amount === 'number') {
+        setPaperBaseAmount(preferences.paper_base_amount);
+        localStorage.setItem('paper_base_amount', String(preferences.paper_base_amount));
+        setPaperBaseSynced(true);
       }
     }
   }, [preferences, altcoinPrefSynced]);
@@ -1916,17 +1950,20 @@ export default function Trading() {
               <div className="flex items-center gap-2 bg-slate-900/60 rounded-lg px-3 py-1.5 border border-yellow-500/30">
                 <span className="text-xs text-yellow-200 font-medium">Base:</span>
                 <div className="flex gap-1">
-                  {[1000, 3000, 5000, 10000].map((amt) => (
+                  {[
+                    { amount: 1000, active: 'bg-emerald-500 text-white', idle: 'bg-slate-800 text-emerald-300 hover:bg-emerald-500/20' },
+                    { amount: 3000, active: 'bg-sky-500 text-white', idle: 'bg-slate-800 text-sky-300 hover:bg-sky-500/20' },
+                    { amount: 5000, active: 'bg-violet-500 text-white', idle: 'bg-slate-800 text-violet-300 hover:bg-violet-500/20' },
+                    { amount: 10000, active: 'bg-amber-500 text-slate-900', idle: 'bg-slate-800 text-amber-300 hover:bg-amber-500/20' }
+                  ].map(({ amount, active, idle }) => (
                     <button
-                      key={amt}
-                      onClick={() => setPaperBaseAmount(amt)}
+                      key={amount}
+                      onClick={() => handlePaperBaseAmountChange(amount)}
                       className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${
-                        paperBaseAmount === amt
-                          ? 'bg-yellow-500 text-slate-900'
-                          : 'bg-slate-800 text-yellow-300 hover:bg-slate-700'
+                        paperBaseAmount === amount ? active : idle
                       }`}
                     >
-                      ${amt.toLocaleString()}
+                      ${amount.toLocaleString()}
                     </button>
                   ))}
                 </div>

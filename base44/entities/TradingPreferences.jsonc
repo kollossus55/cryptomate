@@ -187,7 +187,7 @@
         "daily",
         "weekly",
         "monthly",
-        "as_needed"
+        "as-needed"
       ],
       "default": "weekly",
       "description": "How often to rebalance portfolio"
@@ -230,6 +230,11 @@
       "type": "boolean",
       "default": false,
       "description": "Whether the Altcoin Scanner toggle is enabled on the Trading page"
+    },
+    "paper_base_amount": {
+      "type": "number",
+      "default": 10000,
+      "description": "Starting balance for paper/demo trading reset (e.g. 1000, 3000, 5000, 10000)"
     }
   },
   "required": [
