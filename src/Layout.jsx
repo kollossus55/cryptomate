@@ -243,10 +243,18 @@ export default function Layout({ children, currentPageName }) {
           <div className="max-w-7xl mx-auto px-6 py-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
               <div className="max-w-2xl">
-                <p className="text-slate-400 text-sm leading-relaxed">
-                  <strong className="text-slate-300">Educational Platform:</strong> This is a paper trading simulation for learning purposes.
-                  All trades use virtual funds. No real money is involved. Exchange integrations and auto-trading are demonstration features only.
-                </p>
+                <div className="max-w-2xl space-y-2">
+                  <p className="text-slate-400 text-sm leading-relaxed">
+                    <strong className="text-slate-300">Demo Platform with Live Trading:</strong> CryptoMate runs in paper-trading mode by default using virtual funds.
+                    When you connect a supported exchange and enable live trading, the platform can place real orders on your behalf using your own exchange account and funds.
+                  </p>
+                  <p className="text-slate-500 text-xs leading-relaxed">
+                    <strong className="text-slate-400">Risk Disclaimer:</strong> Trading cryptocurrencies and digital assets carries a high level of risk and may result in the loss of your entire investment.
+                    CryptoMate is provided for educational and informational purposes only and does not constitute financial, investment, or trading advice.
+                    You are solely responsible for any trades you execute and any losses you may incur. CryptoMate, its creators, and its affiliates accept no liability for any financial losses, damages, or consequences arising from the use of this platform.
+                    Always do your own research and consult a licensed financial advisor before trading.
+                  </p>
+                </div>
               </div>
               <div className="text-slate-500 text-sm">
                 © 2024 CryptoMate
