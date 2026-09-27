@@ -114,11 +114,9 @@ export default function Layout({ children, currentPageName }) {
               <path d="m2 12 10 5 10-5"></path>
             </svg>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-white font-semibold">CryptoMate</span>
-            <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">
-              DEMO
-            </Badge>
+          <div className="flex flex-col">
+            <span className="text-white font-semibold leading-tight">CryptoMate</span>
+            <span className="text-[10px] text-slate-400 leading-tight">Your Crypto Trading Assistant</span>
           </div>
         </Link>
 
@@ -246,12 +244,12 @@ export default function Layout({ children, currentPageName }) {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
               <div className="max-w-2xl">
                 <p className="text-slate-400 text-sm leading-relaxed">
-                  <strong className="text-slate-300">Educational Demo Platform:</strong> This is a paper trading simulation for learning purposes.
+                  <strong className="text-slate-300">Educational Platform:</strong> This is a paper trading simulation for learning purposes.
                   All trades use virtual funds. No real money is involved. Exchange integrations and auto-trading are demonstration features only.
                 </p>
               </div>
               <div className="text-slate-500 text-sm">
-                © 2024 CryptoMate Demo
+                © 2024 CryptoMate
               </div>
             </div>
           </div>
