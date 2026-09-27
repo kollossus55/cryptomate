@@ -658,7 +658,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
   let calibrationModel = null;
   try {
     const models = await base44.asServiceRole.entities.CalibrationModel.list('-fitted_at', 5);
-    calibrationModel = (models || []).find((m) => m.owner_email === user_email) || models?.[0] || null;
+    calibrationModel = (models || []).find((m) => m.owner_email === user_email) || null;
     if (calibrationModel) {
       log(`Calibration model loaded: sample ${calibrationModel.sample_size}, win rate ${((calibrationModel.win_rate || 0) * 100).toFixed(1)}%`);
     }
@@ -874,7 +874,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
         const aiMode = settings.ai_confirmation_mode || 'off';
         if (aiMode === 'auto') {
           const aiResult = await aiConfirmTrade(base44, {
-            ticker, signal, settings, candleInterval, log,
+            ticker, signal, settings, candleInterval, log, user_email,
           });
           if (!aiResult.approve) {
             log(`AI REJECTED ${ticker.symbol}: ${aiResult.reasoning}`);
@@ -1049,11 +1049,12 @@ async function notify(base44, user_email, { type, priority, title, message }) {
  * AI Confirmation Gate — asks an LLM to review a trade signal and decide
  * whether to approve it. Returns { approve, confidence, reasoning }.
  *
- * On AI service failure, the trade is ALLOWED through (the AI is a gate, not
- * a dependency — an outage should not halt trading). The user can always
- * enable the kill switch to stop everything.
+ * On AI service failure, the trade is REJECTED (fail-closed). The AI gate is
+ * a safety control — an outage must not silently disable it and let trades
+ * through. The user can always turn the gate off (ai_confirmation_mode='off')
+ * or enable the kill switch to stop everything.
  */
-async function aiConfirmTrade(base44, { ticker, signal, settings, candleInterval, log }) {
+async function aiConfirmTrade(base44, { ticker, signal, settings, candleInterval, log, user_email }) {
   const minScore = settings.ai_confirmation_min_score ?? 70;
   const tpPercent = settings.take_profit_percent ?? 8;
   const slPercent = settings.stop_loss_percent ?? 3;
@@ -1083,11 +1084,14 @@ Your job:
 
 Respond as JSON: {"approve": <true|false>, "confidence": <0-100>, "reasoning": "<one sentence explanation>"}`;
 
-  // Load the user's AI model config (platform model selector or custom API key)
+  // Load the trading user's AI model config (platform model selector or custom
+  // API key). Scope to this user only — asServiceRole bypasses RLS, so without
+  // this filter configs[0] could be ANY user's config, leaking the trading
+  // user's signal data to another user's custom LLM provider.
   let modelConfig = null;
   try {
     const configs = await base44.asServiceRole.entities.AIModelConfig.list();
-    modelConfig = (configs || [])[0] || null;
+    modelConfig = (configs || []).find(c => c.created_by === user_email) || null;
   } catch (e) {
     log(`AI model config load failed: ${e.message}`);
   }
@@ -1140,11 +1144,11 @@ Respond as JSON: {"approve": <true|false>, "confidence": <0-100>, "reasoning": "
 
     return { approve, confidence, reasoning };
   } catch (e) {
-    log(`AI confirmation service failed: ${e.message} — allowing trade by default`);
+    log(`AI confirmation service failed: ${e.message} — rejecting trade (fail-closed)`);
     return {
-      approve: true,
+      approve: false,
       confidence: 0,
-      reasoning: `AI service unavailable — trade allowed by default`,
+      reasoning: `AI service unavailable — trade rejected (fail-closed)`,
     };
   }
 }
