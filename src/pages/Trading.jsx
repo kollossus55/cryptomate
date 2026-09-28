@@ -26,6 +26,7 @@ import NewsWidget from "../components/trading/NewsWidget";
 import SystemHealthMonitor from "../components/trading/SystemHealthMonitor";
 import AITradingAdvisor from "../components/trading/AITradingAdvisor";
 import SignalAlertSettings from "../components/trading/SignalAlertSettings";
+import BackendResultPanel from "../components/trading/BackendResultPanel";
 import ConfluenceSignalScanner from "../components/trading/ConfluenceSignalScanner";
 
 import {
@@ -1816,14 +1817,7 @@ export default function Trading() {
                 </div>
               </div>
 
-              {backendDebugLog && (
-                <div className="mt-4 p-3 bg-slate-900 rounded-lg border border-slate-700">
-                  <p className="text-xs text-slate-400 mb-1">Last Backend Result:</p>
-                  <pre className="text-xs text-green-400 overflow-x-auto whitespace-pre-wrap">
-                    {JSON.stringify(backendDebugLog, null, 2)}
-                  </pre>
-                </div>
-              )}
+              {backendDebugLog && <BackendResultPanel result={backendDebugLog} />}
             </div>
           </>
         )}
