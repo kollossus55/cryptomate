@@ -521,12 +521,8 @@ export function generatePersonalizedPrompt(metrics, issues, assetAnalysis, prefe
   }
 
   let analysisContext = '';
-  const methods = [];
-  if (preferences?.use_technical_analysis) methods.push('technical analysis');
-  if (preferences?.use_sentiment_analysis) methods.push('sentiment analysis');
-  if (preferences?.use_fundamental_analysis) methods.push('fundamental analysis');
-  if (methods.length > 0) {
-    analysisContext = `Analysis methods to emphasize: ${methods.join(', ')}. `;
+  if (preferences?.use_technical_analysis !== false) {
+    analysisContext = `Analysis methods to emphasize: technical analysis (real-data-only engine; sentiment and on-chain data are not used). `;
   }
 
   return `

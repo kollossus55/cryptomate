@@ -512,35 +512,19 @@ export default function TradingPreferencesForm({ onSave }) {
                   </div>
                 </label>
 
-                <label className="flex items-start gap-3 p-4 rounded-xl border-2 border-slate-700 bg-slate-800/50 cursor-pointer hover:border-slate-600 transition-all">
-                  <input
-                    type="checkbox"
-                    checked={formData.use_sentiment_analysis}
-                    onChange={(e) => setFormData({ ...formData, use_sentiment_analysis: e.target.checked })}
-                    className="w-5 h-5 rounded border-slate-700 bg-slate-800 mt-0.5"
-                  />
-                  <div className="flex-1">
-                    <div className="font-semibold text-white mb-1">Sentiment Analysis</div>
-                    <div className="text-sm text-slate-400">
-                      News sentiment, social media trends, market psychology
+                <div className="p-4 rounded-xl border-2 border-slate-700 bg-slate-800/30">
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center mt-0.5 flex-shrink-0">
+                      <CheckCircle2 className="w-3 h-3 text-indigo-400" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-white mb-1">Technical Analysis <span className="text-xs text-indigo-400">(always on)</span></div>
+                      <div className="text-sm text-slate-400">
+                        CryptoMate uses a real-data-only engine: price patterns, indicators (RSI, MACD, etc.), and support/resistance levels. Sentiment and on-chain data are not used.
+                      </div>
                     </div>
                   </div>
-                </label>
-
-                <label className="flex items-start gap-3 p-4 rounded-xl border-2 border-slate-700 bg-slate-800/50 cursor-pointer hover:border-slate-600 transition-all">
-                  <input
-                    type="checkbox"
-                    checked={formData.use_fundamental_analysis}
-                    onChange={(e) => setFormData({ ...formData, use_fundamental_analysis: e.target.checked })}
-                    className="w-5 h-5 rounded border-slate-700 bg-slate-800 mt-0.5"
-                  />
-                  <div className="flex-1">
-                    <div className="font-semibold text-white mb-1">Fundamental Analysis</div>
-                    <div className="text-sm text-slate-400">
-                      On-chain metrics, adoption rates, network activity, tokenomics
-                    </div>
-                  </div>
-                </label>
+                </div>
               </div>
             </div>
 
