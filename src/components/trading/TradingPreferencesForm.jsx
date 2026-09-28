@@ -44,7 +44,7 @@ export default function TradingPreferencesForm({ onSave }) {
     volatility_preference: 'moderate',
     diversification_level: 'moderate',
     use_technical_analysis: true,
-    use_sentiment_analysis: true,
+    use_sentiment_analysis: false,
     use_fundamental_analysis: false,
     rebalancing_frequency: 'weekly',
     notification_preferences: {
