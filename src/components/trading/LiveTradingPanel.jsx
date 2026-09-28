@@ -40,33 +40,26 @@ export default function LiveTradingPanel() {
   const cooldownHours = Math.floor(cooldownRemaining / (1000 * 60 * 60));
   const cooldownMinutes = Math.floor((cooldownRemaining % (1000 * 60 * 60)) / (1000 * 60));
 
+  const invokeLiveControl = async (action) => {
+    const res = await base44.functions.invoke('liveTradingControl', { action });
+    const data = res?.data ?? res;
+    if (!data || data.success !== true) {
+      throw new Error(data?.error || 'Request failed');
+    }
+    return data;
+  };
+
   const handleRequestLive = async () => {
     if (!activeConnection) return;
     if (!window.confirm('Request live trading? A 24-hour cooldown will begin before you can enable live orders.')) return;
     setIsProcessing(true);
     try {
-      await base44.entities.ExchangeConnection.update(activeConnection.id, {
-        trading_mode: 'ready_for_live',
-      });
-      const updates = {
-        live_trading_requested_at: new Date().toISOString(),
-        exchange_connection_id: activeConnection.id,
-      };
-      if (settings?.id) {
-        await base44.entities.AutoTradingSettings.update(settings.id, updates);
-      } else {
-        await base44.entities.AutoTradingSettings.create({
-          is_enabled: false,
-          min_confidence: 70,
-          max_position_size_percent: 10,
-          ...updates,
-        });
-      }
+      await invokeLiveControl('request');
       queryClient.invalidateQueries({ queryKey: ['auto-trading-settings'] });
       queryClient.invalidateQueries({ queryKey: ['exchange-connections'] });
     } catch (error) {
       console.error('Failed to request live trading:', error);
-      alert('Failed to request live trading. Please try again.');
+      alert(`Failed to request live trading: ${error.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -81,13 +74,12 @@ export default function LiveTradingPanel() {
     if (!window.confirm('FINAL WARNING: Live trading uses your real exchange funds. Confirm to proceed.')) return;
     setIsProcessing(true);
     try {
-      await base44.entities.AutoTradingSettings.update(settings.id, {
-        live_trading_enabled: true,
-      });
+      // The server re-verifies the 24h cooldown; this is the authoritative gate.
+      await invokeLiveControl('enable');
       queryClient.invalidateQueries({ queryKey: ['auto-trading-settings'] });
     } catch (error) {
       console.error('Failed to enable live trading:', error);
-      alert('Failed to enable live trading. Please try again.');
+      alert(`Failed to enable live trading: ${error.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -97,12 +89,11 @@ export default function LiveTradingPanel() {
     if (!window.confirm('Disable live trading? Auto-trading will revert to paper mode immediately.')) return;
     setIsProcessing(true);
     try {
-      await base44.entities.AutoTradingSettings.update(settings.id, {
-        live_trading_enabled: false,
-      });
+      await invokeLiveControl('disable');
       queryClient.invalidateQueries({ queryKey: ['auto-trading-settings'] });
     } catch (error) {
       console.error('Failed to disable live trading:', error);
+      alert(`Failed to disable live trading: ${error.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -111,19 +102,12 @@ export default function LiveTradingPanel() {
   const handleCancelRequest = async () => {
     setIsProcessing(true);
     try {
-      await base44.entities.AutoTradingSettings.update(settings.id, {
-        live_trading_requested_at: null,
-        exchange_connection_id: null,
-      });
-      if (activeConnection) {
-        await base44.entities.ExchangeConnection.update(activeConnection.id, {
-          trading_mode: 'simulated',
-        });
-      }
+      await invokeLiveControl('cancel');
       queryClient.invalidateQueries({ queryKey: ['auto-trading-settings'] });
       queryClient.invalidateQueries({ queryKey: ['exchange-connections'] });
     } catch (error) {
       console.error('Failed to cancel request:', error);
+      alert(`Failed to cancel request: ${error.message}`);
     } finally {
       setIsProcessing(false);
     }

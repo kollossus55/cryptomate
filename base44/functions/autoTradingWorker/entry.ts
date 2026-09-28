@@ -166,13 +166,20 @@ async function loadLiveTradingConfig(base44: any, settings: any, user_email: str
     return { enabled: false };
   }
 
-  if (settings.live_trading_requested_at) {
-    const requestedAt = new Date(settings.live_trading_requested_at);
-    const cooldownEnd = new Date(requestedAt.getTime() + 24 * 60 * 60 * 1000);
-    if (new Date() < cooldownEnd) {
-      log('Live trading enabled but 24h cooldown not yet passed — trading paper this cycle');
-      return { enabled: false, reason: 'cooldown_active' };
-    }
+  // Fail closed: a missing timestamp means the arming sequence was never
+  // completed server-side, so live trading must NOT activate. Previously the
+  // cooldown check was skipped when the timestamp was null, allowing a
+  // direct entity write of live_trading_enabled=true to bypass the 24h
+  // cooldown. The timestamp is only set by the liveTradingControl function.
+  if (!settings.live_trading_requested_at) {
+    log('Live trading enabled but no cooldown timestamp — failing closed (not armed via server)');
+    return { enabled: false, reason: 'not_armed' };
+  }
+  const requestedAt = new Date(settings.live_trading_requested_at);
+  const cooldownEnd = new Date(requestedAt.getTime() + 24 * 60 * 60 * 1000);
+  if (new Date() < cooldownEnd) {
+    log('Live trading enabled but 24h cooldown not yet passed — trading paper this cycle');
+    return { enabled: false, reason: 'cooldown_active' };
   }
 
   try {

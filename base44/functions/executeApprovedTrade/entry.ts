@@ -130,15 +130,17 @@ export default async function(req: Request): Promise<Response> {
     const settings = await base44.asServiceRole.entities.AutoTradingSettings.filter({ created_by: user_email });
     const s = settings?.[0];
     let liveTrading = { enabled: false };
-    if (s?.live_trading_enabled && s?.exchange_connection_id) {
-      const conns = await base44.asServiceRole.entities.ExchangeConnection.filter({ id: s.exchange_connection_id });
-      const conn = conns?.[0];
-      if (conn?.is_active && conn?.connection_status === 'connected' && conn?.trading_mode === 'ready_for_live') {
-        if (s.live_trading_requested_at) {
-          const cooldownEnd = new Date(new Date(s.live_trading_requested_at).getTime() + 24 * 60 * 60 * 1000);
-          if (new Date() >= cooldownEnd) {
-            liveTrading = { enabled: true, connection_id: conn.id, exchange: conn.exchange_name };
-          }
+    // Fail closed: a missing timestamp means the arming sequence was never
+    // completed server-side. Previously a null timestamp skipped the cooldown
+    // check, allowing a direct entity write to bypass the 24h cooldown. The
+    // timestamp is only set by the liveTradingControl function.
+    if (s?.live_trading_enabled && s?.exchange_connection_id && s.live_trading_requested_at) {
+      const cooldownEnd = new Date(new Date(s.live_trading_requested_at).getTime() + 24 * 60 * 60 * 1000);
+      if (new Date() >= cooldownEnd) {
+        const conns = await base44.asServiceRole.entities.ExchangeConnection.filter({ id: s.exchange_connection_id });
+        const conn = conns?.[0];
+        if (conn?.is_active && conn?.connection_status === 'connected' && conn?.trading_mode === 'ready_for_live') {
+          liveTrading = { enabled: true, connection_id: conn.id, exchange: conn.exchange_name };
         }
       }
     }
