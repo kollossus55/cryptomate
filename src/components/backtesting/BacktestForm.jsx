@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
+
 import { Checkbox } from "@/components/ui/checkbox";
-import { Play, Sparkles, Calendar, DollarSign, Target, Shield } from "lucide-react";
+import { Play, Calendar, DollarSign, Target, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function BacktestForm({ onRun }) {
@@ -23,7 +23,6 @@ export default function BacktestForm({ onRun }) {
       maxPositionSize: 15,
       stopLoss: 5,
       takeProfit: 10,
-      useSentiment: true,
       riskLevel: 'medium'
     }
   });
@@ -317,25 +316,6 @@ export default function BacktestForm({ onRun }) {
             </div>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-pink-500/10 to-purple-500/10 border-2 border-pink-500/30 rounded-xl">
-            <div className="flex items-center gap-3">
-              <Sparkles className="w-5 h-5 text-pink-400" />
-              <div>
-                <Label className="text-white font-semibold">Use Sentiment Analysis</Label>
-                <p className="text-xs text-pink-200/80 mt-1">
-                  Incorporate news & social media sentiment into trading decisions
-                </p>
-              </div>
-            </div>
-            <Switch
-              checked={config.strategy.useSentiment}
-              onCheckedChange={(checked) => setConfig({
-                ...config,
-                strategy: {...config.strategy, useSentiment: checked}
-              })}
-              className="data-[state=checked]:bg-pink-500"
-            />
-          </div>
         </CardContent>
       </Card>
 

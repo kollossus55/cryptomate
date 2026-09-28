@@ -13,7 +13,7 @@ import {
   Legend,
   ResponsiveContainer
 } from "recharts";
-import { LineChart as LineChartIcon, BarChart3, List, TrendingUp, TrendingDown, Sparkles } from "lucide-react";
+import { LineChart as LineChartIcon, BarChart3, List, TrendingUp, TrendingDown } from "lucide-react";
 import { format } from "date-fns";
 
 export default function BacktestResults({ backtest }) {
@@ -162,12 +162,7 @@ export default function BacktestResults({ backtest }) {
                         <Badge className="bg-purple-500/20 text-purple-400">
                           {trade.confidence?.toFixed(0)}% AI
                         </Badge>
-                        {backtest.strategy_config?.useSentiment && trade.sentiment_score !== undefined && (
-                          <Badge className="bg-pink-500/20 text-pink-400 flex items-center gap-1">
-                            <Sparkles className="w-3 h-3" />
-                            {trade.sentiment_score > 0 ? '+' : ''}{(trade.sentiment_score * 100).toFixed(0)}% sentiment
-                          </Badge>
-                        )}
+
                       </div>
 
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">

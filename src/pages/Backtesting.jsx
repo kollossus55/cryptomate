@@ -13,7 +13,6 @@ import {
   BarChart3,
   Play,
   History,
-  Sparkles,
   AlertCircle,
   Target,
   TrendingDown
@@ -188,7 +187,7 @@ export default function Backtesting() {
       beat_benchmark: result.benchmark
         ? m.totalReturn > result.benchmark.totalReturn
         : null,
-      data_source: 'binance_1h_ohlcv',
+      data_source: 'okx_1h_ohlcv',
       assets_tested: [...candlesBySymbol.keys()],
       assets_unavailable: failures,
       bars_simulated: result.barsSimulated,
@@ -387,12 +386,7 @@ export default function Backtesting() {
                                 }>
                                   {backtest.status}
                                 </Badge>
-                                {backtest.strategy_config?.useSentiment && (
-                                  <Badge className="bg-pink-500/20 text-pink-400 flex items-center gap-1">
-                                    <Sparkles className="w-3 h-3" />
-                                    Sentiment
-                                  </Badge>
-                                )}
+
                               </div>
 
                               {backtest.status === 'completed' && (
