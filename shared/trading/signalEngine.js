@@ -321,28 +321,38 @@ function volumeComponent(candles, ctx) {
  * all three exceed their upper bounds and register as NOT bullish, so the
  * composite scored a powerful trend as bearish. Votes are now directional:
  * above the midpoint is bullish, with only genuine exhaustion excluded.
+ *
+ * Membership is the six sub-components the Signal Indicators panel exposes, and
+ * each one's sub-toggle decides whether it votes — turning a sub-indicator off
+ * now changes what the engine trades on, not just what the panel shows. (It also
+ * voted on a seventh, MACD, that no panel listed and no toggle could reach, so
+ * the traded score could not match the displayed one.)
  */
-function compositeComponent(candles) {
+function compositeComponent(candles, indicators = {}) {
   const ha = heikinAshi(candles);
   const ssl = sslChannel(candles);
   const c = cmo(candles);
   const t = tmo(candles);
   const m = mfi(candles);
   const r = rsi(candles);
-  const mac = macd(candles);
 
-  if (!ha.length || !ssl || c === null || !t || m === null || r === null || !mac) return null;
+  if (!ha.length || !ssl || c === null || !t || m === null || r === null) return null;
 
   const haNow = last(ha);
-  const votes = [
-    { name: 'Heikin Ashi', bull: haNow.close > haNow.open },
-    { name: 'SSL Channel', bull: ssl.bullish },
-    { name: 'TMO', bull: t.bullish },
-    { name: 'CMO', bull: c > 0 },
-    { name: 'Money Flow', bull: m > 50 && m <= 95 },
-    { name: 'RSI', bull: r > 50 && r <= 90 },
-    { name: 'MACD', bull: mac.histogram > 0 },
+  const members = [
+    { key: 'sp500ai_ha', name: 'Heikin Ashi', bull: haNow.close > haNow.open },
+    { key: 'sp500ai_ssl', name: 'SSL Channel', bull: ssl.bullish },
+    { key: 'sp500ai_cmo', name: 'CMO', bull: c > 0 },
+    { key: 'sp500ai_airsi', name: 'RSI', bull: r > 50 && r <= 90 },
+    { key: 'sp500ai_tmo', name: 'TMO', bull: t.bullish },
+    { key: 'sp500ai_mf', name: 'Money Flow', bull: m > 50 && m <= 95 },
   ];
+
+  const enabled = members.filter((v) => indicators[v.key] !== false);
+  // Every sub-component off is a misconfiguration, not a request to disable the
+  // suite — the parent toggle does that. Score the full set rather than emit an
+  // empty composite, which the confluence gate would read as "not bullish".
+  const votes = enabled.length ? enabled : members;
 
   const bullCount = votes.filter((v) => v.bull).length;
   const bullNames = votes.filter((v) => v.bull).map((v) => v.name).join(', ') || 'none';
@@ -350,6 +360,7 @@ function compositeComponent(candles) {
   return {
     score: scale(bullCount, 0, votes.length, 5, 95),
     bullCount,
+    total: votes.length,
     votes,
     reasons: [`Composite ${bullCount}/${votes.length} bullish: ${bullNames}`],
   };
@@ -438,7 +449,7 @@ export function scoreAsset(candles, opts = {}) {
     meanReversion: meanReversionComponent(candles, indicators, ctx),
     volume: classicOn ? volumeComponent(candles, ctx) : null,
     supplyDemand: indicators.supply_demand ? supplyDemandComponent(candles, ctx) : null,
-    composite: indicators.sp500ai ? compositeComponent(candles) : null,
+    composite: indicators.sp500ai ? compositeComponent(candles, indicators) : null,
   };
 
   // Renormalise over the components that actually produced a value, so

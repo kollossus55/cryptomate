@@ -280,6 +280,38 @@ test('choppy markets are still rejected — the fix did not just inflate everyth
   assert.ok(s.strength < 70, `choppy market scored ${s.strength} — threshold no longer selective`);
 });
 
+test('SP500 AI scores the six components the panel shows, and its sub-toggles decide who votes', () => {
+  // Regression: the engine voted with a seventh member (MACD) that no panel
+  // listed and no toggle could reach, and it ignored every sp500ai_* toggle —
+  // so what it traded on could not match what the UI displayed.
+  const onlySp500 = {
+    rsi: false, macd: false, bollinger: false, ema: false, stoch: false,
+    supply_demand: false, sp500ai: true,
+  };
+  const compositeReason = (extra) => {
+    const s = scoreAsset(uptrend, { indicators: { ...onlySp500, ...extra } });
+    assert.ok(s !== null, 'no score produced for an SP500-AI-only setup');
+    return s.reasons.find((r) => r.startsWith('Composite'));
+  };
+
+  assert.match(compositeReason({}), /Composite \d\/6 bullish/);
+
+  const withoutMoneyFlow = compositeReason({ sp500ai_mf: false });
+  assert.match(withoutMoneyFlow, /Composite \d\/5 bullish/,
+    `a disabled sub-indicator still voted: ${withoutMoneyFlow}`);
+
+  const noneEnabled = compositeReason({
+    sp500ai_ha: false, sp500ai_ssl: false, sp500ai_cmo: false,
+    sp500ai_airsi: false, sp500ai_tmo: false, sp500ai_mf: false,
+  });
+  assert.match(noneEnabled, /Composite \d\/6 bullish/,
+    `an all-off misconfiguration must fall back to the full set: ${noneEnabled}`);
+
+  const parentOff = scoreAsset(uptrend, { indicators: { ...onlySp500, sp500ai: false } });
+  assert.ok(parentOff === null || !parentOff.reasons.some((r) => r.startsWith('Composite')),
+    'the composite contributed while SP500 AI was switched off');
+});
+
 // ---------------------------------------------------------------------------
 
 section('Costs');
