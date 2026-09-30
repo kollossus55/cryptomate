@@ -1633,7 +1633,8 @@ export default function Trading() {
               <Newspaper className="w-5 h-5 mr-2" />
               News Feed
             </Button>
-            <div className="flex gap-1">
+            <div className="flex flex-col items-center gap-1">
+              <div className="flex gap-1">
               <Button
                 onClick={() => setShowRecommendations(true)}
                 size="lg"
@@ -1650,6 +1651,8 @@ export default function Trading() {
               >
                 <Settings className="w-5 h-5" />
               </Button>
+              </div>
+              <span className="text-[11px] text-violet-300/80 font-medium">Click to show</span>
             </div>
             <div className="flex items-center gap-2">
               <Button
