@@ -39,6 +39,7 @@ import { motion, AnimatePresence } from "framer-motion";
 export default function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const [clearedCount, setClearedCount] = useState(0);
   const queryClient = useQueryClient();
 
   const { data: notifications = [] } = useQuery({
@@ -76,9 +77,41 @@ export default function NotificationCenter() {
     },
   });
 
-  // Clears the whole inbox, not just the page on screen, in a single request.
+  // Clearing the whole inbox in one request hangs once the history is large: the
+  // delete never comes back. So we delete in bounded batches (newest first, so the
+  // list on screen empties straight away) and refresh the badge after each batch.
+  const CLEAR_BATCH_SIZE = 250;
+  const CLEAR_MAX_BATCHES = 40;
+
   const clearAllMutation = useMutation({
-    mutationFn: () => base44.entities.Notification.deleteMany({}),
+    mutationFn: async () => {
+      setClearedCount(0);
+
+      let deleted = 0;
+
+      for (let batch = 0; batch < CLEAR_MAX_BATCHES; batch += 1) {
+        const { items } = await base44.entities.Notification.filter(
+          {},
+          { sort: '-created_date', limit: CLEAR_BATCH_SIZE, fields: ['id'] }
+        );
+
+        if (items.length === 0) break;
+
+        const result = await base44.entities.Notification.deleteMany({
+          id: { $in: items.map((notification) => notification.id) },
+        });
+
+        if (!result?.deleted) break;
+
+        deleted += result.deleted;
+        setClearedCount(deleted);
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+
+        if (items.length < CLEAR_BATCH_SIZE) break;
+      }
+
+      return deleted;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
@@ -205,7 +238,7 @@ export default function NotificationCenter() {
                   className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
                 >
                   <Trash2 className="w-4 h-4 mr-1" />
-                  {clearAllMutation.isPending ? 'Clearing…' : 'Clear all'}
+                  {clearAllMutation.isPending ? `Clearing… ${clearedCount}` : 'Clear all'}
                 </Button>
               )}
             </div>
@@ -319,7 +352,7 @@ export default function NotificationCenter() {
                 disabled={clearAllMutation.isPending}
                 className="bg-red-600 hover:bg-red-500 text-white"
               >
-                {clearAllMutation.isPending ? 'Clearing…' : 'Delete all'}
+                {clearAllMutation.isPending ? `Clearing… ${clearedCount} deleted` : 'Delete all'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
