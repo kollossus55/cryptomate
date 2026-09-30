@@ -1,0 +1,45 @@
+{
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "notification_cleanup",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "purge_old_notifications": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "notificationCleanup",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Delete old notifications",
+            "description": "Removes notifications older than the configured retention period"
+          }
+        }
+      }
+    ]
+  },
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 3 * * *",
+      "one_time_date": null,
+      "timezone": "UTC",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "name": "Notification Cleanup",
+  "description": "Runs nightly at 03:00 UTC and deletes notifications older than the retention period set in the notifications panel."
+}

@@ -235,6 +235,11 @@
       "type": "number",
       "default": 10000,
       "description": "Starting balance for paper/demo trading reset (e.g. 1000, 3000, 5000, 10000)"
+    },
+    "notification_retention_days": {
+      "type": "number",
+      "default": 30,
+      "description": "Notifications older than this many days are deleted automatically. 0 keeps them forever."
     }
   },
   "required": [

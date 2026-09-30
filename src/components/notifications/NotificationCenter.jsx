@@ -35,6 +35,7 @@ import {
   X
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import NotificationRetentionSelect from "./NotificationRetentionSelect";
 
 export default function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false);
@@ -245,7 +246,7 @@ export default function NotificationCenter() {
           </SheetTitle>
         </SheetHeader>
 
-        <ScrollArea className="h-[calc(100vh-100px)] mt-6 pr-4">
+        <ScrollArea className="h-[calc(100vh-175px)] mt-6 pr-4">
           {notifications.length === 0 ? (
             <div className="text-center py-12">
               <Bell className="w-12 h-12 text-slate-600 mx-auto mb-3" />
@@ -331,6 +332,8 @@ export default function NotificationCenter() {
             </div>
           )}
         </ScrollArea>
+
+        <NotificationRetentionSelect />
 
         {/* In-app confirmation: window.confirm is blocked inside the preview iframe,
             so the previous Clear all button silently did nothing. */}
