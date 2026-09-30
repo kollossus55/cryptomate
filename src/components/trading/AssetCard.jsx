@@ -6,6 +6,7 @@ import { TrendingUp, TrendingDown, Sparkles, BarChart3, Trophy, Clock, ArrowUpCi
 import { motion } from "framer-motion";
 
 import NewsSentimentIndicator from "./NewsSentimentIndicator";
+import { getSignalLabel } from "./signalLabels";
 
 export default function AssetCard({ asset, rank, onTrade, onAnalyze }) {
   const isPositive = (asset.change24h || 0) >= 0;
@@ -132,13 +133,13 @@ export default function AssetCard({ asset, rank, onTrade, onAnalyze }) {
             />
           )}
 
-          {/* AI Recommendation Badge */}
+          {/* Graded Signal Label */}
           <div>
             <Badge className={`${getRecommendationColor(recommendation)} border-2 font-bold px-3 py-1.5 flex items-center gap-1.5 w-full justify-center`}>
               {recommendation === 'buy' && <ArrowUpCircle className="w-4 h-4" />}
               {recommendation === 'sell' && <ArrowDownCircle className="w-4 h-4" />}
               {recommendation === 'hold' && <BarChart3 className="w-4 h-4" />}
-              AI Signal: {recommendation.toUpperCase()}
+              {getSignalLabel(recommendation, confidence)}
             </Badge>
           </div>
 

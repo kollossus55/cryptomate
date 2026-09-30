@@ -1082,7 +1082,7 @@ export default function Trading() {
              'no_opportunities': `Scanned ${combinedAssets.length} assets - No signals met criteria`,
              'no_valid_opportunity': 'Signals found but filtered by risk/rules',
              'circuit_breaker_triggered': 'Circuit Breaker Active - Trading Halted',
-             'confidence_not_ready': 'Waiting for AI Confidence Models...'
+             'confidence_not_ready': 'Waiting for signal data...'
           };
           setLastScanResult(friendlyReasons[result.reason] || result.reason);
           }
@@ -2035,8 +2035,8 @@ export default function Trading() {
               onChange={(e) => setSortBy(e.target.value)}
               className="w-full bg-slate-900 text-white border-none rounded text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="confidence">AI Confidence</option>
-              <option value="signal">AI Signal</option>
+              <option value="confidence">Signal Strength</option>
+              <option value="signal">Signal</option>
               <option value="price">Price (High to Low)</option>
               <option value="change">24h Change</option>
             </select>
