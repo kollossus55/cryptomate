@@ -80,7 +80,7 @@ export default function NotificationCenter() {
   // Clearing the whole inbox in one request hangs once the history is large: the
   // delete never comes back. So we delete in bounded batches (newest first, so the
   // list on screen empties straight away) and refresh the badge after each batch.
-  const CLEAR_BATCH_SIZE = 250;
+  const CLEAR_BATCH_SIZE = 500;
   const CLEAR_MAX_BATCHES = 40;
 
   const clearAllMutation = useMutation({
