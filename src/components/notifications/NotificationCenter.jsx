@@ -12,6 +12,16 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Bell,
   TrendingUp,
   TrendingDown,
@@ -28,6 +38,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export default function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: notifications = [] } = useQuery({
@@ -36,13 +47,20 @@ export default function NotificationCenter() {
     refetchInterval: 10000, // Refresh every 10 seconds
   });
 
+  // Every bulk action is one request. The old version fired a write per notification
+  // (dozens in parallel for "Mark all read", dozens in sequence for "Clear all"),
+  // which tripped the app's request rate limit — most writes failed and were only
+  // logged, so the panel appeared to ignore the click.
   const markAsReadMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Notification.update(id, data),
+    mutationFn: (ids) => base44.entities.Notification.updateMany(
+      { id: { $in: ids } },
+      { $set: { is_read: true } }
+    ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
     onError: (error) => {
-      console.log('Notification already deleted:', error);
+      console.error('Failed to mark notifications as read:', error);
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
@@ -53,59 +71,50 @@ export default function NotificationCenter() {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
     onError: (error) => {
-      console.log('Notification already deleted:', error);
+      console.error('Failed to delete notification:', error);
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 
+  // Clears the whole inbox, not just the page on screen, in a single request.
   const clearAllMutation = useMutation({
-    mutationFn: async (notificationsToDelete) => {
-      // Delete sequentially to avoid race conditions
-      for (const notification of notificationsToDelete) {
-        try {
-          await base44.entities.Notification.delete(notification.id);
-        } catch (error) {
-          console.log('Notification already deleted:', notification.id);
-        }
-      }
-    },
+    mutationFn: () => base44.entities.Notification.deleteMany({}),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+    onError: (error) => {
+      console.error('Failed to clear notifications:', error);
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  const handleMarkAsRead = async (notification) => {
-    if (!notification.is_read) {
-      await markAsReadMutation.mutateAsync({
-        id: notification.id,
-        data: { ...notification, is_read: true }
-      });
-    }
+  const handleMarkAsRead = (notification) => {
+    if (notification.is_read) return;
+
+    markAsReadMutation.mutate([notification.id]);
   };
 
-  const handleMarkAllAsRead = async () => {
-    const unreadNotifications = notifications.filter(n => !n.is_read);
-    await Promise.allSettled(
-      unreadNotifications.map(n =>
-        markAsReadMutation.mutateAsync({
-          id: n.id,
-          data: { ...n, is_read: true }
-        }).catch(() => {})
-      )
-    );
+  const handleMarkAllAsRead = () => {
+    const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+
+    if (unreadIds.length === 0) return;
+
+    markAsReadMutation.mutate(unreadIds);
   };
 
-  const handleDelete = async (e, id) => {
+  const handleDelete = (e, id) => {
     e.stopPropagation(); // Prevent triggering the markAsRead on the parent div
-    await deleteNotificationMutation.mutateAsync(id);
+    deleteNotificationMutation.mutate(id);
   };
 
-  const handleClearAll = async () => {
-    if (window.confirm('Are you sure you want to delete all notifications? This action cannot be undone.')) {
-      await clearAllMutation.mutateAsync(notifications);
-    }
+  const handleClearAll = () => {
+    setConfirmClearOpen(true);
+  };
+
+  const handleConfirmClearAll = () => {
+    clearAllMutation.mutate();
   };
 
   const getNotificationIcon = (type, priority) => {
@@ -180,6 +189,7 @@ export default function NotificationCenter() {
                   variant="ghost"
                   size="sm"
                   onClick={handleMarkAllAsRead}
+                  disabled={markAsReadMutation.isPending}
                   className="text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10"
                 >
                   <Check className="w-4 h-4 mr-1" />
@@ -195,7 +205,7 @@ export default function NotificationCenter() {
                   className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
                 >
                   <Trash2 className="w-4 h-4 mr-1" />
-                  Clear all
+                  {clearAllMutation.isPending ? 'Clearing…' : 'Clear all'}
                 </Button>
               )}
             </div>
@@ -288,6 +298,32 @@ export default function NotificationCenter() {
             </div>
           )}
         </ScrollArea>
+
+        {/* In-app confirmation: window.confirm is blocked inside the preview iframe,
+            so the previous Clear all button silently did nothing. */}
+        <AlertDialog open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
+          <AlertDialogContent className="bg-slate-900 border-slate-700">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-white">Clear all notifications?</AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-400">
+                This permanently deletes every notification in your inbox, including the older ones
+                not currently shown. It cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmClearAll}
+                disabled={clearAllMutation.isPending}
+                className="bg-red-600 hover:bg-red-500 text-white"
+              >
+                {clearAllMutation.isPending ? 'Clearing…' : 'Delete all'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );
