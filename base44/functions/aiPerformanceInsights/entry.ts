@@ -135,6 +135,6 @@ Provide:
     return Response.json({ success: true, ...result });
   } catch (error) {
     console.error('AI Performance Insights Error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: 'Performance insights unavailable' }, { status: 500 });
   }
 });

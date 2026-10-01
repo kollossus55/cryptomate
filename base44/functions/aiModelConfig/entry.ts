@@ -86,6 +86,7 @@ export default async function (req) {
       config: { ...cfg, encrypted_api_key: cfg.api_key_fingerprint ? "***" : "" },
     });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    console.error('AI model configuration failed:', error);
+    return Response.json({ error: 'AI model configuration failed' }, { status: 500 });
   }
 }

@@ -140,6 +140,7 @@ export default async function(req: Request): Promise<Response> {
 
     return Response.json({ error: 'Unhandled action' }, { status: 400 });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    console.error('Live trading control failed:', error);
+    return Response.json({ error: 'Live trading control failed' }, { status: 500 });
   }
 }

@@ -78,6 +78,6 @@ Provide detailed trading recommendations with confidence scores.`;
     return Response.json({ success: true, analysis: result });
   } catch (error) {
     console.error('AI Asset Analysis Error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: 'Analysis failed' }, { status: 500 });
   }
 });

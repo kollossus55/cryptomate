@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
     console.error('❌ Trading Scheduler Error:', error);
     return Response.json({ 
       success: false, 
-      error: error.message 
+      error: 'Scheduler run failed' 
     }, { status: 500 });
   }
 });

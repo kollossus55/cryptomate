@@ -151,7 +151,7 @@ export default async function(req) {
         // Server is geo-blocked from Binance. Do NOT wipe a valid browser-fed
         // scan with an empty error record — just report and leave the DB as-is.
         console.warn('⚠️ Binance universe unavailable (server geo-block):', err.message);
-        return Response.json({ success: false, error: 'Universe unavailable: ' + err.message });
+        return Response.json({ success: false, error: 'Universe unavailable — market data source unreachable' });
       }
     }
 
@@ -235,7 +235,7 @@ export default async function(req) {
     });
   } catch (error) {
     console.error('❌ Altcoin Scanner Worker error:', error);
-    return Response.json({ success: false, error: error.message }, { status: 500 });
+    return Response.json({ success: false, error: 'Scanner run failed' }, { status: 500 });
   }
 }
 

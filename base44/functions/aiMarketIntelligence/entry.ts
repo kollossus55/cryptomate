@@ -140,6 +140,6 @@ Do not invent data; if little is found for any section, reflect that in conserva
     return Response.json({ success: true, news, social, onchain });
   } catch (error) {
     console.error('AI Market Intelligence Error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: 'Market intelligence unavailable' }, { status: 500 });
   }
 });

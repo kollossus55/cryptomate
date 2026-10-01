@@ -146,6 +146,6 @@ Return ONLY the top ${cappedMax} highest-conviction opportunities (can be mix of
     return Response.json({ success: true, ...result });
   } catch (error) {
     console.error('AI Trading Recommendations Error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: 'Recommendations unavailable' }, { status: 500 });
   }
 });

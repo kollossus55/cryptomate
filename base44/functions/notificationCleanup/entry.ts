@@ -67,6 +67,7 @@ export default async function (req: Request): Promise<Response> {
 
     return Response.json({ success: true, deleted, retention_days: retentionDays, cutoff });
   } catch (error) {
-    return Response.json({ success: false, error: error.message }, { status: 500 });
+    console.error('Notification cleanup failed:', error);
+    return Response.json({ success: false, error: 'Notification cleanup failed' }, { status: 500 });
   }
 }

@@ -157,6 +157,6 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error('Calibration error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: 'Signal calibration failed' }, { status: 500 });
   }
 });
