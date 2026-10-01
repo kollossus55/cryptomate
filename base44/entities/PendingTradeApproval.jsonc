@@ -90,6 +90,10 @@
     "owner_email": {
       "type": "string",
       "description": "Email of the user this approval belongs to. Set by the server worker."
+    },
+    "provenance_token": {
+      "type": "string",
+      "description": "HMAC signature the auto-trading worker stamps on each approval. Written ONLY by the worker; verified by executeApprovedTrade to prove the record came from the server, not the entity API."
     }
   },
   "required": [
@@ -100,16 +104,9 @@
   ],
   "rls": {
     "create": {
-      "$or": [
-        {
-          "created_by_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
       "$or": [
