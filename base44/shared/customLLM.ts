@@ -82,11 +82,15 @@ async function callGoogle(config, prompt, responseSchema) {
   const res = await fetch(
     "https://generativelanguage.googleapis.com/v1beta/models/" +
       config.modelName +
-      ":generateContent?key=" +
-      config.apiKey,
+      ":generateContent",
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      // Header auth: a ?key= query parameter would leak the key into any
+      // outbound request, proxy, or error log along the way.
+      headers: {
+        "x-goog-api-key": config.apiKey,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(body),
     }
   );

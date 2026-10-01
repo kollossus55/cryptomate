@@ -13,6 +13,7 @@ import {
 import { logReturns } from './shared/indicators.js';
 import { secrets } from 'base44:runtime';
 import { decryptApiKey } from '../../shared/aiModelCrypto.ts';
+import { signApproval } from '../../shared/approvalProvenance.ts';
 import { callCustomLLM } from '../../shared/customLLM.ts';
 
 /**
@@ -157,7 +158,7 @@ Deno.serve(async (req) => {
     }
   } catch (error) {
     console.error(`[${runId}] Worker error:`, error);
-    return Response.json({ success: false, error: error.message }, { status: 500 });
+    return Response.json({ success: false, error: 'Trading worker run failed' }, { status: 500 });
   }
 });
 
@@ -890,7 +891,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
           log(`AI APPROVED ${ticker.symbol} (confidence ${aiResult.confidence}/100): ${aiResult.reasoning}`);
         } else if (aiMode === 'manual') {
           const tpPercent = settings.take_profit_percent ?? 8;
-          await base44.asServiceRole.entities.PendingTradeApproval.create({
+          const approvalDraft = {
             asset_symbol: ticker.symbol,
             signal_strength: signal.strength,
             signal_direction: signal.direction || 'bullish',
@@ -905,7 +906,17 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
             expires_at: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
             owner_email: user_email,
             created_by: user_email,
-          });
+          };
+          // Sign the approval so executeApprovedTrade can tell a worker-generated
+          // record from one inserted directly through the entity API. Without a
+          // key we create nothing rather than an unverifiable approval.
+          const signingKey = secrets.get('EXCHANGE_ENCRYPTION_KEY');
+          if (!signingKey) {
+            log(`Skip MANUAL APPROVAL ${ticker.symbol}: signing key unavailable`);
+            continue;
+          }
+          approvalDraft.provenance_token = signApproval(approvalDraft, signingKey);
+          await base44.asServiceRole.entities.PendingTradeApproval.create(approvalDraft);
           log(`MANUAL APPROVAL PENDING ${ticker.symbol} — waiting for user confirmation`);
           continue;
         }
