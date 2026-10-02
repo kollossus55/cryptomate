@@ -6,11 +6,15 @@ import { relativeVolume } from './shared/indicators.js';
 /**
  * Altcoin Scanner Worker — server-side scan of the real OKX universe.
  *
- * Runs entirely on the server so the browser never touches Binance: it fetches
- * the 24h ticker universe, pulls OHLCV candles for the top candidates in
- * rate-limited batches, scores each with the SP500-AI composite (real OHLCV,
- * no synthetic data), and stores the results in the ScanResult entity. The UI
- * just reads the latest ScanResult record — instant, zero browser cost.
+ * Runs entirely on the server: it fetches the 24h ticker universe (OKX primary,
+ * Coinbase fallback), pulls OHLCV candles for EVERY symbol in it, scores each
+ * with the indicators selected on the AI Signals page (AISignalConfig), and
+ * stores the results in the ScanResult entity. The UI just reads the latest
+ * ScanResult record — instant, zero browser cost.
+ *
+ * Every score is computed on real OHLCV. The ticker-momentum estimate is a
+ * genuine failure fallback only (exchange unreachable), not the path for most
+ * of the universe.
  *
  * Invoked either by a scheduled workflow (no user context) or manually from
  * the Altcoin Scanner page via the SDK. Either way it acts as the service role.
@@ -19,9 +23,8 @@ import { relativeVolume } from './shared/indicators.js';
 const SCAN_CANDIDATES = 100;     // top symbols by 24h quote volume
 const CANDLE_INTERVAL = '1h';
 const CANDLE_LIMIT = 200;
-const BATCH_SIZE = 10;           // fetch this many symbols per batch
-const BATCH_CONCURRENCY = 5;    // parallel requests within a batch
-const BATCH_DELAY_MS = 300;     // pause between batches to respect rate limits
+const CANDLE_CONCURRENCY = 5;   // parallel candle requests — inside OKX's public
+                                // rate limit; fetchJson backs off on 429
 const MIN_QUOTE_VOLUME_24H = 400_000;
 
 // Static classification — a symbol→category map is a label, not market data.
@@ -108,11 +111,13 @@ export default async function(req) {
     // An unauthenticated external request has neither and must be rejected;
     // previously the server-side fetch path did no auth check, so anyone
     // who knew the URL could trigger the service-role DB writes below.
+    let callerEmail = null;
     try {
       const caller = await base44.auth.me();
       if (!caller) {
         return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
       }
+      callerEmail = caller.email;
     } catch {
       return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
@@ -165,20 +170,38 @@ export default async function(req) {
       }
       console.log(`📥 Browser-fed candles: ${candleMap.size} symbols`);
     } else {
-      // Fetch candles for only the top movers by |change24h|, not all 100.
-      // Fetching all 100 triggers OKX rate limits (429) and makes the scan
-      // take 50+ seconds. The remaining symbols use the ticker fallback score.
-      const candidates = [...universe]
-        .sort((a, b) => Math.abs(b.change24h) - Math.abs(a.change24h))
-        .slice(0, 20);
+      // Every symbol in the universe gets real OHLCV — no symbol is scored on
+      // momentum alone by design. Requests are throttled and 429s are retried
+      // with Retry-After backoff; a symbol that still fails falls back to the
+      // ticker estimate rather than a fabricated score.
       const fetched = await fetchCandlesBatch(
-        candidates.map((u) => u.symbol), CANDLE_INTERVAL, CANDLE_LIMIT, BATCH_CONCURRENCY
+        universe.map((u) => u.symbol), CANDLE_INTERVAL, CANDLE_LIMIT, CANDLE_CONCURRENCY
       );
       for (const [sym, c] of fetched.entries()) candleMap.set(sym, c);
     }
 
-    // 3. Score every universe symbol. Full SP500-AI on OHLCV where available,
-    //    ticker-derived momentum score everywhere else (server geo-block fallback).
+    // 3. Score with the indicators selected on the AI Signals page. That config
+    //    drives the Trading page and the auto-trader too, so the scanner now
+    //    agrees with them instead of running a fixed SP500-AI-only model.
+    //    The scan record is shared: a manual scan uses the caller's own config,
+    //    the scheduled run (no user context) uses the first active one. With no
+    //    config at all the engine's own defaults apply.
+    let indicatorSettings = null;
+    try {
+      const configs = await base44.asServiceRole.entities.AISignalConfig.list();
+      const mine = callerEmail ? configs.filter((c) => c.created_by === callerEmail) : [];
+      const active = mine.find((c) => c.is_active) || mine[0]
+        || configs.find((c) => c.is_active) || configs[0] || null;
+      if (active?.indicator_settings) {
+        indicatorSettings = active.indicator_settings;
+        const enabled = Object.entries(indicatorSettings).filter(([, v]) => v).map(([k]) => k);
+        console.log(`⚙️ Indicators from AISignalConfig "${active.config_name}": ${enabled.join(', ') || 'none'}`);
+      }
+    } catch (e) {
+      console.warn('⚠️ AISignalConfig unavailable, using engine defaults:', e.message);
+    }
+
+    // 4. Score every universe symbol on its real candles.
     const opportunities = [];
     let scored = 0;
 
@@ -186,9 +209,7 @@ export default async function(req) {
       const candles = candleMap.get(u.symbol);
       let result = null;
       if (candles && candles.length >= MIN_CANDLES) {
-        result = scoreAsset(candles, {
-          indicators: { rsi: false, macd: false, bollinger: false, ema: false, stoch: false, sp500ai: true },
-        });
+        result = scoreAsset(candles, { indicators: indicatorSettings || undefined });
       }
       if (!result) result = scoreFromTicker(u);
       if (!result) continue;
@@ -220,10 +241,10 @@ export default async function(req) {
       });
     }
 
-    // 3. Strongest signals first.
+    // 5. Strongest signals first.
     opportunities.sort((a, b) => b.score - a.score);
 
-    // 4. Persist (replaces any previous scan record).
+    // 6. Persist (replaces any previous scan record).
     await storeScanResult(base44, opportunities, universe.length, scored, null);
 
     console.log(`✅ Scan complete: ${scored}/${universe.length} scored, ${opportunities.length} opportunities`);
