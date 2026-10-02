@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Scan, X, RefreshCw, Target, TrendingUp, TrendingDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { base44 } from "@/api/base44Client";
 import { scanAltcoins, getCategories } from "./AltcoinScanner";
 
 export default function AltcoinScannerModal({ onClose, onTradeAsset }) {
@@ -20,7 +21,17 @@ export default function AltcoinScannerModal({ onClose, onTradeAsset }) {
     setIsLoading(true);
     try {
       console.log('🔍 Running altcoin scanner...');
-      const results = await scanAltcoins(12);
+      // Score with the indicators selected on the AI Signals page, so this
+      // browser scan agrees with the server-side scan and the auto-trader.
+      let indicatorSettings = null;
+      try {
+        const configs = await base44.entities.AISignalConfig.list();
+        const active = configs.find((c) => c.is_active) || configs[0] || null;
+        indicatorSettings = active?.indicator_settings || null;
+      } catch (err) {
+        console.warn('Signal config unavailable, using engine defaults:', err.message);
+      }
+      const results = await scanAltcoins(12, indicatorSettings);
       setOpportunities(results);
     } catch (error) {
       console.error('Scanner failed:', error);

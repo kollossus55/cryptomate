@@ -1,8 +1,11 @@
 // Verify each provider's PARSING against real response shapes, with fetch stubbed.
+// Altcoins, not BTC/ETH: fetchUniverse deliberately excludes majors so the bot
+// trades altcoins only, so a BTC fixture would be filtered out before it could
+// test anything.
 const okxTickers = { code:'0', data:[
-  { instId:'BTC-USDT', last:'64000.1', open24h:'62000', volCcy24h:'1500000000', high24h:'64500', low24h:'61800' },
-  { instId:'ETH-USDT', last:'3200.5',  open24h:'3300',  volCcy24h:'800000000',  high24h:'3350',  low24h:'3180' },
-  { instId:'BTC-USDC', last:'64010',   open24h:'62000', volCcy24h:'5000000',    high24h:'64500', low24h:'61800' },
+  { instId:'ENJ-USDT', last:'0.4200', open24h:'0.4000', volCcy24h:'1500000000', high24h:'0.4300', low24h:'0.3900' },
+  { instId:'CVC-USDT', last:'0.2000', open24h:'0.2100', volCcy24h:'800000000',  high24h:'0.2150', low24h:'0.1950' },
+  { instId:'BTC-USDC', last:'64010',  open24h:'62000',  volCcy24h:'5000000',    high24h:'64500', low24h:'61800' },
 ]};
 // OKX candles: [ts, o, h, l, c, vol, volCcy, volCcyQuote, confirm] newest first
 const okxCandles = { code:'0', data:[
@@ -21,17 +24,17 @@ globalThis.fetch = async (url) => {
   return { ok:true, status:200, headers:{get:()=>null}, json: async()=>body };
 };
 
-const m = await import('/home/claude/v2/shared/trading/marketData.js');
+const m = await import('../shared/trading/marketData.js');
 
 let pass=0, fail=0;
 const t=(n,fn)=>{ try{ fn(); pass++; console.log('  PASS  '+n);}catch(e){ fail++; console.log('  FAIL  '+n+'\n        '+e.message);} };
 
 const u = await m.fetchUniverse({ topN: 10, minQuoteVolume24h: 1 });
 t('falls through Binance failure to OKX', ()=>{ if(m.getActiveProvider()!=='okx') throw new Error('provider='+m.getActiveProvider()); });
-t('OKX symbols normalised to Binance style', ()=>{ if(u[0].symbol!=='BTCUSDT') throw new Error(u[0].symbol); });
+t('OKX symbols normalised to Binance style', ()=>{ if(u[0].symbol!=='ENJUSDT') throw new Error(u[0].symbol); });
 t('non-USDT quote pairs excluded', ()=>{ if(u.find(x=>x.symbol.includes('USDC'))) throw new Error('USDC pair leaked in'); });
-t('24h change computed from open', ()=>{ const b=u.find(x=>x.symbol==='BTCUSDT'); const exp=((64000.1-62000)/62000)*100; if(Math.abs(b.change24h-exp)>1e-6) throw new Error(b.change24h+' vs '+exp); });
-t('negative change preserved', ()=>{ const e=u.find(x=>x.symbol==='ETHUSDT'); if(!(e.change24h<0)) throw new Error('ETH should be down, got '+e.change24h); });
+t('24h change computed from open', ()=>{ const b=u.find(x=>x.symbol==='ENJUSDT'); const exp=((0.42-0.4)/0.4)*100; if(Math.abs(b.change24h-exp)>1e-6) throw new Error(b.change24h+' vs '+exp); });
+t('negative change preserved', ()=>{ const e=u.find(x=>x.symbol==='CVCUSDT'); if(!(e.change24h<0)) throw new Error('CVC should be down, got '+e.change24h); });
 t('sorted by quote volume desc', ()=>{ if(!(u[0].quoteVolume24h>=u[1].quoteVolume24h)) throw new Error('not sorted'); });
 
 const c = await m.fetchCandles('BTCUSDT','1h',200);

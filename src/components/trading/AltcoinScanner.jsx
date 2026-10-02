@@ -67,9 +67,11 @@ export const getAltcoinsByCategory = (category) =>
  * real OHLCV with the deterministic signal engine.
  *
  * @param {number} count  How many opportunities to return.
+ * @param {object|null} indicators  Indicator toggles from the user's AI signal
+ *   config. Null falls back to the engine's own defaults.
  * @returns {Promise<Array>} Opportunities sorted by score, or [] on failure.
  */
-export const scanAltcoins = async (count = 12) => {
+export const scanAltcoins = async (count = 12, indicators = null) => {
   console.log(`🔍 Scanning real Binance universe…`);
 
   let universe = [];
@@ -91,9 +93,7 @@ export const scanAltcoins = async (count = 12) => {
     const candles = candleMap.get(u.symbol);
     if (!candles || candles.length < MIN_CANDLES) continue;
 
-    const result = scoreAsset(candles, {
-      indicators: { rsi: false, macd: false, bollinger: false, ema: false, stoch: false, sp500ai: true },
-    });
+    const result = scoreAsset(candles, { indicators: indicators || undefined });
     if (!result) continue;
 
     const base = u.base;

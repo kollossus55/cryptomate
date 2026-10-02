@@ -20,7 +20,7 @@
  */
 
 import {
-  rsi, macd, bollingerBands, stochastic, ema, atrPercent,
+  rsi, macd, bollingerBands, stochastic, ema, adx, awesomeOscillator, atrPercent,
   heikinAshi, sslChannel, mfi, cmo, tmo, relativeVolume, supplyDemandZones, _last as last,
 } from './indicators.js';
 
@@ -44,6 +44,12 @@ export const DEFAULT_INDICATORS = {
   stoch: true,
   supply_demand: false,
   sp500ai: false,
+  // ADX and AO are opt-in rather than on-by-default: a caller that passes no
+  // indicator config scores exactly as it did before they existed. The Signal
+  // Indicators panel enables them (AISignalConfig defaults both to true), and
+  // that is where they take effect.
+  adx: false,
+  ao: false,
 };
 
 /**
@@ -108,44 +114,81 @@ function detectRegime(candles) {
   return { regime, conviction, ema20, ema50, separation };
 }
 
-function trendComponent(candles, ctx) {
+/**
+ * Trend — direction from the EMA stack, conviction from ADX.
+ *
+ * EMA answers "which way", ADX answers "how much is that worth". They share one
+ * weight bucket on purpose: a trendless market should discount the directional
+ * reading, not add a second, independent opinion about it.
+ */
+function trendComponent(candles, ctx, indicators) {
   const prices = candles.map((c) => c.close);
   const price = last(prices);
   const { ema20, ema50, conviction, regime } = ctx;
-  if (ema20 === null || ema50 === null) return null;
 
   let score = 50;
   const reasons = [];
+  let used = 0;
 
-  // Full EMA stack alignment is the strongest single piece of evidence a
-  // trend-following strategy has, so it carries the most weight here.
-  if (price > ema20 && ema20 > ema50) {
-    score += 30;
-    reasons.push('Price above 20 EMA above 50 EMA — full bullish alignment');
-  } else if (price < ema20 && ema20 < ema50) {
-    score -= 30;
-    reasons.push('Price below 20 EMA below 50 EMA — full bearish alignment');
-  } else if (price > ema50) {
-    score += 10;
-    reasons.push('Price above 50 EMA, short term mixed');
-  } else {
-    score -= 10;
-    reasons.push('Price below 50 EMA, short term mixed');
+  if (indicators.ema && ema20 !== null && ema50 !== null) {
+    used++;
+
+    // Full EMA stack alignment is the strongest single piece of evidence a
+    // trend-following strategy has, so it carries the most weight here.
+    if (price > ema20 && ema20 > ema50) {
+      score += 30;
+      reasons.push('Price above 20 EMA above 50 EMA — full bullish alignment');
+    } else if (price < ema20 && ema20 < ema50) {
+      score -= 30;
+      reasons.push('Price below 20 EMA below 50 EMA — full bearish alignment');
+    } else if (price > ema50) {
+      score += 10;
+      reasons.push('Price above 50 EMA, short term mixed');
+    } else {
+      score -= 10;
+      reasons.push('Price below 50 EMA, short term mixed');
+    }
+
+    // Reward the trend in proportion to how established it is.
+    if (regime === 'uptrend') {
+      score += 10 * conviction;
+      reasons.push(`Uptrend conviction ${(conviction * 100).toFixed(0)}%`);
+    } else if (regime === 'downtrend') {
+      score -= 10 * conviction;
+      reasons.push(`Downtrend conviction ${(conviction * 100).toFixed(0)}%`);
+    } else {
+      // In a range, pull toward neutral instead of scoring a direction.
+      score = 50 + (score - 50) * 0.4;
+      reasons.push('No established trend — directional signal discounted');
+    }
   }
 
-  // Reward the trend in proportion to how established it is.
-  if (regime === 'uptrend') {
-    score += 10 * conviction;
-    reasons.push(`Uptrend conviction ${(conviction * 100).toFixed(0)}%`);
-  } else if (regime === 'downtrend') {
-    score -= 10 * conviction;
-    reasons.push(`Downtrend conviction ${(conviction * 100).toFixed(0)}%`);
-  } else {
-    // In a range, pull toward neutral instead of scoring a direction.
-    score = 50 + (score - 50) * 0.4;
-    reasons.push('No established trend — directional signal discounted');
+  if (indicators.adx) {
+    const a = adx(candles);
+    if (a) {
+      used++;
+      const directional = a.plusDI >= a.minusDI ? 1 : -1;
+      const rising = a.adxPrev !== null && a.adx > a.adxPrev;
+
+      if (!indicators.ema) {
+        // No EMA stack to lean on: +DI/−DI supplies the direction and ADX the
+        // magnitude, so a trendless market barely moves the score.
+        const magnitude = a.adx >= 25 ? 25 : a.adx >= 20 ? 12 : 4;
+        score += directional * magnitude;
+        reasons.push(`ADX ${a.adx.toFixed(0)}${rising ? ' and rising' : ''} — ${a.plusDI.toFixed(0)} +DI vs ${a.minusDI.toFixed(0)} −DI`);
+      } else if (a.adx >= 25) {
+        score = 50 + (score - 50) * (rising ? 1.15 : 1.05);
+        reasons.push(`ADX ${a.adx.toFixed(0)}${rising ? ' and rising' : ''} — trend strength confirms the ${directional > 0 ? 'upside' : 'downside'}`);
+      } else if (a.adx >= 20) {
+        reasons.push(`ADX ${a.adx.toFixed(0)} — trend still building`);
+      } else {
+        score = 50 + (score - 50) * 0.6;
+        reasons.push(`ADX ${a.adx.toFixed(0)} — no trend to follow, EMA alignment discounted`);
+      }
+    }
   }
 
+  if (used === 0) return null;
   return { score: clamp(score, 0, 100), reasons };
 }
 
@@ -170,6 +213,21 @@ function momentumComponent(candles, enabled, ctx) {
         score -= falling ? 16 : 9;
         reasons.push(falling ? 'MACD histogram negative and expanding' : 'MACD histogram negative');
       }
+    }
+  }
+
+  if (enabled.ao) {
+    const a = awesomeOscillator(candles);
+    if (a) {
+      used++;
+      // Sign, slope and the zero-line cross — never the raw magnitude, which is
+      // a price difference and so not comparable between assets.
+      if (a.crossedUp) { score += 18; reasons.push('Awesome Oscillator crossed above zero (fresh)'); }
+      else if (a.crossedDown) { score -= 18; reasons.push('Awesome Oscillator crossed below zero (fresh)'); }
+      else if (a.value > 0 && a.rising) { score += 12; reasons.push('Awesome Oscillator positive and rising'); }
+      else if (a.value > 0) { score += 6; reasons.push('Awesome Oscillator positive but flattening'); }
+      else if (a.rising) { score -= 6; reasons.push('Awesome Oscillator negative but turning up'); }
+      else { score -= 12; reasons.push('Awesome Oscillator negative and falling'); }
     }
   }
 
@@ -437,14 +495,15 @@ export function scoreAsset(candles, opts = {}) {
   // Gate every component by its underlying indicator toggles, so that when
   // the user enables only SP500 AI, the score is driven solely by the composite
   // — not by trend/volume components that would otherwise run unconditionally.
-  const classicOn = !!(indicators.rsi || indicators.macd || indicators.bollinger || indicators.ema || indicators.stoch);
+  const classicOn = !!(indicators.rsi || indicators.macd || indicators.bollinger ||
+    indicators.ema || indicators.stoch || indicators.adx || indicators.ao);
 
   // Regime is computed once and shared, because every oscillator below is
   // interpreted differently in a trend than in a range.
   const ctx = detectRegime(candles);
 
   const components = {
-    trend: indicators.ema ? trendComponent(candles, ctx) : null,
+    trend: (indicators.ema || indicators.adx) ? trendComponent(candles, ctx, indicators) : null,
     momentum: momentumComponent(candles, indicators, ctx),
     meanReversion: meanReversionComponent(candles, indicators, ctx),
     volume: classicOn ? volumeComponent(candles, ctx) : null,

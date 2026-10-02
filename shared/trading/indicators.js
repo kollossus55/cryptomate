@@ -370,6 +370,113 @@ export function tmo(candles, length = 14, calcLength = 5, smoothLength = 3) {
 }
 
 // ---------------------------------------------------------------------------
+// Trend strength (ADX) and the Awesome Oscillator
+// ---------------------------------------------------------------------------
+
+/**
+ * Wilder's ADX with +DI / -DI.
+ *
+ * Directional movement and true range are smoothed with Wilder's running
+ * average rather than a plain window mean, because that is the definition every
+ * charting package uses — an ADX of 27 here should be the same 27 the user sees
+ * on a chart.
+ *
+ * Returns { adx, adxPrev, plusDI, minusDI, trend }, or null on too few bars.
+ * `trend` follows the Signal Indicators panel wording: >= 25 is a strong trend.
+ */
+export function adx(candles, period = 14) {
+  if (!Array.isArray(candles) || candles.length < period * 2 + 1) return null;
+
+  const tr = [];
+  const plusDM = [];
+  const minusDM = [];
+  for (let i = 1; i < candles.length; i++) {
+    const upMove = candles[i].high - candles[i - 1].high;
+    const downMove = candles[i - 1].low - candles[i].low;
+    plusDM.push(upMove > downMove && upMove > 0 ? upMove : 0);
+    minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0);
+    const prevClose = candles[i - 1].close;
+    tr.push(Math.max(
+      candles[i].high - candles[i].low,
+      Math.abs(candles[i].high - prevClose),
+      Math.abs(candles[i].low - prevClose),
+    ));
+  }
+
+  let smoothTR = tr.slice(0, period).reduce((a, b) => a + b, 0);
+  let smoothPlus = plusDM.slice(0, period).reduce((a, b) => a + b, 0);
+  let smoothMinus = minusDM.slice(0, period).reduce((a, b) => a + b, 0);
+
+  const dx = [];
+  let plusDI = 0;
+  let minusDI = 0;
+  for (let i = period; i < tr.length; i++) {
+    if (i > period) {
+      smoothTR = smoothTR - smoothTR / period + tr[i];
+      smoothPlus = smoothPlus - smoothPlus / period + plusDM[i];
+      smoothMinus = smoothMinus - smoothMinus / period + minusDM[i];
+    }
+    plusDI = smoothTR === 0 ? 0 : (smoothPlus / smoothTR) * 100;
+    minusDI = smoothTR === 0 ? 0 : (smoothMinus / smoothTR) * 100;
+    const sum = plusDI + minusDI;
+    dx.push(sum === 0 ? 0 : (Math.abs(plusDI - minusDI) / sum) * 100);
+  }
+
+  if (dx.length < period) return null;
+
+  // ADX is itself a Wilder average of DX; keep the series so the caller can see
+  // whether trend strength is building or fading.
+  let value = dx.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  const series = [value];
+  for (let i = period; i < dx.length; i++) {
+    value = (value * (period - 1) + dx[i]) / period;
+    series.push(value);
+  }
+
+  const current = series[series.length - 1];
+  const prev = series.length > 1 ? series[series.length - 2] : null;
+  const trend = current >= 25
+    ? (plusDI > minusDI ? 'strong_uptrend' : 'strong_downtrend')
+    : 'weak_trend';
+
+  return { adx: current, adxPrev: prev, plusDI, minusDI, trend };
+}
+
+/**
+ * Awesome Oscillator — SMA5(median price) − SMA34(median price).
+ *
+ * The value is a price difference, so its magnitude only means something
+ * relative to the asset's own price. Callers should read the sign, the slope
+ * and zero-line crossings, which is what the indicator is used for.
+ */
+export function awesomeOscillator(candles, fast = 5, slow = 34) {
+  if (!Array.isArray(candles) || candles.length < slow + 1) return null;
+
+  const median = candles.map((c) => (c.high + c.low) / 2);
+  const series = [];
+  for (let i = slow - 1; i < median.length; i++) {
+    let fastSum = 0;
+    for (let j = i - fast + 1; j <= i; j++) fastSum += median[j];
+    let slowSum = 0;
+    for (let j = i - slow + 1; j <= i; j++) slowSum += median[j];
+    series.push(fastSum / fast - slowSum / slow);
+  }
+
+  if (series.length < 2) return null;
+  const value = last(series);
+  const prev = series[series.length - 2];
+
+  return {
+    value,
+    prev,
+    rising: value > prev,
+    // Fresh zero-line cross — the classic AO trigger.
+    crossedUp: prev <= 0 && value > 0,
+    crossedDown: prev >= 0 && value < 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Volume analysis — real relative volume
 // ---------------------------------------------------------------------------
 

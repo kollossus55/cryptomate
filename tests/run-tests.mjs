@@ -9,10 +9,10 @@
 
 import assert from 'node:assert';
 import {
-  rsi, macd, bollingerBands, stochastic, atr, ema, sma,
+  rsi, macd, bollingerBands, stochastic, atr, ema, sma, adx, awesomeOscillator,
   heikinAshi, sslChannel, mfi, cmo, relativeVolume, correlation, logReturns,
 } from '../shared/trading/indicators.js';
-import { scoreAsset, MIN_CANDLES } from '../shared/trading/signalEngine.js';
+import { scoreAsset, MIN_CANDLES, DEFAULT_INDICATORS } from '../shared/trading/signalEngine.js';
 import { applyCosts, getFeeRate, estimateFillFromBook, roundTripCostPercent } from '../shared/trading/costs.js';
 import { calculatePositionSize, checkCorrelation, checkPortfolioExposure } from '../shared/trading/sizing.js';
 import {
@@ -160,6 +160,32 @@ test('CMO is positive in an uptrend, negative in a downtrend', () => {
 test('relativeVolume compares latest bar to its average', () => {
   const rv = relativeVolume(uptrend);
   assert.ok(rv > 0, `got ${rv}`);
+});
+
+test('ADX reads a clean trend as strong and a flat market as trendless', () => {
+  const trending = adx(uptrend);
+  const flatMarket = adx(flat);
+  assert.ok(trending !== null && flatMarket !== null, 'ADX returned null');
+  assert.ok(trending.adx > 40, `ADX in a clean uptrend was ${trending.adx}`);
+  assert.ok(flatMarket.adx < 25, `ADX in a flat market was ${flatMarket.adx}`);
+  assert.strictEqual(trending.trend, 'strong_uptrend');
+  assert.ok(trending.plusDI > trending.minusDI, '+DI should lead in an uptrend');
+  assert.ok(trending.adxPrev !== null, 'ADX should expose the previous reading');
+});
+
+test('ADX flips direction with the trend', () => {
+  const down = adx(downtrend);
+  assert.strictEqual(down.trend, 'strong_downtrend');
+  assert.ok(down.minusDI > down.plusDI, '-DI should lead in a downtrend');
+});
+
+test('Awesome Oscillator is positive in an uptrend and negative in a downtrend', () => {
+  const up = awesomeOscillator(uptrend);
+  const down = awesomeOscillator(downtrend);
+  assert.ok(up !== null && down !== null, 'AO returned null');
+  assert.ok(up.value > 0, `AO in an uptrend was ${up.value}`);
+  assert.ok(down.value < 0, `AO in a downtrend was ${down.value}`);
+  assert.strictEqual(typeof up.rising, 'boolean');
 });
 
 test('correlation is 1.0 for identical series and -1.0 for mirrored returns', () => {
@@ -310,6 +336,31 @@ test('SP500 AI scores the six components the panel shows, and its sub-toggles de
   const parentOff = scoreAsset(uptrend, { indicators: { ...onlySp500, sp500ai: false } });
   assert.ok(parentOff === null || !parentOff.reasons.some((r) => r.startsWith('Composite')),
     'the composite contributed while SP500 AI was switched off');
+});
+
+test('ADX and AO score only when their toggles are on, and never by default', () => {
+  const onlyAdxAo = {
+    rsi: false, macd: false, bollinger: false, ema: false, stoch: false,
+    supply_demand: false, sp500ai: false, adx: true, ao: true,
+  };
+
+  const s = scoreAsset(uptrend, { indicators: onlyAdxAo });
+  assert.ok(s !== null, 'no score produced for an ADX + AO setup');
+  assert.ok(s.reasons.some((r) => r.startsWith('ADX')), `no ADX reason in ${s.reasons}`);
+  assert.ok(s.reasons.some((r) => r.startsWith('Awesome Oscillator')), `no AO reason in ${s.reasons}`);
+  assert.ok(s.components.trend !== null && s.components.momentum !== null,
+    'ADX/AO did not reach their weight buckets');
+  assert.ok(s.strength > 55, `a clean uptrend scored ${s.strength} on ADX + AO alone`);
+
+  // Off (the default) must reproduce the previous behaviour exactly: no new
+  // reasons and an identical number, so nobody's existing scores move.
+  const base = scoreAsset(choppy);
+  assert.strictEqual(DEFAULT_INDICATORS.adx, false, 'ADX must be opt-in');
+  assert.strictEqual(DEFAULT_INDICATORS.ao, false, 'AO must be opt-in');
+  const explicitOff = scoreAsset(choppy, { indicators: { adx: false, ao: false } });
+  assert.strictEqual(base.strength, explicitOff.strength);
+  assert.ok(!base.reasons.some((r) => r.startsWith('ADX') || r.startsWith('Awesome Oscillator')),
+    `ADX/AO scored while switched off: ${base.reasons}`);
 });
 
 // ---------------------------------------------------------------------------
