@@ -1,5 +1,6 @@
 // GENERATED FILE — DO NOT EDIT.
 // Copied from /shared/trading by scripts/sync-shared.mjs.
+// Synced: includes adx() and awesomeOscillator().
 // Edit the source in /shared/trading and re-run: npm run sync:functions
 /**
  * Technical indicators — computed on real OHLCV.
