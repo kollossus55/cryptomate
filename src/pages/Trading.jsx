@@ -789,6 +789,13 @@ export default function Trading() {
           .join(', ');
         return `EXECUTED: ${myDetails.trades_executed} trade(s)${tradeSummary ? ' — ' + tradeSummary : ''}`;
       }
+      if (myDetails.new_entries_allowed === false) {
+        const why = (myDetails.entries_blocked_reason || 'risk guard active').replace(/_/g, ' ');
+        return `New entries paused: ${why} — managing exits only`;
+      }
+      if (!myDetails.scanned) {
+        return 'No assets scored — market data unavailable from the server';
+      }
       return `Scanned ${myDetails.scanned} assets — No signals met criteria`;
     }
     const s = data?.summary;

@@ -120,6 +120,7 @@ Deno.serve(async (req) => {
             realized_pnl: result.realizedPnL,
             open_positions: result.openPositions,
             new_entries_allowed: result.newEntriesAllowed,
+            entries_blocked_reason: result.entriesBlockedReason || null,
             trade_actions: (result.trades || []).map(t => ({
               action: t.action || t.trade_type,
               asset_symbol: t.asset_symbol,

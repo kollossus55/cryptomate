@@ -449,6 +449,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
   // every other guard (kill switch, daily loss, trade cap, schedule) still runs.
   const guards = evaluateAllGuards({ settings, counters, equity: startingEquity, universe: usedFallbackUniverse ? null : universe, now });
   let newEntriesAllowed = guards.allowed && guards.newEntriesAllowed !== false;
+  let entriesBlockedReason = newEntriesAllowed ? null : guards.reason;
   if (!newEntriesAllowed) {
     log(`New entries blocked: ${guards.reason} — managing exits only`);
   }
@@ -481,7 +482,10 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
         log(`Portfolio take-profit hit: ${tpCheck.profitPercent.toFixed(2)}% >= ${tpCheck.limit}% — closing all positions`);
       }
     }
-    if (portfolioTpTriggered) newEntriesAllowed = false;
+    if (portfolioTpTriggered) {
+      newEntriesAllowed = false;
+      entriesBlockedReason = 'portfolio_take_profit';
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -1045,6 +1049,7 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
     feesPaid: state.fees_paid_this_run,
     openPositions: state.positions.length,
     newEntriesAllowed,
+    entriesBlockedReason,
     dataSource: 'okx_ohlcv',
   };
 }
