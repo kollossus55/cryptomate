@@ -447,35 +447,9 @@ export function filterAssetsByPreferences(assets, preferences) {
     );
   }
 
-  // Filter by market cap preference
-  if (preferences.market_cap_preference && preferences.market_cap_preference !== 'mixed') {
-    filtered = filtered.filter(a => {
-      const marketCap = a.marketCap;
-      if (preferences.market_cap_preference === 'large_cap') {
-        return marketCap > 10000000000;
-      } else if (preferences.market_cap_preference === 'mid_cap') {
-        return marketCap > 1000000000 && marketCap <= 10000000000;
-      } else if (preferences.market_cap_preference === 'small_cap') {
-        return marketCap <= 1000000000;
-      }
-      return true;
-    });
-  }
-
-  // Filter by volatility preference
-  if (preferences.volatility_preference) {
-    filtered = filtered.filter(a => {
-      const volatility = Math.abs(a.change24h || 0);
-      if (preferences.volatility_preference === 'low') {
-        return volatility < 3;
-      } else if (preferences.volatility_preference === 'moderate') {
-        return volatility >= 3 && volatility < 7;
-      } else if (preferences.volatility_preference === 'high') {
-        return volatility >= 7;
-      }
-      return true;
-    });
-  }
+  // Market-cap and volatility filters are intentionally not applied here:
+  // trade-derived asset rows carry no marketCap/change24h, so those filters
+  // would drop every asset. Preferred/excluded lists are the meaningful ones.
 
   return filtered;
 }

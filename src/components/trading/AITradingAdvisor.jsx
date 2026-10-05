@@ -109,15 +109,17 @@ export default function AITradingAdvisor({
       // Step 2: Identify issues
       const issues = identifyIssues(metrics);
 
-      // Step 3: Analyze asset performance - filter by preferences for LLM context
-      // Note: analyzeAssetPerformance still runs on all metrics.allAssets by default.
-      // The `filteredByPreferences` and `preferredAssets` flags are for the LLM.
+      // Step 3: Analyze asset performance, then filter by preferences so the
+      // AI only sees assets the user actually wants to trade.
+      const fullAssetAnalysis = analyzeAssetPerformance(metrics);
       const filteredAssetsForLLM = preferences
-        ? filterAssetsByPreferences(metrics.allAssets || [], preferences)
-        : metrics.allAssets || [];
+        ? filterAssetsByPreferences(fullAssetAnalysis.allAssets, preferences)
+        : fullAssetAnalysis.allAssets;
 
       const assetAnalysis = {
-        ...analyzeAssetPerformance(metrics),
+        allAssets: filteredAssetsForLLM,
+        bestPerformers: filteredAssetsForLLM.slice(0, 3).filter(a => a.totalPnL > 0),
+        worstPerformers: filteredAssetsForLLM.slice(-3).reverse().filter(a => a.totalPnL < 0),
         filteredByPreferences: preferences ? true : false,
         preferredAssets: preferences?.preferred_assets || []
       };
