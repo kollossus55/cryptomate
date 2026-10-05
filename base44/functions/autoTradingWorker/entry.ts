@@ -10,7 +10,7 @@ import {
   markToMarket, updateTrailingStop, activateBreakeven,
   toPersistablePortfolio, pendingTrades,
 } from './shared/portfolio.js';
-import { logReturns } from './shared/indicators.js';
+import { logReturns, atrPercent } from './shared/indicators.js';
 import { secrets } from 'base44:runtime';
 import { decryptApiKey } from '../../shared/aiModelCrypto.ts';
 import { signApproval } from '../../shared/approvalProvenance.ts';
@@ -708,6 +708,97 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
         if (c) heldCandles.set(s, c);
       }
       const heldReturns = buildReturnsMap(heldCandles);
+
+      // ── DCA: average down on dips into held positions ──────────────────
+      if (settings.dca_enabled) {
+        const dcaEquity = calculateEquity(state, priceMap).equity;
+        const dipThreshold = settings.dca_dip_threshold ?? 5;
+        const maxDca = settings.max_dca_buys ?? 3;
+        const multiplier = settings.dca_multiplier ?? 1.5;
+        for (const position of [...state.positions]) {
+          if (counters.trades_today >= (settings.max_trades_per_day ?? 10)) break;
+          if ((position.dca_count || 0) >= maxDca) continue;
+          const ticker = universeBySymbol.get(position.asset_symbol);
+          if (!ticker || !ticker.price) continue;
+          const dipPercent = ((position.avg_entry_price - ticker.price) / position.avg_entry_price) * 100;
+          if (dipPercent < dipThreshold) continue;
+
+          const candles = candlesBySymbol.get(position.asset_symbol) || null;
+          let dcaSizing;
+          if (!candles) {
+            const flatAmount = Math.min(
+              dcaEquity * ((settings.max_position_size_percent ?? 10) / 100) * multiplier,
+              state.available_balance
+            );
+            dcaSizing = flatAmount >= 10 ? { quoteAmount: flatAmount } : { quoteAmount: 0 };
+          } else {
+            dcaSizing = calculatePositionSize({
+              equity: dcaEquity,
+              availableBalance: state.available_balance,
+              price: ticker.price,
+              candles,
+              riskPerTradePercent: settings.risk_per_trade_percent ?? 1,
+              atrMultiplier: settings.atr_stop_multiplier ?? 2,
+              maxPositionPercent: (settings.max_position_size_percent ?? 10) * multiplier,
+            });
+          }
+          if (dcaSizing.quoteAmount <= 0) continue;
+
+          // Gross-exposure cap (skip the max-positions check — DCA adds to an
+          // existing position, not a new one).
+          const currentExposure = state.positions.reduce((s, p) => s + (p.current_value || 0), 0);
+          const projectedPct = dcaEquity > 0 ? ((currentExposure + dcaSizing.quoteAmount) / dcaEquity) * 100 : 100;
+          if (projectedPct > (settings.max_gross_exposure_percent ?? 60)) {
+            log(`Skip DCA ${ticker.symbol}: gross exposure ${projectedPct.toFixed(1)}%`);
+            continue;
+          }
+
+          const book = await fetchOrderBook(ticker.symbol, 100);
+          const atrPctVal = candles ? atrPercent(candles) : 0.02;
+          const costs = applyCosts({
+            side: 'buy',
+            intendedPrice: ticker.price,
+            quoteAmount: dcaSizing.quoteAmount,
+            exchange,
+            book,
+            quoteVolume24h: ticker.quoteVolume24h,
+            atrPercent: atrPctVal,
+          });
+          if (costs.insufficientLiquidity) continue;
+
+          let dcaMaxSlippage = (settings.max_slippage_percent ?? 0.5) / 100;
+          if (settings.use_dynamic_slippage) {
+            if (atrPctVal * 100 >= (settings.extreme_volatility_threshold ?? 10)) dcaMaxSlippage *= 3;
+            else if (atrPctVal * 100 >= (settings.high_volatility_threshold ?? 5)) dcaMaxSlippage *= 2;
+          }
+          if (costs.slippagePercent > dcaMaxSlippage) {
+            log(`Skip DCA ${ticker.symbol}: slippage ${(costs.slippagePercent * 100).toFixed(2)}% over limit`);
+            continue;
+          }
+
+          const quantity = dcaSizing.quoteAmount / costs.fillPrice;
+
+          if (liveTrading.enabled) {
+            const liveOrder = await placeLiveOrder(base44, liveTrading, {
+              side: 'buy', asset_symbol: ticker.symbol, quantity, user_email,
+            });
+            if (!liveOrder.ok) { log(`LIVE DCA BUY FAILED ${ticker.symbol}: ${liveOrder.error}`); continue; }
+            if (liveOrder.fillPrice) costs.fillPrice = liveOrder.fillPrice;
+          }
+
+          const buy = applyBuy(state, {
+            symbol: ticker.symbol, quantity, costs, strength: 0,
+            reason: `DCA #${(position.dca_count || 0) + 1} — dip ${dipPercent.toFixed(1)}%`,
+            timestamp: now.toISOString(),
+          });
+          if (buy.ok) {
+            log(`DCA BUY ${ticker.symbol} @ ${costs.fillPrice.toFixed(6)} | dip ${dipPercent.toFixed(1)}% | DCA #${(position.dca_count || 0) + 1}`);
+            actions.push({ symbol: ticker.symbol, action: 'dca_buy', strength: 0 });
+            counters.trades_today += 1;
+            priceMap.set(ticker.symbol, costs.fillPrice);
+          }
+        }
+      }
 
       const candidateTickers = universe.slice(0, MAX_SCAN_CANDIDATES);
 
