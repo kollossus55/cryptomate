@@ -1,6 +1,5 @@
 // GENERATED FILE — DO NOT EDIT.
 // Copied from /shared/trading by scripts/sync-shared.mjs.
-// Synced: ADX and Awesome Oscillator are active, opt-in scoring components.
 // Edit the source in /shared/trading and re-run: npm run sync:functions
 /**
  * Signal Engine — deterministic scoring on real market data.

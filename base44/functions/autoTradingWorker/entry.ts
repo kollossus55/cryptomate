@@ -963,9 +963,14 @@ async function runTradingCycle({ base44, settings, portfolio, user_email, log, n
           continue;
         }
 
-        const maxSlippage = (settings.max_slippage_percent ?? 0.5) / 100;
+        let maxSlippage = (settings.max_slippage_percent ?? 0.5) / 100;
+        if (settings.use_dynamic_slippage) {
+          const atrPct = (signal.atrPercent ?? 0.02) * 100;
+          if (atrPct >= (settings.extreme_volatility_threshold ?? 10)) maxSlippage *= 3;
+          else if (atrPct >= (settings.high_volatility_threshold ?? 5)) maxSlippage *= 2;
+        }
         if (costs.slippagePercent > maxSlippage) {
-          log(`Skip ${ticker.symbol}: slippage ${(costs.slippagePercent * 100).toFixed(2)}% over limit`);
+          log(`Skip ${ticker.symbol}: slippage ${(costs.slippagePercent * 100).toFixed(2)}% over limit (cap ${(maxSlippage * 100).toFixed(2)}%)`);
           continue;
         }
 

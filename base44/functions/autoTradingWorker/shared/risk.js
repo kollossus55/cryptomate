@@ -249,7 +249,9 @@ export function evaluateAllGuards({ settings, counters, equity, universe, now = 
 
   let marketHalt = { halt: false };
   if (universe) {
-    marketHalt = checkMarketConditions(universe);
+    marketHalt = checkMarketConditions(universe, {
+      crashThreshold: -(settings.circuit_breaker_market_drop ?? 15),
+    });
     if (marketHalt.halt) {
       return {
         allowed: true,
