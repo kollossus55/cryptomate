@@ -1972,8 +1972,8 @@ export default function Trading() {
                 size="sm"
                 disabled={resetPortfolioMutation.isPending}
               >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Reset to ${paperBaseAmount.toLocaleString()}
+                <RefreshCw className={`w-4 h-4 mr-2 ${resetPortfolioMutation.isPending ? 'animate-spin' : ''}`} />
+                {resetPortfolioMutation.isPending ? 'Resetting...' : 'Reset Portfolio & Clear History'}
               </Button>
             </div>
           </div>
